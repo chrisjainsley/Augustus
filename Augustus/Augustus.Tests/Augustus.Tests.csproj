@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Augustus\Augustus.csproj" />
+    <ProjectReference Include="..\Augustus.AI\Augustus.AI.csproj" />
+    <ProjectReference Include="..\Augustus.Stripe\Augustus.Stripe.csproj" />
   </ItemGroup>
 
 </Project>

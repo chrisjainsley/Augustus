@@ -3,24 +3,19 @@
     <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PackageId>Augustus</PackageId>
+    <PackageId>Augustus.Stripe</PackageId>
     <Version>1.0.0</Version>
     <Authors>Augustus Contributors</Authors>
-    <Description>A flexible API mocking library for .NET inspired by WireMock. Create mock HTTP endpoints with fluent API, JSON file responses, and dynamic route management.</Description>
-    <PackageTags>testing;mocking;api;simulator;wiremock;http;xunit;nunit;mstest</PackageTags>
+    <Description>Stripe-specific extensions for Augustus. Provides fluent API for mocking Stripe endpoints with built-in realistic defaults.</Description>
+    <PackageTags>testing;mocking;stripe;api;simulator;augustus</PackageTags>
     <RepositoryUrl>https://github.com/chrisjainsley/augustus</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
-  
+
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
-  
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\Augustus\Augustus.csproj" />
   </ItemGroup>
 </Project>
