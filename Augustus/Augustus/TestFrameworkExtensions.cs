@@ -90,17 +90,134 @@ public static class TestFrameworkExtensions
     }
 
     /// <summary>
-    /// Creates a new OpenAI API simulator with pre-configured context.
+    /// Creates a new OpenAI API simulator with pre-configured context and default instructions.
     /// </summary>
     /// <param name="testClass">The test class instance (typically <c>this</c>).</param>
     /// <param name="configure">Optional action to configure simulator options.</param>
-    /// <returns>A new <see cref="APISimulator"/> configured for OpenAI API simulation.</returns>
+    /// <returns>A new <see cref="APISimulator"/> configured for OpenAI API simulation with proper response formats.</returns>
     /// <remarks>
-    /// This is a convenience method equivalent to calling <c>CreateAPISimulator("OpenAI", configure)</c>.
+    /// <para>This simulator comes pre-configured with instructions to:</para>
+    /// <list type="bullet">
+    /// <item>Return responses in the official OpenAI API JSON format</item>
+    /// <item>Support common endpoints like /v1/chat/completions, /v1/completions, /v1/models, /v1/embeddings</item>
+    /// <item>Include proper response fields (id, object, created, model, choices, usage)</item>
+    /// <item>Handle error responses with correct OpenAI error format</item>
+    /// </list>
+    /// <para>You can add additional custom instructions using <c>.WithInstruction()</c> or route-specific configurations.</para>
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// var simulator = this.CreateOpenAISimulator(opt =>
+    /// {
+    ///     opt.OpenAIApiKey = "your-key";
+    ///     opt.Port = 9015;
+    /// });
+    /// await simulator.StartAsync();
+    /// </code>
+    /// </example>
     public static APISimulator CreateOpenAISimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
     {
-        return testClass.CreateAPISimulator("OpenAI", configure);
+        var simulator = testClass.CreateAPISimulator("OpenAI", configure);
+
+        // Add default instructions for OpenAI API format
+        simulator.AddInstruction("Return all responses in valid JSON format matching the official OpenAI API specification.");
+
+        simulator.AddInstruction(@"For chat completion requests (POST /v1/chat/completions), return responses in this format:
+{
+  ""id"": ""chatcmpl-[random-id]"",
+  ""object"": ""chat.completion"",
+  ""created"": [unix-timestamp],
+  ""model"": ""[model-name-from-request]"",
+  ""choices"": [
+    {
+      ""index"": 0,
+      ""message"": {
+        ""role"": ""assistant"",
+        ""content"": ""[generated response content]""
+      },
+      ""finish_reason"": ""stop""
+    }
+  ],
+  ""usage"": {
+    ""prompt_tokens"": [realistic-number],
+    ""completion_tokens"": [realistic-number],
+    ""total_tokens"": [sum-of-tokens]
+  }
+}");
+
+        simulator.AddInstruction(@"For completion requests (POST /v1/completions), return responses in this format:
+{
+  ""id"": ""cmpl-[random-id]"",
+  ""object"": ""text_completion"",
+  ""created"": [unix-timestamp],
+  ""model"": ""[model-name-from-request]"",
+  ""choices"": [
+    {
+      ""text"": ""[generated completion text]"",
+      ""index"": 0,
+      ""finish_reason"": ""stop""
+    }
+  ],
+  ""usage"": {
+    ""prompt_tokens"": [realistic-number],
+    ""completion_tokens"": [realistic-number],
+    ""total_tokens"": [sum-of-tokens]
+  }
+}");
+
+        simulator.AddInstruction(@"For model list requests (GET /v1/models), return responses in this format:
+{
+  ""object"": ""list"",
+  ""data"": [
+    {
+      ""id"": ""gpt-4"",
+      ""object"": ""model"",
+      ""created"": [unix-timestamp],
+      ""owned_by"": ""openai""
+    },
+    {
+      ""id"": ""gpt-3.5-turbo"",
+      ""object"": ""model"",
+      ""created"": [unix-timestamp],
+      ""owned_by"": ""openai""
+    }
+  ]
+}");
+
+        simulator.AddInstruction(@"For embedding requests (POST /v1/embeddings), return responses in this format:
+{
+  ""object"": ""list"",
+  ""data"": [
+    {
+      ""object"": ""embedding"",
+      ""embedding"": [[random array of floats with 1536 dimensions for ada-002]],
+      ""index"": 0
+    }
+  ],
+  ""model"": ""[model-name-from-request]"",
+  ""usage"": {
+    ""prompt_tokens"": [realistic-number],
+    ""total_tokens"": [realistic-number]
+  }
+}");
+
+        simulator.AddInstruction(@"For error responses, return in this format:
+{
+  ""error"": {
+    ""message"": ""[error description]"",
+    ""type"": ""invalid_request_error"",
+    ""param"": null,
+    ""code"": ""[error-code]""
+  }
+}");
+
+        simulator.AddInstruction("Generate realistic IDs using the pattern: chatcmpl-[8-character-random-string] for chat completions, cmpl-[8-character-random-string] for completions.");
+
+        simulator.AddInstruction("Use realistic Unix timestamps for the 'created' field (current time).");
+
+        simulator.AddInstruction("Calculate realistic token counts in the 'usage' field based on the approximate length of input and output text.");
+
+        return simulator;
     }
 
     /// <summary>
