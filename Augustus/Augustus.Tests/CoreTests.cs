@@ -1,15 +1,12 @@
 using Augustus;
 using Augustus.Extensions;
-using Augustus.APIs.Stripe;
-using FluentAssertions;
-using Xunit;
 
 namespace Augustus.Tests;
 
-public class IntegrationTests
+public class CoreTests
 {
     [Fact]
-    public async Task MockServer_WithStaticResponse_ShouldReturnConfiguredJson()
+    public async Task APISimulator_WithStaticResponse_ShouldReturnConfiguredJson()
     {
         // Arrange
         var simulator = this.CreateAPISimulator()
@@ -36,7 +33,7 @@ public class IntegrationTests
     }
 
     [Fact]
-    public async Task MockServer_DynamicRouteAddition_ShouldWorkAfterStart()
+    public async Task APISimulator_DynamicRouteAddition_ShouldWorkAfterStart()
     {
         // Arrange
         var simulator = this.CreateAPISimulator();
@@ -64,69 +61,7 @@ public class IntegrationTests
     }
 
     [Fact]
-    public async Task StripeMock_WithDefaultResponse_ShouldReturnRealisticStripeCustomer()
-    {
-        // Arrange
-        var simulator = this.CreateStripeMock();
-        simulator.Customers().Get().UseDefault();
-
-        await simulator.StartAsync();
-
-        try
-        {
-            var client = simulator.CreateClient();
-
-            // Act
-            var response = await client.GetStringAsync("/v1/customers/cus_test123");
-
-            // Assert
-            response.Should().Contain("\"object\":\"customer\"");
-            response.Should().Contain("cus_");
-        }
-        finally
-        {
-            await simulator.StopAsync();
-        }
-    }
-
-    [Fact]
-    public async Task StripeMock_MultipleEndpoints_ShouldAllWork()
-    {
-        // Arrange
-        var simulator = this.CreateStripeMock();
-        simulator.Customers().Get().UseDefault();
-        simulator.Customers().List().UseDefault();
-        simulator.Charges().Get().UseDefault();
-        simulator.PaymentIntents().Create().UseDefault();
-
-        await simulator.StartAsync();
-
-        try
-        {
-            var client = simulator.CreateClient();
-
-            // Act & Assert
-            var customer = await client.GetStringAsync("/v1/customers/cus_123");
-            customer.Should().Contain("\"object\":\"customer\"");
-
-            var customers = await client.GetStringAsync("/v1/customers");
-            customers.Should().Contain("\"object\":\"list\"");
-
-            var charge = await client.GetStringAsync("/v1/charges/ch_123");
-            charge.Should().Contain("\"object\":\"charge\"");
-
-            var piResponse = await client.PostAsync("/v1/payment_intents", new StringContent("{}"));
-            var pi = await piResponse.Content.ReadAsStringAsync();
-            pi.Should().Contain("\"object\":\"payment_intent\"");
-        }
-        finally
-        {
-            await simulator.StopAsync();
-        }
-    }
-
-    [Fact]
-    public void MockServer_RemoveRoute_ShouldRemoveConfiguredRoute()
+    public void APISimulator_RemoveRoute_ShouldRemoveConfiguredRoute()
     {
         // Arrange
         var simulator = this.CreateAPISimulator()
@@ -142,7 +77,7 @@ public class IntegrationTests
     }
 
     [Fact]
-    public async Task MockServer_ClearRoutes_ShouldRemoveAllRoutes()
+    public async Task APISimulator_ClearRoutes_ShouldRemoveAllRoutes()
     {
         // Arrange
         var simulator = this.CreateAPISimulator()
@@ -173,6 +108,43 @@ public class IntegrationTests
         finally
         {
             await simulator.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task APISimulator_WithJsonFile_ShouldLoadFromFile()
+    {
+        // Arrange
+        var tempFile = Path.GetTempFileName();
+        await File.WriteAllTextAsync(tempFile, "{\"message\":\"from file\"}");
+
+        try
+        {
+            var simulator = this.CreateAPISimulator()
+                .ForGet("/api/file-test")
+                .WithJsonFile(tempFile)
+                .Add();
+
+            await simulator.StartAsync();
+
+            try
+            {
+                var client = simulator.CreateClient();
+
+                // Act
+                var response = await client.GetStringAsync("/api/file-test");
+
+                // Assert
+                response.Should().Contain("from file");
+            }
+            finally
+            {
+                await simulator.StopAsync();
+            }
+        }
+        finally
+        {
+            File.Delete(tempFile);
         }
     }
 }

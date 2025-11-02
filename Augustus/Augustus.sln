@@ -7,9 +7,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Augustus", "Augustus\August
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Augustus.AI", "Augustus.AI\Augustus.AI.csproj", "{A1B2C3D4-E5F6-4A5B-8C9D-1E2F3A4B5C6D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Augustus.Stripe", "Augustus.Stripe\Augustus.Stripe.csproj", "{B2C3D4E5-F6A7-4B6C-9D0E-2F3A4B5C6D7E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Augustus.Stripe", "Augustus.APIs.Stripe\Augustus.Stripe.csproj", "{B2C3D4E5-F6A7-4B6C-9D0E-2F3A4B5C6D7E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Augustus.Tests", "Augustus.Tests\Augustus.Tests.csproj", "{0925E96C-DC1E-4F1A-858B-1C58B7441D81}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Augustus.AI.Tests", "Augustus.AI.Tests\Augustus.AI.Tests.csproj", "{C1D2E3F4-A5B6-4C7D-8E9F-0A1B2C3D4E5F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Augustus.Stripe.Tests", "Augustus.APIs.Stripe.Tests\Augustus.Stripe.Tests.csproj", "{D2E3F4A5-B6C7-4D8E-9F0A-1B2C3D4E5F6A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -36,5 +40,13 @@ Global
 		{0925E96C-DC1E-4F1A-858B-1C58B7441D81}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0925E96C-DC1E-4F1A-858B-1C58B7441D81}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0925E96C-DC1E-4F1A-858B-1C58B7441D81}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1D2E3F4-A5B6-4C7D-8E9F-0A1B2C3D4E5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1D2E3F4-A5B6-4C7D-8E9F-0A1B2C3D4E5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1D2E3F4-A5B6-4C7D-8E9F-0A1B2C3D4E5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1D2E3F4-A5B6-4C7D-8E9F-0A1B2C3D4E5F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2E3F4A5-B6C7-4D8E-9F0A-1B2C3D4E5F6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2E3F4A5-B6C7-4D8E-9F0A-1B2C3D4E5F6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2E3F4A5-B6C7-4D8E-9F0A-1B2C3D4E5F6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2E3F4A5-B6C7-4D8E-9F0A-1B2C3D4E5F6A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
