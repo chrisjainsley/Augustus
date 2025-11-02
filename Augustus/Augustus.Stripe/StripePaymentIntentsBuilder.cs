@@ -7,11 +7,11 @@ using Augustus;
 /// </summary>
 public class StripePaymentIntentsBuilder
 {
-    private readonly MockServer mockServer;
+    private readonly APISimulator apiSimulator;
 
-    internal StripePaymentIntentsBuilder(MockServer mockServer)
+    internal StripePaymentIntentsBuilder(APISimulator apiSimulator)
     {
-        this.mockServer = mockServer ?? throw new ArgumentNullException(nameof(mockServer));
+        this.apiSimulator = apiSimulator ?? throw new ArgumentNullException(nameof(apiSimulator));
     }
 
     /// <summary>
@@ -20,7 +20,7 @@ public class StripePaymentIntentsBuilder
     /// <param name="paymentIntentId">The payment intent ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Get(string paymentIntentId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/payment_intents/{paymentIntentId}", "GET", "payment_intent");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/payment_intents/{paymentIntentId}", "GET", "payment_intent");
     }
 
     /// <summary>
@@ -28,7 +28,7 @@ public class StripePaymentIntentsBuilder
     /// </summary>
     public StripeResourceConfigurer List()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/payment_intents", "GET", "payment_intent_list");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/payment_intents", "GET", "payment_intent_list");
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public class StripePaymentIntentsBuilder
     /// </summary>
     public StripeResourceConfigurer Create()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/payment_intents", "POST", "payment_intent");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/payment_intents", "POST", "payment_intent");
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public class StripePaymentIntentsBuilder
     /// <param name="paymentIntentId">The payment intent ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Confirm(string paymentIntentId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/payment_intents/{paymentIntentId}/confirm", "POST", "payment_intent");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/payment_intents/{paymentIntentId}/confirm", "POST", "payment_intent");
     }
 
     /// <summary>
@@ -54,6 +54,6 @@ public class StripePaymentIntentsBuilder
     /// <param name="paymentIntentId">The payment intent ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Cancel(string paymentIntentId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/payment_intents/{paymentIntentId}/cancel", "POST", "payment_intent_canceled");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/payment_intents/{paymentIntentId}/cancel", "POST", "payment_intent_canceled");
     }
 }

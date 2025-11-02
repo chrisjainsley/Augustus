@@ -8,14 +8,14 @@ using System.Text.Json;
 /// </summary>
 public class StripeResourceConfigurer
 {
-    private readonly MockServer mockServer;
+    private readonly APISimulator apiSimulator;
     private readonly string pattern;
     private readonly string httpMethod;
     private readonly string resourceType;
 
-    internal StripeResourceConfigurer(MockServer mockServer, string pattern, string httpMethod, string resourceType)
+    internal StripeResourceConfigurer(APISimulator apiSimulator, string pattern, string httpMethod, string resourceType)
     {
-        this.mockServer = mockServer ?? throw new ArgumentNullException(nameof(mockServer));
+        this.apiSimulator = apiSimulator ?? throw new ArgumentNullException(nameof(apiSimulator));
         this.pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
         this.httpMethod = httpMethod ?? throw new ArgumentNullException(nameof(httpMethod));
         this.resourceType = resourceType ?? throw new ArgumentNullException(nameof(resourceType));
@@ -27,7 +27,7 @@ public class StripeResourceConfigurer
     public void UseDefault()
     {
         var defaultResponse = StripeDefaults.GetDefaultResponse(resourceType);
-        mockServer.ForRoute(pattern, httpMethod)
+        apiSimulator.ForRoute(pattern, httpMethod)
             .WithResponse(defaultResponse)
             .Add();
     }
@@ -38,7 +38,7 @@ public class StripeResourceConfigurer
     /// <param name="jsonResponse">The JSON response to return.</param>
     public void WithResponse(string jsonResponse)
     {
-        mockServer.ForRoute(pattern, httpMethod)
+        apiSimulator.ForRoute(pattern, httpMethod)
             .WithResponse(jsonResponse)
             .Add();
     }
@@ -49,7 +49,7 @@ public class StripeResourceConfigurer
     /// <param name="responseObject">The object to serialize and return.</param>
     public void WithResponse(object responseObject)
     {
-        mockServer.ForRoute(pattern, httpMethod)
+        apiSimulator.ForRoute(pattern, httpMethod)
             .WithResponse(responseObject)
             .Add();
     }
@@ -60,7 +60,7 @@ public class StripeResourceConfigurer
     /// <param name="filePath">Path to the JSON file.</param>
     public void WithJsonFile(string filePath)
     {
-        mockServer.ForRoute(pattern, httpMethod)
+        apiSimulator.ForRoute(pattern, httpMethod)
             .WithJsonFile(filePath)
             .Add();
     }

@@ -12,16 +12,16 @@ public class IntegrationTests
     public async Task MockServer_WithStaticResponse_ShouldReturnConfiguredJson()
     {
         // Arrange
-        var mock = this.CreateMockServer()
+        var simulator = this.CreateAPISimulator()
             .ForGet("/api/test")
             .WithResponse(new { message = "Hello World" })
             .Add();
 
-        await mock.StartAsync();
+        await simulator.StartAsync();
 
         try
         {
-            var client = mock.CreateClient();
+            var client = simulator.CreateClient();
 
             // Act
             var response = await client.GetStringAsync("/api/test");
@@ -31,7 +31,7 @@ public class IntegrationTests
         }
         finally
         {
-            await mock.StopAsync();
+            await simulator.StopAsync();
         }
     }
 
@@ -39,17 +39,17 @@ public class IntegrationTests
     public async Task MockServer_DynamicRouteAddition_ShouldWorkAfterStart()
     {
         // Arrange
-        var mock = this.CreateMockServer();
-        await mock.StartAsync();
+        var simulator = this.CreateAPISimulator();
+        await simulator.StartAsync();
 
         try
         {
             // Add route after starting
-            mock.ForGet("/api/dynamic")
+            simulator.ForGet("/api/dynamic")
                 .WithResponse(new { dynamic = true })
                 .Add();
 
-            var client = mock.CreateClient();
+            var client = simulator.CreateClient();
 
             // Act
             var response = await client.GetStringAsync("/api/dynamic");
@@ -59,7 +59,7 @@ public class IntegrationTests
         }
         finally
         {
-            await mock.StopAsync();
+            await simulator.StopAsync();
         }
     }
 
@@ -67,14 +67,14 @@ public class IntegrationTests
     public async Task StripeMock_WithDefaultResponse_ShouldReturnRealisticStripeCustomer()
     {
         // Arrange
-        var mock = this.CreateStripeMock();
-        mock.Customers().Get().UseDefault();
+        var simulator = this.CreateStripeMock();
+        simulator.Customers().Get().UseDefault();
 
-        await mock.StartAsync();
+        await simulator.StartAsync();
 
         try
         {
-            var client = mock.CreateClient();
+            var client = simulator.CreateClient();
 
             // Act
             var response = await client.GetStringAsync("/v1/customers/cus_test123");
@@ -85,7 +85,7 @@ public class IntegrationTests
         }
         finally
         {
-            await mock.StopAsync();
+            await simulator.StopAsync();
         }
     }
 
@@ -93,17 +93,17 @@ public class IntegrationTests
     public async Task StripeMock_MultipleEndpoints_ShouldAllWork()
     {
         // Arrange
-        var mock = this.CreateStripeMock();
-        mock.Customers().Get().UseDefault();
-        mock.Customers().List().UseDefault();
-        mock.Charges().Get().UseDefault();
-        mock.PaymentIntents().Create().UseDefault();
+        var simulator = this.CreateStripeMock();
+        simulator.Customers().Get().UseDefault();
+        simulator.Customers().List().UseDefault();
+        simulator.Charges().Get().UseDefault();
+        simulator.PaymentIntents().Create().UseDefault();
 
-        await mock.StartAsync();
+        await simulator.StartAsync();
 
         try
         {
-            var client = mock.CreateClient();
+            var client = simulator.CreateClient();
 
             // Act & Assert
             var customer = await client.GetStringAsync("/v1/customers/cus_123");
@@ -121,7 +121,7 @@ public class IntegrationTests
         }
         finally
         {
-            await mock.StopAsync();
+            await simulator.StopAsync();
         }
     }
 
@@ -129,13 +129,13 @@ public class IntegrationTests
     public void MockServer_RemoveRoute_ShouldRemoveConfiguredRoute()
     {
         // Arrange
-        var mock = this.CreateMockServer()
+        var simulator = this.CreateAPISimulator()
             .ForGet("/api/test")
             .WithResponse(new { message = "test" })
             .Add();
 
         // Act
-        var removed = mock.RemoveRoute("/api/test", "GET");
+        var removed = simulator.RemoveRoute("/api/test", "GET");
 
         // Assert
         removed.Should().BeTrue();
@@ -145,7 +145,7 @@ public class IntegrationTests
     public async Task MockServer_ClearRoutes_ShouldRemoveAllRoutes()
     {
         // Arrange
-        var mock = this.CreateMockServer()
+        var simulator = this.CreateAPISimulator()
             .ForGet("/api/test1")
             .WithResponse(new { message = "test1" })
             .Add()
@@ -153,18 +153,18 @@ public class IntegrationTests
             .WithResponse(new { message = "test2" })
             .Add();
 
-        await mock.StartAsync();
+        await simulator.StartAsync();
 
         try
         {
-            var client = mock.CreateClient();
+            var client = simulator.CreateClient();
 
             // Verify routes work before clearing
             var response1 = await client.GetStringAsync("/api/test1");
             response1.Should().Contain("test1");
 
             // Act - clear all routes
-            mock.ClearRoutes();
+            simulator.ClearRoutes();
 
             // Assert - verify routes return 404 after clearing
             var response2 = await client.GetAsync("/api/test1");
@@ -172,7 +172,7 @@ public class IntegrationTests
         }
         finally
         {
-            await mock.StopAsync();
+            await simulator.StopAsync();
         }
     }
 }

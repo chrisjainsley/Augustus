@@ -7,11 +7,11 @@ using Augustus;
 /// </summary>
 public class StripeSubscriptionsBuilder
 {
-    private readonly MockServer mockServer;
+    private readonly APISimulator apiSimulator;
 
-    internal StripeSubscriptionsBuilder(MockServer mockServer)
+    internal StripeSubscriptionsBuilder(APISimulator apiSimulator)
     {
-        this.mockServer = mockServer ?? throw new ArgumentNullException(nameof(mockServer));
+        this.apiSimulator = apiSimulator ?? throw new ArgumentNullException(nameof(apiSimulator));
     }
 
     /// <summary>
@@ -20,7 +20,7 @@ public class StripeSubscriptionsBuilder
     /// <param name="subscriptionId">The subscription ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Get(string subscriptionId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/subscriptions/{subscriptionId}", "GET", "subscription");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/subscriptions/{subscriptionId}", "GET", "subscription");
     }
 
     /// <summary>
@@ -28,7 +28,7 @@ public class StripeSubscriptionsBuilder
     /// </summary>
     public StripeResourceConfigurer List()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/subscriptions", "GET", "subscription_list");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/subscriptions", "GET", "subscription_list");
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public class StripeSubscriptionsBuilder
     /// </summary>
     public StripeResourceConfigurer Create()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/subscriptions", "POST", "subscription");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/subscriptions", "POST", "subscription");
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public class StripeSubscriptionsBuilder
     /// <param name="subscriptionId">The subscription ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Update(string subscriptionId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/subscriptions/{subscriptionId}", "POST", "subscription");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/subscriptions/{subscriptionId}", "POST", "subscription");
     }
 
     /// <summary>
@@ -54,6 +54,6 @@ public class StripeSubscriptionsBuilder
     /// <param name="subscriptionId">The subscription ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Cancel(string subscriptionId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/subscriptions/{subscriptionId}", "DELETE", "subscription_canceled");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/subscriptions/{subscriptionId}", "DELETE", "subscription_canceled");
     }
 }

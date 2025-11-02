@@ -7,11 +7,11 @@ using Augustus;
 /// </summary>
 public class StripeCustomersBuilder
 {
-    private readonly MockServer mockServer;
+    private readonly APISimulator apiSimulator;
 
-    internal StripeCustomersBuilder(MockServer mockServer)
+    internal StripeCustomersBuilder(APISimulator apiSimulator)
     {
-        this.mockServer = mockServer ?? throw new ArgumentNullException(nameof(mockServer));
+        this.apiSimulator = apiSimulator ?? throw new ArgumentNullException(nameof(apiSimulator));
     }
 
     /// <summary>
@@ -20,7 +20,7 @@ public class StripeCustomersBuilder
     /// <param name="customerId">The customer ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Get(string customerId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/customers/{customerId}", "GET", "customer");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/customers/{customerId}", "GET", "customer");
     }
 
     /// <summary>
@@ -28,7 +28,7 @@ public class StripeCustomersBuilder
     /// </summary>
     public StripeResourceConfigurer List()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/customers", "GET", "customer_list");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/customers", "GET", "customer_list");
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public class StripeCustomersBuilder
     /// </summary>
     public StripeResourceConfigurer Create()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/customers", "POST", "customer");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/customers", "POST", "customer");
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public class StripeCustomersBuilder
     /// <param name="customerId">The customer ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Update(string customerId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/customers/{customerId}", "POST", "customer");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/customers/{customerId}", "POST", "customer");
     }
 
     /// <summary>
@@ -54,6 +54,6 @@ public class StripeCustomersBuilder
     /// <param name="customerId">The customer ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Delete(string customerId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/customers/{customerId}", "DELETE", "customer_deleted");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/customers/{customerId}", "DELETE", "customer_deleted");
     }
 }

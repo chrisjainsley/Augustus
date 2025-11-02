@@ -7,11 +7,11 @@ using Augustus;
 /// </summary>
 public class StripeChargesBuilder
 {
-    private readonly MockServer mockServer;
+    private readonly APISimulator apiSimulator;
 
-    internal StripeChargesBuilder(MockServer mockServer)
+    internal StripeChargesBuilder(APISimulator apiSimulator)
     {
-        this.mockServer = mockServer ?? throw new ArgumentNullException(nameof(mockServer));
+        this.apiSimulator = apiSimulator ?? throw new ArgumentNullException(nameof(apiSimulator));
     }
 
     /// <summary>
@@ -20,7 +20,7 @@ public class StripeChargesBuilder
     /// <param name="chargeId">The charge ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Get(string chargeId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/charges/{chargeId}", "GET", "charge");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/charges/{chargeId}", "GET", "charge");
     }
 
     /// <summary>
@@ -28,7 +28,7 @@ public class StripeChargesBuilder
     /// </summary>
     public StripeResourceConfigurer List()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/charges", "GET", "charge_list");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/charges", "GET", "charge_list");
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public class StripeChargesBuilder
     /// </summary>
     public StripeResourceConfigurer Create()
     {
-        return new StripeResourceConfigurer(mockServer, "/v1/charges", "POST", "charge");
+        return new StripeResourceConfigurer(apiSimulator, "/v1/charges", "POST", "charge");
     }
 
     /// <summary>
@@ -45,6 +45,6 @@ public class StripeChargesBuilder
     /// <param name="chargeId">The charge ID pattern (use "{id}" for wildcard).</param>
     public StripeResourceConfigurer Capture(string chargeId = "{id}")
     {
-        return new StripeResourceConfigurer(mockServer, $"/v1/charges/{chargeId}/capture", "POST", "charge");
+        return new StripeResourceConfigurer(apiSimulator, $"/v1/charges/{chargeId}/capture", "POST", "charge");
     }
 }

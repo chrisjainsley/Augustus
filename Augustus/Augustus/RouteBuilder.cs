@@ -1,19 +1,19 @@
 namespace Augustus;
 
 /// <summary>
-/// A fluent builder for configuring mock server routes.
+/// A fluent builder for configuring API simulator routes.
 /// </summary>
 public class RouteBuilder
 {
-    private readonly MockServer mockServer;
+    private readonly APISimulator apiSimulator;
     private readonly string pattern;
     private readonly string httpMethod;
     private IResponseStrategy? responseStrategy;
     private int statusCode = 200;
 
-    internal RouteBuilder(MockServer mockServer, string pattern, string httpMethod)
+    internal RouteBuilder(APISimulator apiSimulator, string pattern, string httpMethod)
     {
-        this.mockServer = mockServer ?? throw new ArgumentNullException(nameof(mockServer));
+        this.apiSimulator = apiSimulator ?? throw new ArgumentNullException(nameof(apiSimulator));
         this.pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
         this.httpMethod = httpMethod;
     }
@@ -87,11 +87,11 @@ public class RouteBuilder
     }
 
     /// <summary>
-    /// Adds this route configuration to the mock server.
+    /// Adds this route configuration to the API simulator.
     /// </summary>
-    /// <returns>The <see cref="MockServer"/> instance for further configuration.</returns>
+    /// <returns>The <see cref="APISimulator"/> instance for further configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if no response strategy was configured.</exception>
-    public MockServer Add()
+    public APISimulator Add()
     {
         if (responseStrategy == null)
         {
@@ -100,11 +100,11 @@ public class RouteBuilder
                 "Use WithResponse(), WithJsonFile(), or WithStrategy() before calling Add().");
         }
 
-        mockServer.AddRouteInternal(new RouteConfiguration(pattern, httpMethod)
+        apiSimulator.AddRouteInternal(new RouteConfiguration(pattern, httpMethod)
         {
             ResponseStrategy = responseStrategy
         });
 
-        return mockServer;
+        return apiSimulator;
     }
 }
