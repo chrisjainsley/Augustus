@@ -94,7 +94,7 @@ namespace Augustus
                     // Double the delay for next retry, but cap at maximum
                     delayMilliseconds = Math.Min(delayMilliseconds * 2, options.MaxRetryDelayMs);
                 }
-                catch (TaskCanceledException) when (attemptCount < options.MaxRetries)
+                catch (TaskCanceledException) when (attemptCount <= options.MaxRetries)
                 {
                     // Timeout occurred, retry if we haven't exceeded max retries
                     LogRetryAttempt(attemptCount, new Exception("Request timeout"), delayMilliseconds);
