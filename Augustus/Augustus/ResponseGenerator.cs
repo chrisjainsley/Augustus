@@ -34,7 +34,7 @@ namespace Augustus
                 if (options.EnableCaching)
                 {
                     var cachedResponse = await fileManager.ReadCachedResponseAsync(requestHash);
-                    if (!string.IsNullOrEmpty(cachedResponse))
+                    if (!string.IsNullOrWhiteSpace(cachedResponse))
                     {
                         httpContext.Response.ContentType = "application/json";
                         await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
@@ -75,7 +75,7 @@ namespace Augustus
 
                 // Get the first result and validate it's not null
                 var firstContent = chatResults.Value.Content[0];
-                if (firstContent == null || string.IsNullOrEmpty(firstContent.Text))
+                if (firstContent == null || string.IsNullOrWhiteSpace(firstContent.Text))
                 {
                     await WriteErrorResponse(httpContext, "Empty or null text content from OpenAI", 500, cancellationToken);
                     return;

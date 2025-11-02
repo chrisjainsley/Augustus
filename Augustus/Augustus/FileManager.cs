@@ -57,7 +57,7 @@ public partial class APISimulator
         public async Task<string?> ReadCachedResponseAsync(string requestHash)
         {
             var json = await ReadFromFileAsync($"{requestHash}.json");
-            if (string.IsNullOrEmpty(json))
+            if (string.IsNullOrWhiteSpace(json))
                 return null;
 
             try
