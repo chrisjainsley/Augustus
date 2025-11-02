@@ -1,4 +1,4 @@
-namespace Augustus.Stripe;
+namespace Augustus.APIs.Stripe;
 
 using Augustus;
 using System.Text.Json;

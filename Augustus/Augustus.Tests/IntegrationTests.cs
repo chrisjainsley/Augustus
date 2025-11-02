@@ -1,6 +1,6 @@
 using Augustus;
 using Augustus.Extensions;
-using Augustus.Stripe;
+using Augustus.APIs.Stripe;
 using FluentAssertions;
 using Xunit;
 
