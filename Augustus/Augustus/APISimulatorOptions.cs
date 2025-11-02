@@ -126,6 +126,105 @@ public class APISimulatorOptions
         }
     }
 
+    private int _maxRetries = 5;
+
+    /// <summary>
+    /// Gets or sets the maximum number of retry attempts for OpenAI API requests.
+    /// </summary>
+    /// <value>
+    /// The maximum number of retries. Must be between 0 and 10. Default is 5.
+    /// </value>
+    /// <remarks>
+    /// When OpenAI API requests fail due to rate limiting (HTTP 429) or transient errors (HTTP 500-504),
+    /// the request will be retried up to this many times with exponential backoff.
+    /// Set to 0 to disable retries.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 0 or greater than 10.</exception>
+    public int MaxRetries
+    {
+        get => _maxRetries;
+        set
+        {
+            if (value < 0 || value > 10)
+                throw new ArgumentOutOfRangeException(nameof(MaxRetries), "MaxRetries must be between 0 and 10");
+            _maxRetries = value;
+        }
+    }
+
+    private int _initialRetryDelayMs = 1000;
+
+    /// <summary>
+    /// Gets or sets the initial retry delay in milliseconds.
+    /// </summary>
+    /// <value>
+    /// The initial delay in milliseconds before the first retry. Must be between 100 and 60000. Default is 1000 (1 second).
+    /// </value>
+    /// <remarks>
+    /// The delay doubles with each subsequent retry (exponential backoff) up to <see cref="MaxRetryDelayMs"/>.
+    /// For example, with default settings: 1s, 2s, 4s, 8s, 16s.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 100 or greater than 60000.</exception>
+    public int InitialRetryDelayMs
+    {
+        get => _initialRetryDelayMs;
+        set
+        {
+            if (value < 100 || value > 60000)
+                throw new ArgumentOutOfRangeException(nameof(InitialRetryDelayMs), "InitialRetryDelayMs must be between 100 and 60000");
+            _initialRetryDelayMs = value;
+        }
+    }
+
+    private int _maxRetryDelayMs = 32000;
+
+    /// <summary>
+    /// Gets or sets the maximum retry delay in milliseconds.
+    /// </summary>
+    /// <value>
+    /// The maximum delay in milliseconds between retry attempts. Must be between 1000 and 300000. Default is 32000 (32 seconds).
+    /// </value>
+    /// <remarks>
+    /// This caps the exponential backoff delay to prevent excessively long waits.
+    /// The delay starts at <see cref="InitialRetryDelayMs"/> and doubles with each retry until reaching this maximum.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 1000 or greater than 300000.</exception>
+    public int MaxRetryDelayMs
+    {
+        get => _maxRetryDelayMs;
+        set
+        {
+            if (value < 1000 || value > 300000)
+                throw new ArgumentOutOfRangeException(nameof(MaxRetryDelayMs), "MaxRetryDelayMs must be between 1000 and 300000");
+            _maxRetryDelayMs = value;
+        }
+    }
+
+    private int _maxConcurrentRequests = 10;
+
+    /// <summary>
+    /// Gets or sets the maximum number of concurrent OpenAI API requests.
+    /// </summary>
+    /// <value>
+    /// The maximum number of concurrent requests. Must be between 1 and 100. Default is 10.
+    /// </value>
+    /// <remarks>
+    /// This limits how many requests can be in-flight to OpenAI at the same time.
+    /// Requests beyond this limit will be queued and processed when slots become available.
+    /// Lower values reduce the chance of hitting rate limits but may increase overall latency.
+    /// Higher values allow more parallelism but increase the risk of rate limiting.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 1 or greater than 100.</exception>
+    public int MaxConcurrentRequests
+    {
+        get => _maxConcurrentRequests;
+        set
+        {
+            if (value < 1 || value > 100)
+                throw new ArgumentOutOfRangeException(nameof(MaxConcurrentRequests), "MaxConcurrentRequests must be between 1 and 100");
+            _maxConcurrentRequests = value;
+        }
+    }
+
     /// <summary>
     /// Validates that all required configuration is present and correct.
     /// </summary>
