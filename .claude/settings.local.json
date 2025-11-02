@@ -13,5 +13,17 @@
       "WebSearch"
     ],
     "deny": []
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/review-and-fix"
+          }
+        ]
+      }
+    ]
   }
 }

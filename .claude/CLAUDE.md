@@ -28,30 +28,23 @@ When you request branch or worktree work, the branch-worktree-manager agent will
 
 ## Automated Code Review
 
-**When to run auto-review:**
+**Automatic execution via Stop hook:**
 
-After making substantial changes to C# source files:
-- After editing 3+ files
-- After adding new features
-- After refactoring
-- Before creating commits or PRs
-- When the user explicitly requests it
+A Claude Code Stop hook is configured to automatically run `/review-and-fix` when Claude stops processing. This ensures consistent code quality after each development session.
 
-**How to trigger:**
+**The code review process:**
 
-The code review process will:
 1. Review all C# source files for quality issues
 2. Identify and prioritize issues (Critical, High, Medium, Low)
 3. Fix Critical and High priority issues automatically
 4. Run tests to verify all fixes work
 5. Report findings and recommendations
 
+**Manual execution:**
+
+You can also manually trigger the review at any time by using the `/review-and-fix` command.
+
 See `.claude/commands/review-and-fix.md` for detailed review criteria.
-
-## Useful Custom Hooks
-
-The project includes automated scripts that can be manually executed:
-- `.claude/hooks/auto-review.sh` - Run comprehensive code review (see review process above)
 
 ---
 
