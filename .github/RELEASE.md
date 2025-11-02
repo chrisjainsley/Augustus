@@ -68,7 +68,7 @@ Once you publish the release:
 2. The workflow:
    - Extracts the version from the tag (removes 'v' prefix)
    - Updates `Augustus/Augustus/Augustus.csproj` with the new version
-   - Builds the project for all target frameworks (net6.0, net7.0, net8.0, net9.0, net10.0)
+   - Builds the project for all target frameworks (net6.0, net7.0, net8.0, net9.0)
    - Creates NuGet packages (`.nupkg` and `.snupkg` symbol package)
    - Publishes to NuGet.org
    - Attaches packages to the GitHub release
