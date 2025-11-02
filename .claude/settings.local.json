@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet :*)",
+      "Bash(dotnet test)",
+      "Bash(dotnet test:*)",
+      "Bash(del NUnitTests.cs)",
+      "Bash(del MSTestTests.cs)",
+      "Bash(rm:*)",
+      "WebSearch"
+    ],
+    "deny": []
+  }
+}

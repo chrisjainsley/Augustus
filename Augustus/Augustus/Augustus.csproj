@@ -1,18 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackageId>Augustus.AI</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Augustus Contributors</Authors>
+    <Description>An AI-powered API simulator library for .NET that generates realistic mock responses using OpenAI, with intelligent caching for test frameworks.</Description>
+    <PackageTags>testing;mocking;ai;openai;api;simulator;xunit;nunit;mstest</PackageTags>
+    <RepositoryUrl>https://github.com/chrisjainsley/augustus</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+  
   <ItemGroup>
-    <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.7" />
-    <PackageReference Include="HttpClientToCurl" Version="2.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore" Version="2.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Hosting" Version="2.2.7" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
-	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="OpenAI" Version="2.6.0" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 </Project>

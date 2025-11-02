@@ -7,7 +7,7 @@ public static class HttpRequestExtensions
 {
     public static async Task<string> ToCurlCommandAsync(this HttpRequest request)
     {
-        StringBuilder curlCommand = new StringBuilder();
+        StringBuilder curlCommand = new StringBuilder(256); // Pre-allocate with estimated capacity
         curlCommand.Append("curl -X ").Append(request.Method);
 
         // Append headers
@@ -21,8 +21,13 @@ public static class HttpRequestExtensions
             request.Method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
             request.Method.Equals("PATCH", StringComparison.OrdinalIgnoreCase))
         {
-            request.Body.Position = 0;
-            using (StreamReader reader = new StreamReader(request.Body))
+            // Only attempt to rewind if the stream supports seeking
+            if (request.Body.CanSeek)
+            {
+                request.Body.Position = 0;
+            }
+
+            using (StreamReader reader = new StreamReader(request.Body, leaveOpen: true))
             {
                 string requestBody = await reader.ReadToEndAsync();
                 if (!string.IsNullOrEmpty(requestBody))
@@ -30,7 +35,12 @@ public static class HttpRequestExtensions
                     curlCommand.Append($" -d '{requestBody}'");
                 }
             }
-            request.Body.Position = 0;
+
+            // Reset position for subsequent reads, if possible
+            if (request.Body.CanSeek)
+            {
+                request.Body.Position = 0;
+            }
         }
 
         // Append URL
