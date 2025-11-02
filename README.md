@@ -3,7 +3,8 @@
 An AI-powered API simulator library for .NET that generates realistic mock responses using OpenAI, with intelligent caching for test frameworks.
 
 [![NuGet](https://img.shields.io/nuget/v/Augustus.AI.svg)](https://www.nuget.org/packages/Augustus.AI)
-[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%209.0-blue.svg)](https://dotnet.microsoft.com/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Augustus.AI.svg)](https://www.nuget.org/packages/Augustus.AI)
+[![.NET](https://img.shields.io/badge/.NET-6.0%20%7C%207.0%20%7C%208.0%20%7C%209.0%20%7C%2010.0-blue.svg)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## 🌟 Features
@@ -13,7 +14,7 @@ An AI-powered API simulator library for .NET that generates realistic mock respo
 - **Multi-Framework Support**: Works with xUnit, NUnit, and MSTest
 - **Easy Integration**: Simple fluent API for quick setup in your tests
 - **Configurable**: Customizable OpenAI models, caching options, and ports
-- **Multiple .NET Versions**: Supports .NET 8.0 and 9.0
+- **Multiple .NET Versions**: Supports .NET 6.0, 7.0, 8.0, 9.0, and 10.0
 
 ## 🚀 Quick Start
 
@@ -67,7 +68,7 @@ var options = new APISimulatorOptions
 {
     OpenAIApiKey = "your-api-key",           // Required: Your OpenAI API key
     OpenAIEndpoint = "",                     // Optional: Custom OpenAI endpoint
-    OpenAIModel = "gpt-4",                   // Optional: Model to use (default: gpt-4)
+    OpenAIModel = "gpt-5-mini",              // Optional: Model to use (default: gpt-5-mini)
     EnableCaching = true,                    // Optional: Enable response caching (default: true)
     CacheFolderPath = "./mocks",             // Optional: Cache folder path (default: ./mocks)
     Port = 9001                              // Optional: Simulator port (default: 9001)
@@ -264,10 +265,25 @@ var simulator = this.CreateAPISimulator("MyAPI", options =>
 });
 ```
 
+## 📦 Releases
+
+Augustus is automatically published to NuGet.org when a new GitHub release is created.
+
+### For Users
+
+Visit [Augustus.AI on NuGet.org](https://www.nuget.org/packages/Augustus.AI) to see the latest versions and release notes.
+
+### For Contributors
+
+See [.github/RELEASE.md](.github/RELEASE.md) for detailed information on:
+- How releases are automated
+- Version numbering conventions
+- How to create a new release
+
 ## 🛠️ Building from Source
 
 1. Clone the repository
-2. Ensure you have .NET 8.0 or 9.0 SDK installed
+2. Ensure you have .NET 8.0+ SDK installed (supports .NET 6.0 through 10.0)
 3. Run the tests:
 
 ```bash
