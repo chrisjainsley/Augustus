@@ -90,6 +90,20 @@ public static class TestFrameworkExtensions
     }
 
     /// <summary>
+    /// Creates a new OpenAI API simulator with pre-configured context.
+    /// </summary>
+    /// <param name="testClass">The test class instance (typically <c>this</c>).</param>
+    /// <param name="configure">Optional action to configure simulator options.</param>
+    /// <returns>A new <see cref="APISimulator"/> configured for OpenAI API simulation.</returns>
+    /// <remarks>
+    /// This is a convenience method equivalent to calling <c>CreateAPISimulator("OpenAI", configure)</c>.
+    /// </remarks>
+    public static APISimulator CreateOpenAISimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    {
+        return testClass.CreateAPISimulator("OpenAI", configure);
+    }
+
+    /// <summary>
     /// Starts the simulator asynchronously and returns it for method chaining.
     /// </summary>
     /// <param name="simulator">The simulator to start.</param>
