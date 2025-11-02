@@ -8,6 +8,7 @@ namespace Augustus
     internal class ResponseGenerator
     {
         private readonly OpenAIClient openAiClient;
+        private readonly OpenAIRequestHandler requestHandler;
         private readonly APISimulatorOptions options;
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
@@ -19,6 +20,7 @@ namespace Augustus
 
             // Validation is now done in APISimulator constructor (fail-fast)
             openAiClient = new OpenAIClient(options.OpenAIApiKey);
+            requestHandler = new OpenAIRequestHandler(openAiClient, options);
 
             fileManager = new APISimulator.FileManager(options.CacheFolderPath);
         }
@@ -63,9 +65,8 @@ namespace Augustus
                 // Add the curlRequest as the user message
                 messages.Add(ChatMessage.CreateUserMessage(curlRequest));
 
-                // Send chat messages to the openAiClient
-                var chatClient = openAiClient.GetChatClient(options.OpenAIModel);
-                var chatResults = await chatClient.CompleteChatAsync(messages, cancellationToken: cancellationToken);
+                // Send chat messages to OpenAI with retry and backoff logic
+                var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, cancellationToken);
 
                 if (chatResults?.Value?.Content == null || chatResults.Value.Content.Count == 0)
                 {
