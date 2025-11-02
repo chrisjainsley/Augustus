@@ -65,7 +65,7 @@ jobs:
             ./nupkg/*.nupkg
             ./nupkg/*.snupkg
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Publish release notes
         run: |
