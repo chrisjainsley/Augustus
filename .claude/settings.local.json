@@ -10,7 +10,8 @@
       "Bash(del NUnitTests.cs)",
       "Bash(del MSTestTests.cs)",
       "Bash(rm:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(del \"C:\\Repos\\Augustus\\claude\\split-augustus-project-011CUjpoSBhHygMamUaXiYDA\\Augustus\\Augustus\\Extensions\\TestFrameworkExtensions.cs\")"
     ],
     "deny": []
   },

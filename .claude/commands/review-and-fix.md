@@ -5,7 +5,7 @@ You are performing an automated code review and fix cycle for the Augustus proje
 ## Your Task
 
 1. **Run Comprehensive Code Review**
-   - Review all C# source files in `Augustus/Augustus/` and `Augustus/Augustus.Tests/`
+   - Review all C# source files in `Augustus`
    - Check for:
      - Code quality issues (naming, readability, maintainability)
      - Potential bugs or edge cases
@@ -32,8 +32,8 @@ You are performing an automated code review and fix cycle for the Augustus proje
    - Preserve existing functionality
 
 4. **Run Tests**
-   - Build the project: `dotnet build Augustus/Augustus/Augustus.csproj`
-   - Run all tests: `dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj`
+   - Build the project: `dotnet build Augustus/Augustus.sln`
+   - Run all tests: `dotnet test Augustus/Augustus.sln`
    - If tests fail, diagnose and fix
    - Ensure all tests pass before reporting completion
 

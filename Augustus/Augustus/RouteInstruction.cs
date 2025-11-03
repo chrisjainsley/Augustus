@@ -44,10 +44,11 @@ public class RouteInstruction
     /// </summary>
     /// <param name="pattern">The URL pattern to match. Supports {id} for path segments and {*} for wildcards.</param>
     /// <param name="httpMethod">The HTTP method to match, or "*" for all methods. Default is "*".</param>
+    /// <exception cref="ArgumentNullException">Thrown if pattern is null.</exception>
     public RouteInstruction(string pattern, string httpMethod = "*")
     {
-        Pattern = pattern;
-        HttpMethod = httpMethod.ToUpperInvariant();
+        Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
+        HttpMethod = (httpMethod ?? "*").ToUpperInvariant();
         CompilePattern();
     }
 

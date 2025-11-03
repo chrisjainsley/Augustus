@@ -10,6 +10,29 @@
 public static class TestFrameworkExtensions
 {
     /// <summary>
+    /// Creates a new API simulator with optional configuration.
+    /// </summary>
+    /// <param name="testClass">The test class instance (typically <c>this</c>).</param>
+    /// <param name="configure">Optional action to configure simulator options.</param>
+    /// <returns>A new <see cref="APISimulator"/> instance.</returns>
+    /// <example>
+    /// <code>
+    /// var simulator = this.CreateAPISimulator(opt =>
+    /// {
+    ///     opt.OpenAIApiKey = "your-key";
+    ///     opt.Port = 9001;
+    /// });
+    /// </code>
+    /// </example>
+    public static APISimulator CreateAPISimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    {
+        var options = new APISimulatorOptions();
+        configure?.Invoke(options);
+
+        return new APISimulator(options);
+    }
+
+    /// <summary>
     /// Creates a new API simulator with the specified name and configuration.
     /// </summary>
     /// <param name="testClass">The test class instance (typically <c>this</c>).</param>

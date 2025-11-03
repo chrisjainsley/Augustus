@@ -1,118 +1,79 @@
-﻿using System.ComponentModel.DataAnnotations;
-
 namespace Augustus;
 
 /// <summary>
 /// Configuration options for the <see cref="APISimulator"/>.
 /// </summary>
-/// <remarks>
-/// This class provides settings for OpenAI integration, caching behavior, and server configuration.
-/// All properties have sensible defaults except <see cref="OpenAIApiKey"/>, which is required.
-/// </remarks>
 public class APISimulatorOptions
 {
-    /// <summary>
-    /// Gets or sets a value indicating whether response caching is enabled.
-    /// </summary>
-    /// <value>
-    /// <c>true</c> to cache generated responses to disk for reuse; <c>false</c> to generate fresh responses for each request.
-    /// Default is <c>true</c>.
-    /// </value>
-    /// <remarks>
-    /// When enabled, responses are cached based on a hash of the request and instructions.
-    /// This significantly reduces OpenAI API costs and improves test execution speed.
-    /// Cached responses are stored in the folder specified by <see cref="CacheFolderPath"/>.
-    /// </remarks>
-    public bool EnableCaching { get; set; } = true;
-
-    private string _cacheFolderPath = "./mocks";
+    private int _port;
+    private int _maxRetries = 5;
+    private int _initialRetryDelayMs = 1000;
+    private int _maxRetryDelayMs = 32000;
+    private int _maxConcurrentRequests = 10;
 
     /// <summary>
-    /// Gets or sets the file system path where cached responses are stored.
+    /// Random number generator for port allocation.
     /// </summary>
-    /// <value>
-    /// The path to the cache folder. Default is "./mocks".
-    /// </value>
-    /// <remarks>
-    /// The path can be relative or absolute. If the folder doesn't exist, it will be created automatically.
-    /// Setting this to null or whitespace will reset it to the default "./mocks" value.
-    /// </remarks>
-    public string CacheFolderPath
+    private static readonly Random portRandom = new Random();
+    private static readonly object portLock = new object();
+
+    /// <summary>
+    /// Generates a random port in the range 10000-59999 to avoid conflicts.
+    /// Ensures the port is not already in use by attempting to bind to it.
+    /// </summary>
+    private static int GenerateRandomPort()
     {
-        get => _cacheFolderPath;
-        set => _cacheFolderPath = string.IsNullOrWhiteSpace(value) ? "./mocks" : value;
+        lock (portLock)
+        {
+            int maxAttempts = 100;
+            int attempts = 0;
+
+            while (attempts < maxAttempts)
+            {
+                int port = portRandom.Next(10000, 60000);
+
+                // Try to bind to the port to check if it's available
+                var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port);
+                try
+                {
+                    listener.Start();
+                    listener.Stop();
+                    return port;
+                }
+                catch
+                {
+                    // Port is in use, try again
+                    attempts++;
+                }
+            }
+
+            // Fallback: if we can't find an available port after many attempts, just return a random one
+            // The actual binding will fail later with a more descriptive error
+            return portRandom.Next(10000, 60000);
+        }
     }
 
-    private string _openAIApiKey = string.Empty;
-
     /// <summary>
-    /// Gets or sets the OpenAI API key used for generating responses.
+    /// Initializes a new instance of the <see cref="APISimulatorOptions"/> class.
     /// </summary>
-    /// <value>
-    /// The OpenAI API key. This property is required and must be set before starting the simulator.
-    /// </value>
-    /// <remarks>
-    /// You can obtain an API key from https://platform.openai.com/api-keys.
-    /// The value is automatically trimmed of leading/trailing whitespace.
-    /// Consider loading this from environment variables or secure configuration rather than hardcoding.
-    /// </remarks>
-    /// <exception cref="ValidationException">Thrown during <see cref="Validate"/> if this property is not set.</exception>
-    public string OpenAIApiKey
+    public APISimulatorOptions()
     {
-        get => _openAIApiKey;
-        set => _openAIApiKey = value?.Trim() ?? string.Empty;
+        // Auto-assign a random port by default to avoid conflicts in tests
+        _port = GenerateRandomPort();
     }
 
-    private string _openAIEndpoint = string.Empty;
-
     /// <summary>
-    /// Gets or sets a custom OpenAI API endpoint URL.
+    /// Gets or sets the TCP port number on which the API simulator will listen.
     /// </summary>
     /// <value>
-    /// The custom API endpoint URL, or an empty string to use the default OpenAI endpoint.
-    /// </value>
-    /// <remarks>
-    /// This is useful for Azure OpenAI Service or other OpenAI-compatible endpoints.
-    /// If not set, the standard OpenAI API endpoint will be used.
-    /// The value must be a valid absolute URI if provided.
-    /// </remarks>
-    /// <exception cref="ValidationException">Thrown during <see cref="Validate"/> if the value is not a valid absolute URI.</exception>
-    public string OpenAIEndpoint
-    {
-        get => _openAIEndpoint;
-        set => _openAIEndpoint = value?.Trim() ?? string.Empty;
-    }
-
-    private string _openAIModel = "gpt-5-mini";
-
-    /// <summary>
-    /// Gets or sets the OpenAI model to use for generating responses.
-    /// </summary>
-    /// <value>
-    /// The model identifier. Default is "gpt-5-mini".
-    /// </value>
-    /// <remarks>
-    /// Common values include "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo".
-    /// Different models have different costs and capabilities.
-    /// Setting this to null or whitespace will reset it to "gpt-5-mini".
-    /// </remarks>
-    public string OpenAIModel
-    {
-        get => _openAIModel;
-        set => _openAIModel = string.IsNullOrWhiteSpace(value) ? "gpt-5-mini" : value.Trim();
-    }
-
-    private int _port = 9001;
-
-    /// <summary>
-    /// Gets or sets the TCP port number on which the simulator will listen.
-    /// </summary>
-    /// <value>
-    /// The port number. Must be between 1024 and 65535. Default is 9001.
+    /// The port number. Must be 0 (auto-assign) or between 1024 and 65535.
+    /// By default, a random port is automatically assigned at construction time to avoid conflicts.
     /// </value>
     /// <remarks>
     /// Ports below 1024 are typically reserved for system services and require elevated privileges.
     /// If the specified port is already in use, starting the simulator will fail.
+    /// Each new APISimulatorOptions instance automatically gets a random port assignment to avoid conflicts,
+    /// which is especially useful for running parallel tests.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 1024 or greater than 65535.</exception>
     public int Port
@@ -120,25 +81,58 @@ public class APISimulatorOptions
         get => _port;
         set
         {
-            if (value < 1024 || value > 65535)
-                throw new ArgumentOutOfRangeException(nameof(Port), "Port must be between 1024 and 65535");
+            if (value != 0 && (value < 1024 || value > 65535))
+                throw new ArgumentOutOfRangeException(nameof(Port), "Port must be 0 (auto-assign) or between 1024 and 65535");
             _port = value;
         }
     }
 
-    private int _maxRetries = 5;
+    /// <summary>
+    /// Gets or sets the OpenAI API key for AI-powered responses.
+    /// </summary>
+    /// <value>
+    /// The API key string. Cannot be null or empty when used with AI features.
+    /// </value>
+    public string OpenAIApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the maximum number of retry attempts for OpenAI API requests.
+    /// Gets or sets a value indicating whether response caching is enabled.
+    /// </summary>
+    /// <value>
+    /// true to enable caching; false to disable. Default is true.
+    /// </value>
+    public bool EnableCaching { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the folder path where cached responses are stored.
+    /// </summary>
+    /// <value>
+    /// The folder path. Default is "./mocks".
+    /// </value>
+    public string CacheFolderPath { get; set; } = "./mocks";
+
+    /// <summary>
+    /// Gets or sets the OpenAI model to use for API calls.
+    /// </summary>
+    /// <value>
+    /// The model identifier (e.g., "gpt-5-mini"). Default is "gpt-5-mini".
+    /// </value>
+    public string OpenAIModel { get; set; } = "gpt-5-mini";
+
+    /// <summary>
+    /// Gets or sets the custom OpenAI endpoint URL.
+    /// </summary>
+    /// <value>
+    /// The endpoint URL. Default is empty string.
+    /// </value>
+    public string OpenAIEndpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the maximum number of retry attempts for API calls.
     /// </summary>
     /// <value>
     /// The maximum number of retries. Must be between 0 and 10. Default is 5.
     /// </value>
-    /// <remarks>
-    /// When OpenAI API requests fail due to rate limiting (HTTP 429) or transient errors (HTTP 500-504),
-    /// the request will be retried up to this many times with exponential backoff.
-    /// Set to 0 to disable retries.
-    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 0 or greater than 10.</exception>
     public int MaxRetries
     {
@@ -151,18 +145,12 @@ public class APISimulatorOptions
         }
     }
 
-    private int _initialRetryDelayMs = 1000;
-
     /// <summary>
-    /// Gets or sets the initial retry delay in milliseconds.
+    /// Gets or sets the initial delay in milliseconds before the first retry attempt.
     /// </summary>
     /// <value>
-    /// The initial delay in milliseconds before the first retry. Must be between 100 and 60000. Default is 1000 (1 second).
+    /// The delay in milliseconds. Must be between 100 and 60000. Default is 1000.
     /// </value>
-    /// <remarks>
-    /// The delay doubles with each subsequent retry (exponential backoff) up to <see cref="MaxRetryDelayMs"/>.
-    /// For example, with default settings: 1s, 2s, 4s, 8s, 16s.
-    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 100 or greater than 60000.</exception>
     public int InitialRetryDelayMs
     {
@@ -175,18 +163,12 @@ public class APISimulatorOptions
         }
     }
 
-    private int _maxRetryDelayMs = 32000;
-
     /// <summary>
-    /// Gets or sets the maximum retry delay in milliseconds.
+    /// Gets or sets the maximum delay in milliseconds between retry attempts.
     /// </summary>
     /// <value>
-    /// The maximum delay in milliseconds between retry attempts. Must be between 1000 and 300000. Default is 32000 (32 seconds).
+    /// The delay in milliseconds. Must be between 1000 and 300000. Default is 32000.
     /// </value>
-    /// <remarks>
-    /// This caps the exponential backoff delay to prevent excessively long waits.
-    /// The delay starts at <see cref="InitialRetryDelayMs"/> and doubles with each retry until reaching this maximum.
-    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 1000 or greater than 300000.</exception>
     public int MaxRetryDelayMs
     {
@@ -199,20 +181,12 @@ public class APISimulatorOptions
         }
     }
 
-    private int _maxConcurrentRequests = 10;
-
     /// <summary>
-    /// Gets or sets the maximum number of concurrent OpenAI API requests.
+    /// Gets or sets the maximum number of concurrent API requests allowed.
     /// </summary>
     /// <value>
     /// The maximum number of concurrent requests. Must be between 1 and 100. Default is 10.
     /// </value>
-    /// <remarks>
-    /// This limits how many requests can be in-flight to OpenAI at the same time.
-    /// Requests beyond this limit will be queued and processed when slots become available.
-    /// Lower values reduce the chance of hitting rate limits but may increase overall latency.
-    /// Higher values allow more parallelism but increase the risk of rate limiting.
-    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 1 or greater than 100.</exception>
     public int MaxConcurrentRequests
     {
@@ -222,30 +196,6 @@ public class APISimulatorOptions
             if (value < 1 || value > 100)
                 throw new ArgumentOutOfRangeException(nameof(MaxConcurrentRequests), "MaxConcurrentRequests must be between 1 and 100");
             _maxConcurrentRequests = value;
-        }
-    }
-
-    /// <summary>
-    /// Validates that all required configuration is present and correct.
-    /// </summary>
-    /// <remarks>
-    /// This method checks that:
-    /// <list type="bullet">
-    /// <item><description><see cref="OpenAIApiKey"/> is not empty</description></item>
-    /// <item><description><see cref="OpenAIEndpoint"/>, if provided, is a valid absolute URI</description></item>
-    /// </list>
-    /// </remarks>
-    /// <exception cref="ValidationException">Thrown if any required configuration is missing or invalid.</exception>
-    public void Validate()
-    {
-        if (string.IsNullOrWhiteSpace(OpenAIApiKey))
-        {
-            throw new ValidationException("OpenAI API key is required. Please set APISimulatorOptions.OpenAIApiKey");
-        }
-
-        if (!string.IsNullOrEmpty(OpenAIEndpoint) && !Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))
-        {
-            throw new ValidationException("OpenAI endpoint must be a valid absolute URI");
         }
     }
 }

@@ -10,7 +10,7 @@ namespace Augustus;
 /// <remarks>
 /// This class is instance-based to support running multiple independent simulators concurrently.
 /// </remarks>
-internal class InstructionsContainer
+public class InstructionsContainer
 {
     private readonly string apiName;
     private readonly List<string> defaultInstructions;
