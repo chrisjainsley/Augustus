@@ -30,6 +30,16 @@ public static class StripeExtensions
     {
         return new StripeRouteBuilder(apiSimulator);
     }
+
+    /// <summary>
+    /// Accesses Stripe-specific route configuration for a StripeMock instance.
+    /// </summary>
+    /// <param name="stripeMock">The Stripe mock instance.</param>
+    /// <returns>A <see cref="StripeRouteBuilder"/> for configuring Stripe routes.</returns>
+    public static StripeRouteBuilder Stripe(this StripeMock stripeMock)
+    {
+        return new StripeRouteBuilder(stripeMock.APISimulator);
+    }
 }
 
 /// <summary>

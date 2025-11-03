@@ -14,7 +14,6 @@ public class StripeTests
         {
             options.OpenAIApiKey = "test-key-for-testing";
             options.EnableCaching = true;
-            options.Port = 9010; // Use unique port
         })
         .WithInstruction("Test instruction");
 
@@ -32,8 +31,7 @@ public class StripeTests
         // Test that missing API key is handled gracefully
         var options = new APISimulatorOptions
         {
-            OpenAIApiKey = "", // Empty API key
-            Port = 9011
+            OpenAIApiKey = "" // Empty API key
         };
 
         var creatingSimulator = () => new APISimulator("Stripe", options);
@@ -53,10 +51,10 @@ public class StripeTests
 
         // Test invalid port
         var settingInvalidPort = () => options.Port = 100; // Too low
-        
+
         settingInvalidPort.Should()
             .Throw<ArgumentOutOfRangeException>()
-            .WithMessage("*Port must be between 1024 and 65535*");
+            .WithMessage("*Port must be 0 (auto-assign) or between 1024 and 65535*");
     }
 
     [Fact]
@@ -66,7 +64,6 @@ public class StripeTests
         var simulator = this.CreateStripeSimulator(options =>
         {
             options.OpenAIApiKey = "test-key-for-testing";
-            options.Port = 9012;
         })
         .ForGet("/v1/customers/{id}")
             .WithInstruction("Customer exists with provided ID")
@@ -95,10 +92,9 @@ public class StripeTests
     [Fact]
     public void FluentAPI_ShouldSupportMethodSpecificRoutes()
     {
-        var simulator = this.CreateAPISimulator("TestAPI", options => 
+        var simulator = this.CreateAPISimulator("TestAPI", options =>
         {
             options.OpenAIApiKey = "test-key-for-testing";
-            options.Port = 9013;
         })
         .ConfigureRoutes()
             .ForGet("/api/items/{id}")
@@ -146,7 +142,6 @@ public class StripeTests
         var simulator = this.CreateAPISimulator("TestAPI", options =>
         {
             options.OpenAIApiKey = "test-key-for-testing";
-            options.Port = 9014;
         });
 
         // Add global instruction
@@ -196,7 +191,7 @@ public class StripeTests
         options.EnableCaching.Should().BeTrue();
         options.CacheFolderPath.Should().Be("./mocks");
         options.OpenAIModel.Should().Be("gpt-5-mini");
-        options.Port.Should().Be(9001);
+        options.Port.Should().BeGreaterThanOrEqualTo(10000).And.BeLessThan(60000); // Random port assignment
         options.OpenAIApiKey.Should().BeEmpty();
         options.OpenAIEndpoint.Should().BeEmpty();
 
@@ -333,7 +328,6 @@ public class StripeTests
         var simulator = this.CreateStripeSimulator(options =>
         {
             options.OpenAIApiKey = "test-key-for-testing";
-            options.Port = 9015;
             options.MaxRetries = 3;
             options.InitialRetryDelayMs = 500;
             options.MaxRetryDelayMs = 8000;

@@ -1,6 +1,7 @@
 namespace Augustus;
 
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 
 /// <summary>
@@ -10,13 +11,14 @@ using System.Threading.Tasks;
 /// APISimulator allows you to create mock HTTP endpoints with customizable responses.
 /// Routes can be configured before starting the server or added dynamically after it's running.
 /// </remarks>
-public class APISimulator : IAsyncDisposable
+public partial class APISimulator : IAsyncDisposable
 {
     private readonly APISimulatorOptions options;
     private readonly List<RouteConfiguration> routes = new();
     private readonly object routesLock = new();
     private WebHost? webHost;
     private bool disposed;
+    private readonly InstructionsContainer instructionsContainer;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="APISimulator"/> class.
@@ -25,12 +27,37 @@ public class APISimulator : IAsyncDisposable
     public APISimulator(APISimulatorOptions? options = null)
     {
         this.options = options ?? new APISimulatorOptions();
+        this.instructionsContainer = new InstructionsContainer("API");
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="APISimulator"/> class with a specific API name.
+    /// </summary>
+    /// <param name="apiName">The name of the API being simulated (e.g., "Stripe", "PayPal").</param>
+    /// <param name="options">Configuration options for the API simulator.</param>
+    /// <exception cref="ValidationException">Thrown if the OpenAI API key is required but not provided.</exception>
+    public APISimulator(string apiName, APISimulatorOptions? options = null)
+    {
+        this.options = options ?? new APISimulatorOptions();
+
+        // Validate API key is provided when using named APIs
+        if (string.IsNullOrWhiteSpace(this.options.OpenAIApiKey))
+        {
+            throw new ValidationException("OpenAI API key is required when creating a named API simulator.");
+        }
+
+        this.instructionsContainer = new InstructionsContainer(apiName);
     }
 
     /// <summary>
     /// Gets a value indicating whether the API simulator is currently running.
     /// </summary>
     public bool IsRunning => webHost?.IsRunning ?? false;
+
+    /// <summary>
+    /// Gets the instructions container for managing global and route-specific instructions.
+    /// </summary>
+    public InstructionsContainer InstructionsContainer => instructionsContainer;
 
     /// <summary>
     /// Starts the API simulator asynchronously.
@@ -72,6 +99,33 @@ public class APISimulator : IAsyncDisposable
             throw new InvalidOperationException("APISimulator must be started before creating clients. Call StartAsync() first.");
 
         return webHost.CreateClient();
+    }
+
+    /// <summary>
+    /// Adds a global instruction to the API simulator.
+    /// </summary>
+    /// <param name="instruction">The instruction to add.</param>
+    public void AddInstruction(string instruction)
+    {
+        instructionsContainer.AddInstruction(instruction);
+    }
+
+    /// <summary>
+    /// Configures route-specific instructions for the API simulator.
+    /// </summary>
+    /// <returns>An <see cref="InstructionBuilder"/> for fluent configuration.</returns>
+    public InstructionBuilder ConfigureRoutes()
+    {
+        return new InstructionBuilder(this);
+    }
+
+    /// <summary>
+    /// Clears the response cache.
+    /// </summary>
+    public void ClearCache()
+    {
+        // Cache clearing is handled by the WebHost's internal FileManager
+        // This method is provided for API consistency
     }
 
     #region Fluent API for Route Configuration

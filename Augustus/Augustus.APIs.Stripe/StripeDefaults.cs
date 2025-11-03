@@ -8,6 +8,7 @@ using System.Text.Json;
 internal static class StripeDefaults
 {
     private static readonly Random random = new Random();
+    private static readonly object randomLock = new object();
 
     public static string GetDefaultResponse(string resourceType)
     {
@@ -42,7 +43,7 @@ internal static class StripeDefaults
             delinquent = false,
             description = "Test customer",
             discount = (object?)null,
-            email = $"customer{random.Next(1000, 9999)}@example.com",
+            email = $"customer{GetRandomInt(1000, 9999)}@example.com",
             invoice_prefix = GenerateRandomString(8).ToUpper(),
             invoice_settings = new
             {
@@ -53,7 +54,7 @@ internal static class StripeDefaults
             },
             livemode = false,
             metadata = new { },
-            name = $"Test Customer {random.Next(100, 999)}",
+            name = $"Test Customer {GetRandomInt(100, 999)}",
             phone = (string?)null,
             preferred_locales = new string[] { },
             shipping = (object?)null,
@@ -61,7 +62,7 @@ internal static class StripeDefaults
             test_clock = (string?)null
         };
 
-        return JsonSerializer.Serialize(customer, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(customer, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GenerateCustomerList()
@@ -81,7 +82,7 @@ internal static class StripeDefaults
             url = "/v1/customers"
         };
 
-        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GenerateCharge()
@@ -90,8 +91,8 @@ internal static class StripeDefaults
         {
             id = $"ch_{GenerateRandomId()}",
             @object = "charge",
-            amount = random.Next(1000, 10000),
-            amount_captured = random.Next(1000, 10000),
+            amount = GetRandomInt(1000, 10000),
+            amount_captured = GetRandomInt(1000, 10000),
             amount_refunded = 0,
             application = (string?)null,
             application_fee = (string?)null,
@@ -134,7 +135,7 @@ internal static class StripeDefaults
                 network_status = "approved_by_network",
                 reason = (string?)null,
                 risk_level = "normal",
-                risk_score = random.Next(10, 50),
+                risk_score = GetRandomInt(10, 50),
                 seller_message = "Payment complete.",
                 type = "authorized"
             },
@@ -158,7 +159,7 @@ internal static class StripeDefaults
                     fingerprint = GenerateRandomId(),
                     funding = "credit",
                     installments = (object?)null,
-                    last4 = $"{random.Next(1000, 9999)}",
+                    last4 = $"{GetRandomInt(1000, 9999)}",
                     mandate = (string?)null,
                     network = "visa",
                     three_d_secure = (object?)null,
@@ -201,7 +202,7 @@ internal static class StripeDefaults
             transfer_group = (string?)null
         };
 
-        return JsonSerializer.Serialize(charge, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(charge, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GenerateChargeList()
@@ -220,7 +221,7 @@ internal static class StripeDefaults
             url = "/v1/charges"
         };
 
-        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GeneratePaymentIntent(string status = "succeeded")
@@ -229,7 +230,7 @@ internal static class StripeDefaults
         {
             id = $"pi_{GenerateRandomId()}",
             @object = "payment_intent",
-            amount = random.Next(1000, 10000),
+            amount = GetRandomInt(1000, 10000),
             amount_capturable = 0,
             amount_details = new
             {
@@ -280,7 +281,7 @@ internal static class StripeDefaults
             transfer_group = (string?)null
         };
 
-        return JsonSerializer.Serialize(pi, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(pi, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GeneratePaymentIntentList()
@@ -299,7 +300,7 @@ internal static class StripeDefaults
             url = "/v1/payment_intents"
         };
 
-        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GenerateSubscription(string status = "active")
@@ -431,7 +432,7 @@ internal static class StripeDefaults
             trial_start = (long?)null
         };
 
-        return JsonSerializer.Serialize(sub, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(sub, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GenerateSubscriptionList()
@@ -450,7 +451,7 @@ internal static class StripeDefaults
             url = "/v1/subscriptions"
         };
 
-        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string GenerateDeleted(string objectType)
@@ -462,18 +463,29 @@ internal static class StripeDefaults
             deleted = true
         };
 
-        return JsonSerializer.Serialize(deleted, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(deleted, new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    /// <summary>
+    /// Thread-safe wrapper for Random.Next to prevent race conditions in multi-threaded scenarios.
+    /// </summary>
+    private static int GetRandomInt(int minValue, int maxValue)
+    {
+        lock (randomLock)
+        {
+            return random.Next(minValue, maxValue);
+        }
     }
 
     private static string GenerateRandomId(int length = 24)
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        return new string(Enumerable.Range(0, length).Select(_ => chars[random.Next(chars.Length)]).ToArray());
+        return new string(Enumerable.Range(0, length).Select(_ => chars[GetRandomInt(0, chars.Length)]).ToArray());
     }
 
     private static string GenerateRandomString(int length)
     {
         const string chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-        return new string(Enumerable.Range(0, length).Select(_ => chars[random.Next(chars.Length)]).ToArray());
+        return new string(Enumerable.Range(0, length).Select(_ => chars[GetRandomInt(0, chars.Length)]).ToArray());
     }
 }

@@ -7,7 +7,7 @@ namespace Augustus.AI;
 /// <summary>
 /// Handles OpenAI API requests with retry logic, exponential backoff, and request queuing.
 /// </summary>
-internal class OpenAIRequestHandler
+internal class OpenAIRequestHandler : IDisposable
 {
     private readonly OpenAIClient openAiClient;
     private readonly AIOptions options;
@@ -91,5 +91,13 @@ internal class OpenAIRequestHandler
     private void LogRetryAttempt(int attemptCount, Exception exception, int delayMs)
     {
         Console.WriteLine($"[OpenAI Retry] Attempt {attemptCount}/{options.MaxRetries} failed: {exception.Message}. Retrying in {delayMs}ms...");
+    }
+
+    /// <summary>
+    /// Disposes the OpenAI request handler and its resources.
+    /// </summary>
+    public void Dispose()
+    {
+        requestSemaphore?.Dispose();
     }
 }

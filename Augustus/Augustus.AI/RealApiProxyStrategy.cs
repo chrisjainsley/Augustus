@@ -7,7 +7,7 @@ using System.Text.Json;
 /// <summary>
 /// Response strategy that proxies requests to a real API and caches the responses.
 /// </summary>
-public class RealApiProxyStrategy : IResponseStrategy
+public class RealApiProxyStrategy : IResponseStrategy, IDisposable
 {
     private readonly string baseUrl;
     private readonly bool enableCaching;
@@ -57,70 +57,74 @@ public class RealApiProxyStrategy : IResponseStrategy
 
             // Proxy to real API
             var realUrl = $"{baseUrl}{path}{queryString}";
-            var request = new HttpRequestMessage(new HttpMethod(method), realUrl);
-
-            // Copy headers
-            foreach (var header in httpContext.Request.Headers)
+            using (var request = new HttpRequestMessage(new HttpMethod(method), realUrl))
             {
-                if (!header.Key.StartsWith(":") && !header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase))
+                // Copy headers
+                foreach (var header in httpContext.Request.Headers)
                 {
-                    request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
+                    if (!header.Key.StartsWith(":") && !header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase))
+                    {
+                        request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
+                    }
+                }
+
+                // Add default headers
+                foreach (var header in defaultHeaders)
+                {
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+
+                // Copy body for POST/PUT/PATCH
+                if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) ||
+                    method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
+                    method.Equals("PATCH", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (httpContext.Request.Body.CanSeek)
+                    {
+                        httpContext.Request.Body.Position = 0;
+                    }
+
+                    var bodyContent = await new StreamReader(httpContext.Request.Body).ReadToEndAsync();
+                    if (!string.IsNullOrEmpty(bodyContent))
+                    {
+                        request.Content = new StringContent(bodyContent, System.Text.Encoding.UTF8,
+                            httpContext.Request.ContentType ?? "application/json");
+                    }
+                }
+
+                // Make the request
+                using (var response = await httpClient.SendAsync(request, cancellationToken))
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                    // Cache if successful
+                    if (cacheManager != null && response.IsSuccessStatusCode)
+                    {
+                        try
+                        {
+                            await cacheManager.CacheResponseAsync(
+                                cacheKey,
+                                responseContent,
+                                $"{method} {realUrl}",
+                                new List<string> { "Real API response" });
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
+                        }
+                    }
+
+                    // Return response
+                    httpContext.Response.StatusCode = (int)response.StatusCode;
+                    httpContext.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+                    await httpContext.Response.WriteAsync(responseContent, cancellationToken);
                 }
             }
-
-            // Add default headers
-            foreach (var header in defaultHeaders)
-            {
-                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
-            }
-
-            // Copy body for POST/PUT/PATCH
-            if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) ||
-                method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
-                method.Equals("PATCH", StringComparison.OrdinalIgnoreCase))
-            {
-                if (httpContext.Request.Body.CanSeek)
-                {
-                    httpContext.Request.Body.Position = 0;
-                }
-
-                var bodyContent = await new StreamReader(httpContext.Request.Body).ReadToEndAsync();
-                if (!string.IsNullOrEmpty(bodyContent))
-                {
-                    request.Content = new StringContent(bodyContent, System.Text.Encoding.UTF8,
-                        httpContext.Request.ContentType ?? "application/json");
-                }
-            }
-
-            // Make the request
-            var response = await httpClient.SendAsync(request, cancellationToken);
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            // Cache if successful
-            if (cacheManager != null && response.IsSuccessStatusCode)
-            {
-                try
-                {
-                    await cacheManager.CacheResponseAsync(
-                        cacheKey,
-                        responseContent,
-                        $"{method} {realUrl}",
-                        new List<string> { "Real API response" });
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
-                }
-            }
-
-            // Return response
-            httpContext.Response.StatusCode = (int)response.StatusCode;
-            httpContext.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
-            await httpContext.Response.WriteAsync(responseContent, cancellationToken);
         }
         catch (Exception ex)
         {
-            await WriteErrorResponse(httpContext, $"Proxy error: {ex.Message}", 500, cancellationToken);
+            System.Diagnostics.Debug.WriteLine($"Proxy error: {ex}");
+            await WriteErrorResponse(httpContext, "Failed to proxy request to real API", 502, cancellationToken);
         }
     }
 
@@ -135,7 +139,15 @@ public class RealApiProxyStrategy : IResponseStrategy
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
-        var errorResponse = JsonSerializer.Serialize(new { error = message, status = statusCode });
+        var errorResponse = JsonSerializer.Serialize(new { error = message ?? "Unknown error", status = statusCode });
         await context.Response.WriteAsync(errorResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Disposes the real API proxy strategy and its resources.
+    /// </summary>
+    public void Dispose()
+    {
+        httpClient?.Dispose();
     }
 }

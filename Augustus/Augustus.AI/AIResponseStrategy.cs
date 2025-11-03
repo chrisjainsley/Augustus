@@ -9,7 +9,7 @@ using System.Text.Json;
 /// <summary>
 /// Response strategy that uses OpenAI to generate realistic API responses.
 /// </summary>
-public class AIResponseStrategy : IResponseStrategy
+public class AIResponseStrategy : IResponseStrategy, IDisposable
 {
     private readonly AIOptions options;
     private readonly List<string> instructions;
@@ -94,9 +94,25 @@ public class AIResponseStrategy : IResponseStrategy
             httpContext.Response.ContentType = "application/json";
             await httpContext.Response.WriteAsync(responseContent, cancellationToken);
         }
-        catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
+        catch (HttpRequestException ex)
         {
-            await WriteErrorResponse(httpContext, $"Internal error: {ex.Message}", 500, cancellationToken);
+            System.Diagnostics.Debug.WriteLine($"OpenAI request failed: {ex}");
+            await WriteErrorResponse(httpContext, "Failed to generate response from OpenAI API", 502, cancellationToken);
+        }
+        catch (TaskCanceledException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"OpenAI request timeout: {ex}");
+            await WriteErrorResponse(httpContext, "Request timeout while contacting OpenAI API", 504, cancellationToken);
+        }
+        catch (OperationCanceledException ex) when (!(ex is TaskCanceledException))
+        {
+            System.Diagnostics.Debug.WriteLine($"Operation cancelled: {ex}");
+            await WriteErrorResponse(httpContext, "Request cancelled", 499, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Unexpected error generating response: {ex}");
+            await WriteErrorResponse(httpContext, "Internal server error", 500, cancellationToken);
         }
     }
 
@@ -104,7 +120,15 @@ public class AIResponseStrategy : IResponseStrategy
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
-        var errorResponse = JsonSerializer.Serialize(new { error = message, status = statusCode });
+        var errorResponse = JsonSerializer.Serialize(new { error = message ?? "Unknown error", status = statusCode });
         await context.Response.WriteAsync(errorResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Disposes the AI response strategy and its resources.
+    /// </summary>
+    public void Dispose()
+    {
+        requestHandler?.Dispose();
     }
 }

@@ -109,7 +109,8 @@ internal class WebHost : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            await WriteErrorResponse(context, $"Internal error: {ex.Message}", 500, cancellationToken);
+            System.Diagnostics.Debug.WriteLine($"Request handling error: {ex}");
+            await WriteErrorResponse(context, "Internal server error", 500, cancellationToken);
         }
     }
 
