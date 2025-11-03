@@ -14,5 +14,17 @@
       "Bash(del \"C:\\Repos\\Augustus\\claude\\split-augustus-project-011CUjpoSBhHygMamUaXiYDA\\Augustus\\Augustus\\Extensions\\TestFrameworkExtensions.cs\")"
     ],
     "deny": []
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/review-and-fix"
+          }
+        ]
+      }
+    ]
   }
 }
