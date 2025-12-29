@@ -24,6 +24,32 @@ public partial class APISimulator
             }
         }
 
+        /// <summary>
+        /// Validates that a filename is safe and doesn't contain path traversal characters.
+        /// </summary>
+        /// <param name="fileName">The filename to validate.</param>
+        /// <exception cref="ArgumentException">Thrown if the filename contains invalid characters.</exception>
+        private static void ValidateFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                throw new ArgumentException("File name cannot be null or empty.", nameof(fileName));
+            }
+
+            // Check for path traversal characters
+            if (fileName.Contains("..") || fileName.Contains('/') || fileName.Contains('\\'))
+            {
+                throw new ArgumentException("File name contains invalid path characters.", nameof(fileName));
+            }
+
+            // Check for other invalid filename characters
+            var invalidChars = Path.GetInvalidFileNameChars();
+            if (fileName.IndexOfAny(invalidChars) >= 0)
+            {
+                throw new ArgumentException("File name contains invalid characters.", nameof(fileName));
+            }
+        }
+
         public async Task WriteToFileAsync(string filename, string content)
         {
             string fullPath = Path.Combine(cacheFolderPath, filename);
@@ -41,6 +67,8 @@ public partial class APISimulator
 
         public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
         {
+            ValidateFileName(requestHash);
+
             var cacheEntry = new CacheEntry
             {
                 RequestHash = requestHash,
@@ -56,6 +84,8 @@ public partial class APISimulator
 
         public async Task<string?> ReadCachedResponseAsync(string requestHash)
         {
+            ValidateFileName(requestHash);
+
             var json = await ReadFromFileAsync($"{requestHash}.json");
             if (string.IsNullOrEmpty(json))
                 return null;

@@ -106,5 +106,6 @@ internal class WebHost : IAsyncDisposable
 
         startStopLock.Dispose();
         disposed = true;
+        GC.SuppressFinalize(this);
     }
 }

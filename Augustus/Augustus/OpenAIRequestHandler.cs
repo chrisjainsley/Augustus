@@ -70,7 +70,11 @@ namespace Augustus
             IEnumerable<ChatMessage> messages,
             CancellationToken cancellationToken)
         {
-            var chatClient = openAiClient.GetChatClient(options.OpenAIModel);
+            // For Azure OpenAI, use the deployment name; otherwise use the model name
+            var modelOrDeployment = options.UseAzureOpenAI
+                ? options.AzureDeploymentName
+                : options.OpenAIModel;
+            var chatClient = openAiClient.GetChatClient(modelOrDeployment);
             int attemptCount = 0;
             int delayMilliseconds = options.InitialRetryDelayMs;
 

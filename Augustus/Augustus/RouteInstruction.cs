@@ -56,8 +56,10 @@ public class RouteInstruction
         try
         {
             // Convert simple patterns like "/api/customers/{id}" to regex
+            // Also supports {deployment} for Azure OpenAI URL patterns
             var regexPattern = Pattern
                 .Replace("{id}", @"[^/]+")
+                .Replace("{deployment}", @"[^/]+")
                 .Replace("{*}", ".*")
                 .Replace("/", @"\/");
 

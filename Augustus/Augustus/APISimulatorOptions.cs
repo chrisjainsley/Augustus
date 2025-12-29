@@ -83,6 +83,55 @@ public class APISimulatorOptions
         set => _openAIEndpoint = value?.Trim() ?? string.Empty;
     }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether to use Azure OpenAI service instead of standard OpenAI.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> to use Azure OpenAI; <c>false</c> to use standard OpenAI (default).
+    /// </value>
+    /// <remarks>
+    /// When enabled, <see cref="OpenAIEndpoint"/> and <see cref="AzureDeploymentName"/> must also be configured.
+    /// The <see cref="OpenAIApiKey"/> should contain your Azure OpenAI API key.
+    /// </remarks>
+    public bool UseAzureOpenAI { get; set; } = false;
+
+    private string _azureDeploymentName = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Azure OpenAI deployment name.
+    /// </summary>
+    /// <value>
+    /// The deployment name configured in your Azure OpenAI resource.
+    /// Required when <see cref="UseAzureOpenAI"/> is <c>true</c>.
+    /// </value>
+    /// <remarks>
+    /// This corresponds to the deployment name you created in the Azure portal for your model.
+    /// Example: "gpt-4", "gpt-35-turbo", or a custom deployment name.
+    /// </remarks>
+    public string AzureDeploymentName
+    {
+        get => _azureDeploymentName;
+        set => _azureDeploymentName = value?.Trim() ?? string.Empty;
+    }
+
+    private string _azureApiVersion = "2024-06-01";
+
+    /// <summary>
+    /// Gets or sets the Azure OpenAI API version.
+    /// </summary>
+    /// <value>
+    /// The API version to use. Default is "2024-06-01".
+    /// </value>
+    /// <remarks>
+    /// Azure OpenAI requires an API version in requests. Common versions include:
+    /// "2024-06-01", "2024-02-01", "2023-12-01-preview".
+    /// </remarks>
+    public string AzureApiVersion
+    {
+        get => _azureApiVersion;
+        set => _azureApiVersion = string.IsNullOrWhiteSpace(value) ? "2024-06-01" : value.Trim();
+    }
+
     private string _openAIModel = "gpt-5-mini";
 
     /// <summary>
@@ -246,6 +295,20 @@ public class APISimulatorOptions
         if (!string.IsNullOrEmpty(OpenAIEndpoint) && !Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))
         {
             throw new ValidationException("OpenAI endpoint must be a valid absolute URI");
+        }
+
+        // Azure OpenAI specific validation
+        if (UseAzureOpenAI)
+        {
+            if (string.IsNullOrWhiteSpace(OpenAIEndpoint))
+            {
+                throw new ValidationException("OpenAI endpoint is required when UseAzureOpenAI is true. Please set APISimulatorOptions.OpenAIEndpoint to your Azure OpenAI resource URL (e.g., https://your-resource.openai.azure.com)");
+            }
+
+            if (string.IsNullOrWhiteSpace(AzureDeploymentName))
+            {
+                throw new ValidationException("Azure deployment name is required when UseAzureOpenAI is true. Please set APISimulatorOptions.AzureDeploymentName");
+            }
         }
     }
 }

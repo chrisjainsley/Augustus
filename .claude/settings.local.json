@@ -19,8 +19,10 @@
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "/review-and-fix"
+            "type": "agent",
+            "prompt": "Review all modified C# files for code quality issues, potential bugs, and security vulnerabilities. Fix any Critical or High priority issues found, then run the tests to verify.",
+            "timeout": 300,
+            "statusMessage": "Running automated code review..."
           }
         ]
       }

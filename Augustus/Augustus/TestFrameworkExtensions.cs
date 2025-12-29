@@ -221,6 +221,111 @@ public static class TestFrameworkExtensions
     }
 
     /// <summary>
+    /// Creates a new Azure OpenAI API simulator with pre-configured context and default instructions.
+    /// </summary>
+    /// <param name="testClass">The test class instance (typically <c>this</c>).</param>
+    /// <param name="configure">Optional action to configure simulator options.</param>
+    /// <returns>A new <see cref="APISimulator"/> configured for Azure OpenAI API simulation with proper response formats.</returns>
+    /// <remarks>
+    /// <para>This simulator comes pre-configured with instructions to:</para>
+    /// <list type="bullet">
+    /// <item>Return responses in the official Azure OpenAI API JSON format</item>
+    /// <item>Support Azure-specific endpoints like /openai/deployments/{deployment}/chat/completions</item>
+    /// <item>Include proper response fields with Azure-specific metadata (content_filter_results)</item>
+    /// <item>Handle api-version query parameter requirements</item>
+    /// <item>Support api-key header authentication</item>
+    /// </list>
+    /// <para>You can add additional custom instructions using <c>.WithInstruction()</c> or route-specific configurations.</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var simulator = this.CreateAzureOpenAISimulator(opt =>
+    /// {
+    ///     opt.OpenAIApiKey = "your-key";
+    ///     opt.Port = 9020;
+    /// });
+    /// await simulator.StartAsync();
+    /// </code>
+    /// </example>
+    public static APISimulator CreateAzureOpenAISimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    {
+        var simulator = testClass.CreateAPISimulator("Azure OpenAI", configure);
+
+        // Add default instructions for Azure OpenAI API format
+        simulator.AddInstruction("Return all responses in valid JSON format matching the official Azure OpenAI API specification.");
+
+        simulator.AddInstruction("Recognize and handle Azure OpenAI URL patterns: /openai/deployments/{deployment-name}/chat/completions with api-version query parameter.");
+
+        simulator.AddInstruction("Accept authentication via 'api-key' header (Azure style) in addition to 'Authorization: Bearer' header (OpenAI style).");
+
+        simulator.AddInstruction(@"For Azure OpenAI chat completion requests (POST /openai/deployments/{deployment}/chat/completions), return responses in this format:
+{
+  ""id"": ""chatcmpl-[random-id]"",
+  ""object"": ""chat.completion"",
+  ""created"": [unix-timestamp],
+  ""model"": ""[deployment-name-from-url]"",
+  ""choices"": [
+    {
+      ""index"": 0,
+      ""message"": {
+        ""role"": ""assistant"",
+        ""content"": ""[generated response content]""
+      },
+      ""finish_reason"": ""stop"",
+      ""content_filter_results"": {
+        ""hate"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""self_harm"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""sexual"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""violence"": { ""filtered"": false, ""severity"": ""safe"" }
+      }
+    }
+  ],
+  ""usage"": {
+    ""prompt_tokens"": [realistic-number],
+    ""completion_tokens"": [realistic-number],
+    ""total_tokens"": [sum-of-tokens]
+  },
+  ""system_fingerprint"": ""fp_[random-string]""
+}");
+
+        simulator.AddInstruction(@"For Azure OpenAI embedding requests (POST /openai/deployments/{deployment}/embeddings), include Azure-specific metadata and return in standard embedding format.");
+
+        simulator.AddInstruction(@"For error responses, return in Azure OpenAI format:
+{
+  ""error"": {
+    ""code"": ""[error-code]"",
+    ""message"": ""[error description]"",
+    ""param"": null,
+    ""type"": ""[error-type]""
+  }
+}");
+
+        simulator.AddInstruction("Include 'content_filter_results' in Azure OpenAI responses to simulate Azure's content filtering metadata.");
+
+        simulator.AddInstruction("When api-version query parameter is missing, return error: { \"error\": { \"code\": \"MissingApiVersionParameter\", \"message\": \"api-version query parameter is required\" } }");
+
+        simulator.AddInstruction("Generate realistic IDs using the pattern: chatcmpl-[8-character-random-string] for chat completions.");
+
+        simulator.AddInstruction("Use realistic Unix timestamps for the 'created' field (current time).");
+
+        simulator.AddInstruction("Calculate realistic token counts in the 'usage' field based on the approximate length of input and output text.");
+
+        // Configure route patterns for Azure OpenAI endpoints
+        simulator.ConfigureRoutes()
+            .ForPost("/openai/deployments/{deployment}/chat/completions")
+                .WithInstruction("This is an Azure OpenAI chat completion endpoint. Extract deployment name from URL path.")
+            .ForPost("/openai/deployments/{deployment}/completions")
+                .WithInstruction("This is an Azure OpenAI text completion endpoint. Extract deployment name from URL path.")
+            .ForPost("/openai/deployments/{deployment}/embeddings")
+                .WithInstruction("This is an Azure OpenAI embeddings endpoint. Extract deployment name from URL path.")
+            .ForGet("/openai/deployments")
+                .WithInstruction("Return list of available deployments in Azure OpenAI format.")
+            .Build();
+
+        return simulator;
+    }
+
+    /// <summary>
     /// Starts the simulator asynchronously and returns it for method chaining.
     /// </summary>
     /// <param name="simulator">The simulator to start.</param>

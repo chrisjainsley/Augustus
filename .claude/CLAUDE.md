@@ -30,7 +30,7 @@ When you request branch or worktree work, the branch-worktree-manager agent will
 
 **Automatic execution via Stop hook:**
 
-A Claude Code Stop hook is configured to automatically run `/review-and-fix` when Claude stops processing. This ensures consistent code quality after each development session.
+A Claude Code Stop hook is configured to automatically run an agent-based code review when Claude stops processing. This ensures consistent code quality after each development session.
 
 **The code review process:**
 

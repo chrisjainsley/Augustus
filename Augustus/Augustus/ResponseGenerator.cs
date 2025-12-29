@@ -1,4 +1,5 @@
-﻿using OpenAI;
+﻿using Azure.AI.OpenAI;
+using OpenAI;
 using OpenAI.Chat;
 using Microsoft.AspNetCore.Http;
 using System.Text.Json;
@@ -19,7 +20,19 @@ namespace Augustus
             this.instructionsContainer = instructionsContainer ?? throw new ArgumentNullException(nameof(instructionsContainer));
 
             // Validation is now done in APISimulator constructor (fail-fast)
-            openAiClient = new OpenAIClient(options.OpenAIApiKey);
+            // Create appropriate client based on configuration
+            if (options.UseAzureOpenAI && !string.IsNullOrEmpty(options.OpenAIEndpoint))
+            {
+                // Use Azure OpenAI client
+                openAiClient = new AzureOpenAIClient(
+                    new Uri(options.OpenAIEndpoint),
+                    new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
+            }
+            else
+            {
+                // Use standard OpenAI client
+                openAiClient = new OpenAIClient(options.OpenAIApiKey);
+            }
             requestHandler = new OpenAIRequestHandler(openAiClient, options);
 
             fileManager = new APISimulator.FileManager(options.CacheFolderPath);
