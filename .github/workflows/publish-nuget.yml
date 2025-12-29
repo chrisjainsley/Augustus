@@ -8,6 +8,8 @@ jobs:
   publish:
     name: Publish to NuGet.org
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
