@@ -132,23 +132,23 @@ public class APISimulatorOptions
         set => _azureApiVersion = string.IsNullOrWhiteSpace(value) ? "2024-06-01" : value.Trim();
     }
 
-    private string _openAIModel = "gpt-5-mini";
+    private string _openAIModel = "gpt-5.3-codex-spark";
 
     /// <summary>
     /// Gets or sets the OpenAI model to use for generating responses.
     /// </summary>
     /// <value>
-    /// The model identifier. Default is "gpt-5-mini".
+    /// The model identifier. Default is "gpt-5.3-codex-spark".
     /// </value>
     /// <remarks>
-    /// Common values include "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo".
+    /// Common values include "gpt-5.3-codex-spark", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo".
     /// Different models have different costs and capabilities.
-    /// Setting this to null or whitespace will reset it to "gpt-5-mini".
+    /// Setting this to null or whitespace will reset it to "gpt-5.3-codex-spark".
     /// </remarks>
     public string OpenAIModel
     {
         get => _openAIModel;
-        set => _openAIModel = string.IsNullOrWhiteSpace(value) ? "gpt-5-mini" : value.Trim();
+        set => _openAIModel = string.IsNullOrWhiteSpace(value) ? "gpt-5.3-codex-spark" : value.Trim();
     }
 
     private int _port = 9001;

@@ -252,13 +252,90 @@ public static class TestFrameworkExtensions
         var simulator = testClass.CreateAPISimulator("Azure OpenAI", configure);
 
         // Add default instructions for Azure OpenAI API format
+        simulator.AddInstruction("CRITICAL: Return ONLY raw JSON. No markdown code fences, no ``` characters, no explanations. Your entire response must be valid, parseable JSON with no surrounding text.");
+
         simulator.AddInstruction("Return all responses in valid JSON format matching the official Azure OpenAI API specification.");
 
         simulator.AddInstruction("Recognize and handle Azure OpenAI URL patterns: /openai/deployments/{deployment-name}/chat/completions with api-version query parameter.");
 
         simulator.AddInstruction("Accept authentication via 'api-key' header (Azure style) in addition to 'Authorization: Bearer' header (OpenAI style).");
 
-        simulator.AddInstruction(@"For Azure OpenAI chat completion requests (POST /openai/deployments/{deployment}/chat/completions), return responses in this format:
+        simulator.AddInstruction(@"For Azure OpenAI chat completion requests (POST /openai/deployments/{deployment}/chat/completions), examine the request body CAREFULLY to determine which of the 3 response types to return:
+
+CASE 1 — TOOL RESULT ALREADY IN CONVERSATION (HIGHEST PRIORITY):
+If the messages array contains ANY message with ""role"": ""tool"" (a function result), the function has ALREADY been executed successfully. You MUST return a stop response. Do NOT return tool_calls again:
+{
+  ""id"": ""chatcmpl-[random-id]"",
+  ""object"": ""chat.completion"",
+  ""created"": [unix-timestamp],
+  ""model"": ""[deployment-name-from-url]"",
+  ""choices"": [
+    {
+      ""index"": 0,
+      ""message"": {
+        ""role"": ""assistant"",
+        ""content"": ""Operation completed successfully.""
+      },
+      ""finish_reason"": ""stop"",
+      ""content_filter_results"": {
+        ""hate"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""self_harm"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""sexual"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""violence"": { ""filtered"": false, ""severity"": ""safe"" }
+      }
+    }
+  ],
+  ""usage"": {
+    ""prompt_tokens"": [realistic-number],
+    ""completion_tokens"": [realistic-number],
+    ""total_tokens"": [sum-of-tokens]
+  },
+  ""system_fingerprint"": ""fp_[random-string]""
+}
+
+CASE 2 — FIRST FUNCTION CALL (tools array present, no tool results yet):
+If the request includes a ""tools"" array AND there are NO ""role"": ""tool"" messages yet, return a tool_calls response calling the most appropriate function:
+{
+  ""id"": ""chatcmpl-[random-id]"",
+  ""object"": ""chat.completion"",
+  ""created"": [unix-timestamp],
+  ""model"": ""[deployment-name-from-url]"",
+  ""choices"": [
+    {
+      ""index"": 0,
+      ""message"": {
+        ""role"": ""assistant"",
+        ""content"": null,
+        ""tool_calls"": [
+          {
+            ""id"": ""call_[random-id]"",
+            ""type"": ""function"",
+            ""function"": {
+              ""name"": ""[function-name-from-tools-array]"",
+              ""arguments"": ""[json-encoded-arguments-matching-function-parameters]""
+            }
+          }
+        ]
+      },
+      ""finish_reason"": ""tool_calls"",
+      ""content_filter_results"": {
+        ""hate"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""self_harm"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""sexual"": { ""filtered"": false, ""severity"": ""safe"" },
+        ""violence"": { ""filtered"": false, ""severity"": ""safe"" }
+      }
+    }
+  ],
+  ""usage"": {
+    ""prompt_tokens"": [realistic-number],
+    ""completion_tokens"": [realistic-number],
+    ""total_tokens"": [sum-of-tokens]
+  },
+  ""system_fingerprint"": ""fp_[random-string]""
+}
+
+CASE 3 — NO TOOLS (text response):
+If the request does NOT include a ""tools"" array, return a normal content response:
 {
   ""id"": ""chatcmpl-[random-id]"",
   ""object"": ""chat.completion"",
@@ -286,7 +363,9 @@ public static class TestFrameworkExtensions
     ""total_tokens"": [sum-of-tokens]
   },
   ""system_fingerprint"": ""fp_[random-string]""
-}");
+}
+
+CRITICAL: The ""arguments"" field in tool_calls must be a JSON-encoded STRING (not an object). NEVER return tool_calls if messages already contain a ""role"": ""tool"" entry.");
 
         simulator.AddInstruction(@"For Azure OpenAI embedding requests (POST /openai/deployments/{deployment}/embeddings), include Azure-specific metadata and return in standard embedding format.");
 
@@ -320,6 +399,8 @@ public static class TestFrameworkExtensions
                 .WithInstruction("This is an Azure OpenAI embeddings endpoint. Extract deployment name from URL path.")
             .ForGet("/openai/deployments")
                 .WithInstruction("Return list of available deployments in Azure OpenAI format.")
+            .ForRoute("{*}")
+                .WithInstruction("This is an Azure OpenAI API endpoint. Return a valid Azure OpenAI JSON response matching the request type.")
             .Build();
 
         return simulator;

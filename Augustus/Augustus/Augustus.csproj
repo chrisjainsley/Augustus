@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Augustus.AI</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <Authors>Augustus Contributors</Authors>
     <Description>An AI-powered API simulator library for .NET that generates realistic mock responses using OpenAI, with intelligent caching for test frameworks.</Description>
     <PackageTags>testing;mocking;ai;openai;api;simulator;xunit;nunit;mstest</PackageTags>

@@ -1,4 +1,4 @@
-﻿using Azure.AI.OpenAI;
+using Azure.AI.OpenAI;
 using OpenAI;
 using OpenAI.Chat;
 using Microsoft.AspNetCore.Http;
@@ -43,7 +43,14 @@ namespace Augustus
             try
             {
                 var curlRequest = await httpContext.Request.ToCurlCommandAsync();
-                var requestHash = GenerateRequestHash(curlRequest, instructionsContainer.Instructions);
+
+                // Get route-specific instructions based on the request path and method
+                // (must happen before hash so route instructions are included in cache key)
+                var instructions = instructionsContainer.GetInstructionsForRequest(
+                    httpContext.Request.Path.Value ?? "/",
+                    httpContext.Request.Method);
+
+                var requestHash = GenerateRequestHash(curlRequest, instructions);
 
                 // Try to get cached response first
                 if (options.EnableCaching)
@@ -56,11 +63,6 @@ namespace Augustus
                         return;
                     }
                 }
-
-                // Get route-specific instructions based on the request path and method
-                var instructions = instructionsContainer.GetInstructionsForRequest(
-                    httpContext.Request.Path.Value ?? "/",
-                    httpContext.Request.Method);
 
                 if (!instructions.Any())
                 {
@@ -78,8 +80,17 @@ namespace Augustus
                 // Add the curlRequest as the user message
                 messages.Add(ChatMessage.CreateUserMessage(curlRequest));
 
+                // Force the simulation LLM to return a valid JSON object.
+                // The simulation LLM generates the Azure OpenAI API *response body*, which must always be valid JSON.
+                // It does not use tool_calls itself — it generates a JSON body that *contains* tool_calls when appropriate.
+                // json_object mode ensures the response is parseable by the Azure OpenAI client SDK.
+                var chatOptions = new ChatCompletionOptions
+                {
+                    ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                };
+
                 // Send chat messages to OpenAI with retry and backoff logic
-                var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, cancellationToken);
+                var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, chatOptions, cancellationToken);
 
                 if (chatResults?.Value?.Content == null || chatResults.Value.Content.Count == 0)
                 {
@@ -95,7 +106,8 @@ namespace Augustus
                     return;
                 }
 
-                var responseContent = firstContent.Text;
+                // Strip any markdown code fences the AI may have added despite instructions
+                var responseContent = StripMarkdown(firstContent.Text);
 
                 // Cache the response if caching is enabled
                 if (options.EnableCaching)
@@ -120,6 +132,20 @@ namespace Augustus
             }
         }
 
+        private static string StripMarkdown(string text)
+        {
+            var trimmed = text.Trim();
+            if (trimmed.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+                trimmed = trimmed.Substring(7);
+            else if (trimmed.StartsWith("```"))
+                trimmed = trimmed.Substring(3);
+
+            if (trimmed.EndsWith("```"))
+                trimmed = trimmed.Substring(0, trimmed.Length - 3);
+
+            return trimmed.Trim();
+        }
+
         private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken = default)
         {
             context.Response.StatusCode = statusCode;
@@ -135,6 +161,6 @@ namespace Augustus
             // Use full hash to prevent collisions (64 hex characters from SHA256)
             // File systems can handle long names, and cache correctness is more important than brevity
             return Convert.ToHexString(hash);
-        }        
+        }
     }
 }

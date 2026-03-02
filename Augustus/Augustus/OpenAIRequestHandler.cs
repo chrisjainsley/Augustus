@@ -41,12 +41,14 @@ namespace Augustus
         /// Executes a chat completion request with retry logic and queuing.
         /// </summary>
         /// <param name="messages">The chat messages to send to OpenAI.</param>
+        /// <param name="options">Optional chat completion options (e.g. response format).</param>
         /// <param name="cancellationToken">Cancellation token to cancel the operation.</param>
         /// <returns>The chat completion result from OpenAI.</returns>
         /// <exception cref="ClientResultException">Thrown if the request fails after all retry attempts.</exception>
         /// <exception cref="OperationCanceledException">Thrown if the operation is cancelled.</exception>
         public async Task<ClientResult<ChatCompletion>> CompleteChatWithRetryAsync(
             IEnumerable<ChatMessage> messages,
+            ChatCompletionOptions? chatOptions = null,
             CancellationToken cancellationToken = default)
         {
             // Wait for available slot in the request queue
@@ -54,7 +56,7 @@ namespace Augustus
 
             try
             {
-                return await ExecuteWithRetryAsync(messages, cancellationToken);
+                return await ExecuteWithRetryAsync(messages, chatOptions, cancellationToken);
             }
             finally
             {
@@ -68,6 +70,7 @@ namespace Augustus
         /// </summary>
         private async Task<ClientResult<ChatCompletion>> ExecuteWithRetryAsync(
             IEnumerable<ChatMessage> messages,
+            ChatCompletionOptions? chatOptions,
             CancellationToken cancellationToken)
         {
             // For Azure OpenAI, use the deployment name; otherwise use the model name
@@ -85,7 +88,7 @@ namespace Augustus
                 try
                 {
                     // Attempt the API call
-                    return await chatClient.CompleteChatAsync(messages, cancellationToken: cancellationToken);
+                    return await chatClient.CompleteChatAsync(messages, chatOptions, cancellationToken: cancellationToken);
                 }
                 catch (ClientResultException ex) when (ShouldRetry(ex, attemptCount))
                 {
