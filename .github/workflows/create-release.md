@@ -7,6 +7,12 @@ description: >
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in test mode — analyse and report without creating the release or review issue"
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: read
@@ -41,6 +47,7 @@ safe-outputs:
         - name: Create draft release
           env:
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            DRY_RUN: ${{ inputs.dry_run }}
           run: |
             TAG=$(jq -r '.items[] | select(.type == "create_draft_release") | .tag_name' "$GH_AW_AGENT_OUTPUT")
             NAME=$(jq -r '.items[] | select(.type == "create_draft_release") | .release_name' "$GH_AW_AGENT_OUTPUT")
@@ -52,13 +59,25 @@ safe-outputs:
               FLAGS="$FLAGS --prerelease"
             fi
 
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$NAME" \
-              --notes-file /tmp/release-notes.md \
-              $FLAGS
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[DRY RUN] Would create draft release:"
+              echo "  Tag:         $TAG"
+              echo "  Name:        $NAME"
+              echo "  Pre-release: $PRERELEASE"
+              echo "  Flags:       $FLAGS"
+              echo "  Notes:"
+              cat /tmp/release-notes.md
+              echo ""
+              echo "Draft release NOT created (dry-run mode)."
+            else
+              gh release create "$TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "$NAME" \
+                --notes-file /tmp/release-notes.md \
+                $FLAGS
 
-            echo "Draft release created. Review at: https://github.com/$GITHUB_REPOSITORY/releases"
+              echo "Draft release created. Review at: https://github.com/$GITHUB_REPOSITORY/releases"
+            fi
 ---
 # Create Release
 
@@ -66,6 +85,11 @@ You are a release management assistant for the **Augustus** .NET library
 (`Augustus.AI` on NuGet). Your task is to analyse changes since the last
 release, determine the right semantic version increment, write release notes,
 create a draft GitHub release for human review, and open a review issue.
+
+> **Dry-run mode**: If this workflow was triggered with `dry_run = true`, complete
+> Steps 1–4 as normal (analysis and release notes), then **skip Steps 5 and 6**
+> — use `noop` instead and summarise what would have been created in your
+> response. Do not create a real release or issue in dry-run mode.
 
 ## Step 1 — Find the Last Release
 

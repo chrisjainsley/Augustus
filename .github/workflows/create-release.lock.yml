@@ -23,11 +23,17 @@
 #
 # Analyzes changes since the last release, selects the best semantic version increment, generates release notes, creates a draft GitHub release, and opens a review issue for human approval before the release is published.
 #
-# gh-aw-metadata: {"schema_version":"v1","frontmatter_hash":"2dbd9bb0c046f92357648cbecbfee4da7bf961d54c966681557e9d5f8b5c9ece","compiler_version":"v0.53.6"}
+# gh-aw-metadata: {"schema_version":"v1","frontmatter_hash":"9ca946fae1da32b384dd6f2f1f0daaceabed02db7f0bdaa1c9a7e32e4c0b74e3","compiler_version":"v0.53.6"}
 
 name: "Create Release"
 "on":
   workflow_dispatch:
+    inputs:
+      dry_run:
+        default: "false"
+        description: Run in test mode — analyse and report without creating the release or review issue
+        required: false
+        type: boolean
 
 permissions: {}
 
@@ -1088,14 +1094,27 @@ jobs:
             FLAGS="$FLAGS --prerelease"
           fi
 
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$NAME" \
-            --notes-file /tmp/release-notes.md \
-            $FLAGS
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "[DRY RUN] Would create draft release:"
+            echo "  Tag:         $TAG"
+            echo "  Name:        $NAME"
+            echo "  Pre-release: $PRERELEASE"
+            echo "  Flags:       $FLAGS"
+            echo "  Notes:"
+            cat /tmp/release-notes.md
+            echo ""
+            echo "Draft release NOT created (dry-run mode)."
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$NAME" \
+              --notes-file /tmp/release-notes.md \
+              $FLAGS
 
-          echo "Draft release created. Review at: https://github.com/$GITHUB_REPOSITORY/releases"
+            echo "Draft release created. Review at: https://github.com/$GITHUB_REPOSITORY/releases"
+          fi
         env:
+          DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   safe_outputs:
