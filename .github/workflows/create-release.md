@@ -33,18 +33,6 @@ safe-outputs:
       permissions:
         contents: write
       inputs:
-        tag_name:
-          description: "Version tag for the release (e.g. v1.2.3)"
-          required: true
-          type: string
-        release_name:
-          description: "Human-readable release title (e.g. Augustus 1.2.3)"
-          required: true
-          type: string
-        release_notes:
-          description: "Markdown-formatted release notes"
-          required: true
-          type: string
         prerelease:
           description: "Set to 'true' if this is a pre-release (alpha/beta/rc)"
           required: false
