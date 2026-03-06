@@ -73,8 +73,8 @@ public partial class APISimulator
             {
                 RequestHash = requestHash,
                 Response = response,
-                OriginalRequest = originalRequest,
-                Instructions = instructions,
+                OriginalRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(originalRequest),
+                Instructions = instructions.Select(SensitiveDataSanitizer.SanitizeSensitiveValues).ToList(),
                 Timestamp = DateTime.UtcNow
             };
 
