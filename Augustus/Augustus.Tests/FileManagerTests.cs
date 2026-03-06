@@ -32,6 +32,7 @@ public class FileManagerTests
             json.Should().NotContain("token-456");
             json.Should().NotContain("qwerty");
             json.Should().NotContain("xyz");
+            json.Should().NotContain("p@ss");
         }
         finally
         {
