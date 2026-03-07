@@ -16,7 +16,7 @@ on:
 
 permissions:
   contents: read
-  issues: read
+  issues: write
   pull-requests: read
 
 tools:
@@ -96,7 +96,7 @@ create a draft GitHub release for human review, and open a review issue.
 Run the following command to retrieve all releases:
 
 ```
-gh release list --limit 10 --json tagName,publishedAt,isLatest,isDraft
+gh release list --limit 10 --json tagName,publishedAt,isLatest,isDraft --repo "$GITHUB_REPOSITORY"
 ```
 
 From the results, select the most recent **non-draft** release — the one where
@@ -213,5 +213,5 @@ goes live. The issue body must include:
      NuGet packaging and publishing to NuGet.org via the existing CI workflow.
    - To cancel, delete the draft release and close this issue.
 
-Use the issue title: `Augustus <version> - Release Ready for Review`
-(e.g. `Augustus 0.3.0 - Release Ready for Review`).
+Use the issue title: `[Release Review] Augustus <version> - Release Ready for Review`
+(e.g. `[Release Review] Augustus 0.3.0 - Release Ready for Review`).
