@@ -1,5 +1,5 @@
 ---
-name: NuGet Package Update
+name: Dependency Updater
 description: >
   Automatically updates NuGet packages across the solution, fixes any breaking
   changes introduced by the updates while preserving the public API surface,
@@ -54,7 +54,7 @@ safe-outputs:
 
 timeout-minutes: 30
 ---
-# NuGet Package Update
+# Dependency Updater
 
 You are a .NET dependency management assistant for the **Augustus** library
 (`Augustus.AI` on NuGet). Your job is to update NuGet packages, fix any breaking
