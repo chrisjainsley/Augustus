@@ -25,6 +25,11 @@ permissions:
   issues: read
   pull-requests: read
 
+network:
+  allowed:
+    - defaults
+    - dotnet
+
 tools:
   github:
     mode: remote
