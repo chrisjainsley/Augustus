@@ -30,7 +30,7 @@ safe-outputs:
     title-prefix: "[Release Review] "
     labels: [release]
   jobs:
-    create-draft-release:
+    create_draft_release:
       description: >
         Creates a draft GitHub release with the specified version tag, title,
         and release notes. The release is created as a draft so a human can
@@ -39,6 +39,18 @@ safe-outputs:
       permissions:
         contents: write
       inputs:
+        tag_name:
+          description: "Version tag for the release (e.g. v1.2.3)"
+          required: true
+          type: string
+        release_name:
+          description: "Human-readable release title (e.g. Augustus 1.2.3)"
+          required: true
+          type: string
+        release_notes:
+          description: "Markdown-formatted release notes"
+          required: true
+          type: string
         prerelease:
           description: "Set to 'true' if this is a pre-release (alpha/beta/rc)"
           required: false
@@ -134,9 +146,19 @@ current default branch (`master`). For each commit:
 Apply these rules **in order** to the categorised changes:
 
 1. **MAJOR** (`X.0.0`) — if ANY breaking changes exist.
-2. **MINOR** (`0.X.0`) — if any new features exist and NO breaking changes.
+2. **MINOR** (`0.X.0`) — if any new **public-facing** features exist and NO
+   breaking changes. A change qualifies as MINOR only if it adds new public
+   API surface that library consumers can use — e.g. new public classes,
+   methods, or configuration options.
 3. **PATCH** (`0.0.X`) — if ONLY bug fixes, documentation, or internal
-   changes.
+   changes. The following are always PATCH, never MINOR:
+   - Internal security hardening (sanitization, encoding, validation) that
+     does not add new public API
+   - Caching, performance, or resilience improvements invisible to consumers
+   - CI/CD workflow changes, build scripts, lock-file regeneration
+   - Test additions or modifications
+   - Documentation updates
+   - Dependency bumps (unless they add new public API surface)
 
 Calculate the new version from the last release version found in Step 1.
 
@@ -150,6 +172,11 @@ Calculate the new version from the last release version found in Step 1.
 - A MINOR change increments the **minor** segment (e.g. `0.2.0` → `0.3.0`).
 - A PATCH change increments only the **patch** segment (e.g. `0.2.0` →
   `0.2.1`), never the minor segment.
+
+> **Common mistake**: Internal improvements such as security hardening,
+> sanitization, caching, and CI changes are **not** new features even if they
+> touch core library code. Unless the change exposes a new public type, method,
+> or configuration option that a consumer can call, it is a PATCH.
 
 **Example**: If Step 1 found `v0.2.0` as the latest release and new features
 were added, the correct next version is `v0.3.0` — not `v0.1.0` or any tag
