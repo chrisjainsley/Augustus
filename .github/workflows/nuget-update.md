@@ -44,6 +44,7 @@ safe-outputs:
     reviewers: [copilot]
     draft: true
     max: 1
+    base-branch: "master"
     fallback-as-issue: true
   create-issue:
     max: 1
