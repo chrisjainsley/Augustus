@@ -13,11 +13,11 @@ internal class WebHost : IAsyncDisposable
     private readonly SemaphoreSlim startStopLock = new SemaphoreSlim(1, 1);
     private bool disposed;
 
-    public void Initialize(APISimulatorOptions options, InstructionsContainer instructionsContainer)
+    public void Initialize(APISimulatorOptions options, InstructionsContainer instructionsContainer, APISimulator.FileManager fileManager)
     {
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.url = $"http://localhost:{options.Port}";
-        this.responseGenerator = new ResponseGenerator(options, instructionsContainer);
+        this.responseGenerator = new ResponseGenerator(options, instructionsContainer, fileManager);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)

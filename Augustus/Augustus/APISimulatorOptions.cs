@@ -25,7 +25,17 @@ public class APISimulatorOptions
     /// </remarks>
     public bool EnableCaching { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether stale cache entries are automatically removed on dispose.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> to automatically delete cache files that were not accessed during the simulator's lifetime;
+    /// <c>false</c> to keep all cache files. Default is <c>true</c>.
+    /// </value>
+    public bool AutoRemoveStaleCache { get; set; } = true;
+
     private string _cacheFolderPath = "./mocks";
+    private bool _cacheFolderPathExplicitlySet;
 
     /// <summary>
     /// Gets or sets the file system path where cached responses are stored.
@@ -36,11 +46,32 @@ public class APISimulatorOptions
     /// <remarks>
     /// The path can be relative or absolute. If the folder doesn't exist, it will be created automatically.
     /// Setting this to null or whitespace will reset it to the default "./mocks" value.
+    /// When explicitly set, this overrides the per-test-class auto-resolution from <c>[CallerFilePath]</c>.
     /// </remarks>
     public string CacheFolderPath
     {
         get => _cacheFolderPath;
-        set => _cacheFolderPath = string.IsNullOrWhiteSpace(value) ? "./mocks" : value;
+        set
+        {
+            _cacheFolderPath = string.IsNullOrWhiteSpace(value) ? "./mocks" : value;
+            _cacheFolderPathExplicitlySet = true;
+        }
+    }
+
+    internal bool IsCacheFolderPathExplicitlySet => _cacheFolderPathExplicitlySet;
+
+    internal void ResetCacheFolderPathExplicitFlag() => _cacheFolderPathExplicitlySet = false;
+
+    internal string? TestClassFilePath { get; set; }
+
+    internal static string ResolveCacheFolderPath(string? testClassFilePath, string apiName, string defaultPath)
+    {
+        if (string.IsNullOrEmpty(testClassFilePath))
+            return defaultPath;
+
+        var dir = Path.GetDirectoryName(testClassFilePath)!;
+        var className = Path.GetFileNameWithoutExtension(testClassFilePath);
+        return Path.Combine(dir, "__mocks__", className, apiName);
     }
 
     private string _openAIApiKey = string.Empty;
