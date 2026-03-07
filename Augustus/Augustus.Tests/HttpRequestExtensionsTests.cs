@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using Augustus;
 
 namespace Augustus.Tests;
 
@@ -76,10 +77,11 @@ public class HttpRequestExtensionsTests
         stream.Position = 3;
         request.Body = stream;
 
-        var _ = await request.ToCurlCommandAsync();
+        var curl = await request.ToCurlCommandAsync();
 
         request.Body.CanSeek.Should().BeTrue();
         request.Body.Position.Should().Be(0);
+        curl.Should().Contain("-d '{\"id\":1}'");
     }
 
     [Fact]
