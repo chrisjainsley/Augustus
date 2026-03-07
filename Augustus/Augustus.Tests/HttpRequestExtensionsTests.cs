@@ -21,7 +21,6 @@ public class HttpRequestExtensionsTests
 
         curl.Should().Contain("curl -X GET");
         curl.Should().Contain("-H \"X-Trace-Id: abc123\"");
-        curl.Should().Contain("-H");
         curl.Should().Contain("\"https://api.example.com/v1/resources?page=1\"");
         curl.Should().NotContain(" -d '");
     }
