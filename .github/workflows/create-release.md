@@ -16,7 +16,7 @@ on:
 
 permissions:
   contents: read
-  issues: read
+  issues: write
   pull-requests: read
 
 tools:
@@ -93,8 +93,24 @@ create a draft GitHub release for human review, and open a review issue.
 
 ## Step 1 — Find the Last Release
 
-Use the GitHub tools to retrieve the most recent release in this repository.
-Note the tag name (e.g. `v0.2.0`) and publication date.
+Run the following command to retrieve all releases:
+
+```
+gh release list --limit 10 --json tagName,publishedAt,isLatest,isDraft --repo "$GITHUB_REPOSITORY"
+```
+
+From the results, select the most recent **non-draft** release — the one where
+`isLatest` is `true`, or the most recently published if none is marked latest.
+Note its `tagName` (e.g. `v0.2.0`) and `publishedAt` date.
+
+> ⚠️ **Do NOT use `git tag`, `git describe`, or any other git-based command
+> to find releases.** This workflow uses a shallow clone (`--depth=1
+> --no-tags`), so git has no tag history and will return empty results.
+> The `gh release list` output is the **sole source of truth** for existing
+> releases.
+>
+> If `gh release list` returns no results, this is the first release — use
+> `v0.0.0` as the baseline for version calculation.
 
 ## Step 2 — Analyse Changes Since the Last Release
 
@@ -122,13 +138,22 @@ Apply these rules **in order** to the categorised changes:
 3. **PATCH** (`0.0.X`) — if ONLY bug fixes, documentation, or internal
    changes.
 
-Calculate the new version from the last release version.
+Calculate the new version from the last release version found in Step 1.
+
+> ⚠️ The new version **must always be strictly greater than the last release
+> tag**. Never propose a version that already exists or is lower than the
+> current latest release.
+
 **Note**: While the project is pre-1.0 (i.e. major is `0`):
 - A change that would normally be MAJOR should still increment the **minor**
   segment (e.g. `0.2.0` → `0.3.0`) and document the breaking changes clearly.
 - A MINOR change increments the **minor** segment (e.g. `0.2.0` → `0.3.0`).
 - A PATCH change increments only the **patch** segment (e.g. `0.2.0` →
   `0.2.1`), never the minor segment.
+
+**Example**: If Step 1 found `v0.2.0` as the latest release and new features
+were added, the correct next version is `v0.3.0` — not `v0.1.0` or any tag
+that already exists.
 
 ## Step 4 — Write Release Notes
 
@@ -188,5 +213,5 @@ goes live. The issue body must include:
      NuGet packaging and publishing to NuGet.org via the existing CI workflow.
    - To cancel, delete the draft release and close this issue.
 
-Use the issue title: `Augustus <version> - Release Ready for Review`
-(e.g. `Augustus 0.3.0 - Release Ready for Review`).
+Use the issue title: `[Release Review] Augustus <version> - Release Ready for Review`
+(e.g. `[Release Review] Augustus 0.3.0 - Release Ready for Review`).
