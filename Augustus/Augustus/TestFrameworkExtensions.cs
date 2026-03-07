@@ -427,7 +427,7 @@ CRITICAL: The ""arguments"" field in tool_calls must be a JSON-encoded STRING (n
     /// </example>
     public static async Task<APISimulator> StartSimulatorAsync(this APISimulator simulator, CancellationToken cancellationToken = default)
     {
-        await simulator.StartAsync(cancellationToken);
+        await simulator.StartAsync(cancellationToken).ConfigureAwait(false);
         return simulator;
     }
 

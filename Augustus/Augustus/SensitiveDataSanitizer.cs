@@ -31,9 +31,32 @@ internal static class SensitiveDataSanitizer
         "(\\b(?:api[-_]?key|access[-_]?token|refresh[-_]?token|token|secret|client[-_]?secret|password|passphrase|private[-_]?key)\\b\\s*(?:=|:)\\s*)[^,\\s\\\"']+",
         SanitizeOptions);
 
+    // Quick-check keywords that indicate a string might contain sensitive data.
+    // If none are present, we can skip the expensive regex passes entirely.
+    private static readonly string[] SensitiveKeywords = new[]
+    {
+        "authorization", "api", "key", "token", "secret", "password", "passphrase", "private"
+    };
+
     public static string SanitizeSensitiveValues(string input)
     {
         if (string.IsNullOrWhiteSpace(input))
+        {
+            return input;
+        }
+
+        // Fast path: skip regex passes if the input contains no sensitive keywords
+        bool maybeSensitive = false;
+        foreach (var keyword in SensitiveKeywords)
+        {
+            if (input.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                maybeSensitive = true;
+                break;
+            }
+        }
+
+        if (!maybeSensitive)
         {
             return input;
         }

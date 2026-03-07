@@ -22,7 +22,7 @@ internal class WebHost : IAsyncDisposable
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        await startStopLock.WaitAsync(cancellationToken);
+        await startStopLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (webHost != null)
@@ -45,7 +45,7 @@ internal class WebHost : IAsyncDisposable
                 })
                 .Build();
 
-            await webHost.StartAsync(cancellationToken);
+            await webHost.StartAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -55,18 +55,24 @@ internal class WebHost : IAsyncDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        await startStopLock.WaitAsync(cancellationToken);
+        await startStopLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (webHost == null)
                 return;
 
-            await webHost.StopAsync(cancellationToken);
+            // Drain any in-flight background cache writes before stopping the host
+            if (responseGenerator != null)
+            {
+                await responseGenerator.DrainPendingCacheWritesAsync().ConfigureAwait(false);
+            }
+
+            await webHost.StopAsync(cancellationToken).ConfigureAwait(false);
 
             // Dispose of the host after stopping
             if (webHost is IAsyncDisposable asyncDisposable)
             {
-                await asyncDisposable.DisposeAsync();
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
             }
             else if (webHost is IDisposable disposable)
             {
@@ -96,7 +102,7 @@ internal class WebHost : IAsyncDisposable
 
         try
         {
-            await StopAsync();
+            await StopAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
