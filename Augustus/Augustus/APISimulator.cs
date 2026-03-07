@@ -33,6 +33,7 @@ public partial class APISimulator : IAsyncDisposable
     private readonly APISimulatorOptions options;
     private readonly WebHost webHost = new();
     private readonly InstructionsContainer instructionsContainer;
+    private readonly FileManager fileManager;
     private bool disposed;
 
     /// <summary>
@@ -50,8 +51,18 @@ public partial class APISimulator : IAsyncDisposable
         // Validate options early (fail-fast) instead of waiting until first request
         options.Validate();
 
+        // Resolve per-test-class cache path if not explicitly set
+        if (!options.IsCacheFolderPathExplicitlySet && !string.IsNullOrEmpty(options.TestClassFilePath))
+        {
+            options.CacheFolderPath = APISimulatorOptions.ResolveCacheFolderPath(
+                options.TestClassFilePath, apiName, options.CacheFolderPath);
+            // Reset the explicit flag since this was auto-resolved, not user-set
+            options.ResetCacheFolderPathExplicitFlag();
+        }
+
+        fileManager = new FileManager(options.CacheFolderPath);
         instructionsContainer = new InstructionsContainer(apiName);
-        webHost.Initialize(options, instructionsContainer);
+        webHost.Initialize(options, instructionsContainer, fileManager);
     }
 
     /// <summary>
@@ -137,7 +148,6 @@ public partial class APISimulator : IAsyncDisposable
     /// </remarks>
     public void ClearCache()
     {
-        var fileManager = new FileManager(options.CacheFolderPath);
         fileManager.ClearCache();
     }
 
@@ -184,6 +194,18 @@ public partial class APISimulator : IAsyncDisposable
         {
             // Log but don't throw during disposal
             System.Diagnostics.Debug.WriteLine($"Error during APISimulator disposal: {ex}");
+        }
+
+        if (options.AutoRemoveStaleCache && options.EnableCaching)
+        {
+            try
+            {
+                fileManager.RemoveStaleEntries();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during stale cache removal: {ex}");
+            }
         }
 
         disposed = true;

@@ -1,5 +1,7 @@
 ﻿namespace Augustus.Extensions;
 
+using System.Runtime.CompilerServices;
+
 /// <summary>
 /// Extension methods for test frameworks to simplify <see cref="APISimulator"/> usage.
 /// </summary>
@@ -25,10 +27,11 @@ public static class TestFrameworkExtensions
     /// });
     /// </code>
     /// </example>
-    public static APISimulator CreateAPISimulator(this object testClass, string apiName, Action<APISimulatorOptions>? configure = null)
+    public static APISimulator CreateAPISimulator(this object testClass, string apiName, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
     {
         var options = new APISimulatorOptions();
         configure?.Invoke(options);
+        options.TestClassFilePath = callerFilePath;
 
         return new APISimulator(apiName, options);
     }
@@ -42,9 +45,9 @@ public static class TestFrameworkExtensions
     /// <remarks>
     /// This is a convenience method equivalent to calling <c>CreateAPISimulator("Stripe", configure)</c>.
     /// </remarks>
-    public static APISimulator CreateStripeSimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    public static APISimulator CreateStripeSimulator(this object testClass, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
     {
-        return testClass.CreateAPISimulator("Stripe", configure);
+        return testClass.CreateAPISimulator("Stripe", configure, callerFilePath);
     }
 
     /// <summary>
@@ -56,9 +59,9 @@ public static class TestFrameworkExtensions
     /// <remarks>
     /// This is a convenience method equivalent to calling <c>CreateAPISimulator("PayPal", configure)</c>.
     /// </remarks>
-    public static APISimulator CreatePayPalSimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    public static APISimulator CreatePayPalSimulator(this object testClass, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
     {
-        return testClass.CreateAPISimulator("PayPal", configure);
+        return testClass.CreateAPISimulator("PayPal", configure, callerFilePath);
     }
 
     /// <summary>
@@ -70,9 +73,9 @@ public static class TestFrameworkExtensions
     /// <remarks>
     /// This is a convenience method equivalent to calling <c>CreateAPISimulator("Twilio", configure)</c>.
     /// </remarks>
-    public static APISimulator CreateTwilioSimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    public static APISimulator CreateTwilioSimulator(this object testClass, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
     {
-        return testClass.CreateAPISimulator("Twilio", configure);
+        return testClass.CreateAPISimulator("Twilio", configure, callerFilePath);
     }
 
     /// <summary>
@@ -84,9 +87,9 @@ public static class TestFrameworkExtensions
     /// <remarks>
     /// This is a convenience method equivalent to calling <c>CreateAPISimulator("Slack", configure)</c>.
     /// </remarks>
-    public static APISimulator CreateSlackSimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    public static APISimulator CreateSlackSimulator(this object testClass, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
     {
-        return testClass.CreateAPISimulator("Slack", configure);
+        return testClass.CreateAPISimulator("Slack", configure, callerFilePath);
     }
 
     /// <summary>
@@ -115,9 +118,9 @@ public static class TestFrameworkExtensions
     /// await simulator.StartAsync();
     /// </code>
     /// </example>
-    public static APISimulator CreateOpenAISimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    public static APISimulator CreateOpenAISimulator(this object testClass, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
     {
-        var simulator = testClass.CreateAPISimulator("OpenAI", configure);
+        var simulator = testClass.CreateAPISimulator("OpenAI", configure, callerFilePath);
 
         // Add default instructions for OpenAI API format
         simulator.AddInstruction("Return all responses in valid JSON format matching the official OpenAI API specification.");
@@ -247,9 +250,9 @@ public static class TestFrameworkExtensions
     /// await simulator.StartAsync();
     /// </code>
     /// </example>
-    public static APISimulator CreateAzureOpenAISimulator(this object testClass, Action<APISimulatorOptions>? configure = null)
+    public static APISimulator CreateAzureOpenAISimulator(this object testClass, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
     {
-        var simulator = testClass.CreateAPISimulator("Azure OpenAI", configure);
+        var simulator = testClass.CreateAPISimulator("Azure OpenAI", configure, callerFilePath);
 
         // Add default instructions for Azure OpenAI API format
         simulator.AddInstruction("CRITICAL: Return ONLY raw JSON. No markdown code fences, no ``` characters, no explanations. Your entire response must be valid, parseable JSON with no surrounding text.");

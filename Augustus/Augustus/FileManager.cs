@@ -1,5 +1,6 @@
 ﻿namespace Augustus;
 
+using System.Collections.Concurrent;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ public partial class APISimulator
     internal class FileManager
     {
         private readonly string cacheFolderPath;
+        private readonly ConcurrentDictionary<string, byte> _touchedHashes = new();
 
         public FileManager(string cacheFolderPath)
         {
@@ -80,6 +82,7 @@ public partial class APISimulator
 
             var json = JsonSerializer.Serialize(cacheEntry, new JsonSerializerOptions { WriteIndented = true });
             await WriteToFileAsync($"{requestHash}.json", json);
+            _touchedHashes.TryAdd(requestHash, 0);
         }
 
         public async Task<string?> ReadCachedResponseAsync(string requestHash)
@@ -93,12 +96,53 @@ public partial class APISimulator
             try
             {
                 var cacheEntry = JsonSerializer.Deserialize<CacheEntry>(json);
+                if (cacheEntry?.Response != null)
+                    _touchedHashes.TryAdd(requestHash, 0);
                 return cacheEntry?.Response;
             }
             catch (JsonException)
             {
                 // Invalid cache file, return null
                 return null;
+            }
+        }
+
+        public void RemoveStaleEntries()
+        {
+            if (!Directory.Exists(cacheFolderPath))
+                return;
+
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(cacheFolderPath, "*.json");
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return;
+            }
+
+            foreach (var file in files)
+            {
+                var hash = Path.GetFileNameWithoutExtension(file);
+                if (!_touchedHashes.ContainsKey(hash))
+                {
+                    try
+                    {
+                        File.Delete(file);
+                    }
+                    catch (FileNotFoundException)
+                    {
+                    }
+                    catch (IOException ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Warning: Could not delete stale cache file {file}: {ex.Message}");
+                    }
+                    catch (UnauthorizedAccessException ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Warning: Access denied when deleting stale file {file}: {ex.Message}");
+                    }
+                }
             }
         }
 

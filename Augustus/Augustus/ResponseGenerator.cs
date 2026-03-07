@@ -14,10 +14,11 @@ namespace Augustus
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
 
-        public ResponseGenerator(APISimulatorOptions options, InstructionsContainer instructionsContainer)
+        public ResponseGenerator(APISimulatorOptions options, InstructionsContainer instructionsContainer, APISimulator.FileManager fileManager)
         {
             this.options = options ?? throw new ArgumentNullException(nameof(options));
             this.instructionsContainer = instructionsContainer ?? throw new ArgumentNullException(nameof(instructionsContainer));
+            this.fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
 
             // Validation is now done in APISimulator constructor (fail-fast)
             // Create appropriate client based on configuration
@@ -34,8 +35,6 @@ namespace Augustus
                 openAiClient = new OpenAIClient(options.OpenAIApiKey);
             }
             requestHandler = new OpenAIRequestHandler(openAiClient, options);
-
-            fileManager = new APISimulator.FileManager(options.CacheFolderPath);
         }
 
         public async Task GenerateResponse(HttpContext httpContext, CancellationToken cancellationToken = default)
