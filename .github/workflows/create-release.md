@@ -184,7 +184,7 @@ goes live. The issue body must include:
    - Go to **[Releases → Drafts](https://github.com/chrisjainsley/Augustus/releases)**
      and open the draft release named `<release_name>`.
    - Edit the release notes if needed.
-   - **If this is a pre-release** (marked with "This is a pre-release" checkbox):
+   - **If this is a pre-release** (the "This is a pre-release" checkbox is checked):
      - You must **uncheck** the "This is a pre-release" checkbox before publishing
        if you want the package to be published to NuGet.org.
      - Pre-releases are NOT published to NuGet automatically - only regular releases are.

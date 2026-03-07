@@ -127,13 +127,13 @@ For pre-releases (alpha, beta, rc) that you want to review before publishing to 
 5. When ready to publish to NuGet.org:
    - Edit the release on GitHub
    - **Uncheck "This is a pre-release"**
-   - Save the changes
-6. The NuGet publish workflow will automatically trigger and publish to NuGet.org
+   - Save the changes (the NuGet publish workflow will automatically trigger)
+6. The NuGet publish workflow will automatically run and publish to NuGet.org
 
 This workflow allows you to:
 - Create pre-release versions for testing
 - Share them via GitHub releases
-- Control when they are published to NuGet.org
+- Control when they are published to NuGet.org by toggling the pre-release checkbox
 
 ### Releasing version 0.2.0
 

@@ -1,18 +1,18 @@
 name: Publish NuGet Package
 
-# This workflow triggers when a release is published.
+# This workflow triggers when a release is published or edited.
 # It will only publish to NuGet.org if the release is NOT marked as a pre-release.
 # 
 # Workflow:
 # 1. Create a draft release (via create-release workflow) - it may be marked as pre-release
 # 2. Review the draft release
 # 3. Uncheck "This is a pre-release" checkbox if you want to publish to NuGet
-# 4. Click "Publish release" - this workflow will run and publish to NuGet.org
+# 4. Click "Publish release" or save the edit - this workflow will run and publish to NuGet.org
 # 5. If you leave "This is a pre-release" checked, this workflow will skip publishing
 
 on:
   release:
-    types: [published]
+    types: [published, edited]
 
 jobs:
   publish:
