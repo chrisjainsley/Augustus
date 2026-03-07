@@ -164,7 +164,7 @@ public class StripeApiTests
             await using var simulator = this.CreateStripeSimulator(opt =>
             {
                 opt.OpenAIApiKey = apiKey;
-            opt.OpenAIModel = GetModel();
+                opt.OpenAIModel = GetModel();
                 opt.Port = 9053;
                 opt.AutoRemoveStaleCache = true;
             })
@@ -211,7 +211,7 @@ public class StripeApiTests
             await using var simulator = this.CreateStripeSimulator(opt =>
             {
                 opt.OpenAIApiKey = apiKey;
-            opt.OpenAIModel = GetModel();
+                opt.OpenAIModel = GetModel();
                 opt.Port = 9054;
                 opt.AutoRemoveStaleCache = false;
             })
