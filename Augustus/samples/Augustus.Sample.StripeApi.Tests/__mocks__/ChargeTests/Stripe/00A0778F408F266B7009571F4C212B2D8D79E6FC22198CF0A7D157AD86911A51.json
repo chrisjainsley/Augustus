@@ -1,0 +1,14 @@
+{
+  "RequestHash": "00A0778F408F266B7009571F4C212B2D8D79E6FC22198CF0A7D157AD86911A51",
+  "Response": "{\n  \u0022id\u0022: \u0022ch_1IuKjY2eZvKYlo2C2a2E5D1B\u0022,\n  \u0022object\u0022: \u0022charge\u0022,\n  \u0022amount\u0022: 2000,\n  \u0022currency\u0022: \u0022usd\u0022,\n  \u0022status\u0022: \u0022succeeded\u0022,\n  \u0022created\u0022: 1672531199,\n  \u0022livemode\u0022: false,\n  \u0022description\u0022: null,\n  \u0022payment_method\u0022: \u0022tok_visa\u0022,\n  \u0022payment_method_details\u0022: {\n    \u0022type\u0022: \u0022card\u0022,\n    \u0022card\u0022: {\n      \u0022brand\u0022: \u0022Visa\u0022,\n      \u0022last4\u0022: \u00224242\u0022,\n      \u0022exp_month\u0022: 12,\n      \u0022exp_year\u0022: 2025,\n      \u0022funding\u0022: \u0022credit\u0022\n    }\n  },\n  \u0022receipt_url\u0022: \u0022https://pay.stripe.com/receipts/acct_1234/ch_1IuKjY2eZvKYlo2C2a2E5D1B\u0022,\n  \u0022balance_transaction\u0022: \u0022txn_1IuKjY2eZvKYlo2C1B0F9Z2B\u0022,\n  \u0022outcome\u0022: {\n    \u0022network_status\u0022: \u0022approved_by_network\u0022,\n    \u0022risk_level\u0022: \u0022reasonable\u0022,\n    \u0022seller_message\u0022: \u0022Payment complete.\u0022,\n    \u0022type\u0022: \u0022approved\u0022\n  }\n}",
+  "OriginalRequest": "curl -X POST -H \u0022Host: localhost:9050\u0022 -H \u0022Content-Type: application/x-www-form-urlencoded\u0022 -H \u0022Content-Length: 40\u0022 -d \u0027amount=2000\u0026currency=usd\u0026source=tok_visa\u0027 \u0022http://localhost:9050/v1/charges\u0022",
+  "Instructions": [
+    "You are a Stripe API simulator. You only respond to curl commands.",
+    "Only output the response body. Always output the full body you would expect from the API.",
+    "Generate realistic, properly formatted responses that match the API\u0027s expected structure and data types.",
+    "Use appropriate HTTP status codes in your responses when applicable.",
+    "Return realistic Stripe API JSON responses.",
+    "For POST /v1/charges, return a charge object with \u0022object\u0022: \u0022charge\u0022, a realistic \u0022id\u0022 starting with \u0022ch_\u0022, the amount and currency from the request, and \u0022status\u0022: \u0022succeeded\u0022."
+  ],
+  "Timestamp": "2026-03-07T17:12:53.9650046Z"
+}

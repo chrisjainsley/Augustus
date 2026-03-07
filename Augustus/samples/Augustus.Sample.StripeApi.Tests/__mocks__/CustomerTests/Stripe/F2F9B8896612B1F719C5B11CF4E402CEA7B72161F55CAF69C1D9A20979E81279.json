@@ -1,6 +1,6 @@
 {
   "RequestHash": "F2F9B8896612B1F719C5B11CF4E402CEA7B72161F55CAF69C1D9A20979E81279",
-  "Response": "{\n  \u0022id\u0022: \u0022cus_1234567890abcdef\u0022,\n  \u0022object\u0022: \u0022customer\u0022,\n  \u0022name\u0022: \u0022Jane Doe\u0022,\n  \u0022email\u0022: \u0022jane@example.com\u0022,\n  \u0022created\u0022: 1698436911,\n  \u0022livemode\u0022: false,\n  \u0022metadata\u0022: {},\n  \u0022description\u0022: null,\n  \u0022account_balance\u0022: 0,\n  \u0022discount\u0022: null,\n  \u0022shipping\u0022: null,\n  \u0022sources\u0022: {\n    \u0022object\u0022: \u0022list\u0022,\n    \u0022data\u0022: [],\n    \u0022has_more\u0022: false,\n    \u0022total_count\u0022: 0,\n    \u0022url\u0022: \u0022/v1/customers/cus_1234567890abcdef/sources\u0022\n  },\n  \u0022subscriptions\u0022: {\n    \u0022object\u0022: \u0022list\u0022,\n    \u0022data\u0022: [],\n    \u0022has_more\u0022: false,\n    \u0022total_count\u0022: 0,\n    \u0022url\u0022: \u0022/v1/customers/cus_1234567890abcdef/subscriptions\u0022\n  }\n}",
+  "Response": "{\n  \u0022id\u0022: \u0022cus_J6v3gK4ZfM7nQw\u0022,\n  \u0022object\u0022: \u0022customer\u0022,\n  \u0022name\u0022: \u0022Jane Doe\u0022,\n  \u0022email\u0022: \u0022jane@example.com\u0022,\n  \u0022created\u0022: 1698369451,\n  \u0022livemode\u0022: false,\n  \u0022metadata\u0022: {},\n  \u0022subscriptions\u0022: {\n    \u0022object\u0022: \u0022list\u0022,\n    \u0022data\u0022: [],\n    \u0022has_more\u0022: false,\n    \u0022total_count\u0022: 0,\n    \u0022url\u0022: \u0022/v1/customers/cus_J6v3gK4ZfM7nQw/subscriptions\u0022\n  }\n}",
   "OriginalRequest": "curl -X POST -H \u0022Host: localhost:9052\u0022 -H \u0022Content-Type: application/x-www-form-urlencoded\u0022 -H \u0022Content-Length: 38\u0022 -d \u0027name=Jane\u002BDoe\u0026email=jane%40example.com\u0027 \u0022http://localhost:9052/v1/customers\u0022",
   "Instructions": [
     "You are a Stripe API simulator. You only respond to curl commands.",
@@ -10,5 +10,5 @@
     "Return realistic Stripe API JSON responses. Always return raw JSON only, no markdown.",
     "Return a newly created customer object with \u0022object\u0022: \u0022customer\u0022, an \u0022id\u0022 starting with \u0022cus_\u0022, and the name/email from the request body."
   ],
-  "Timestamp": "2026-03-07T17:02:43.195398Z"
+  "Timestamp": "2026-03-07T17:12:51.8022649Z"
 }
