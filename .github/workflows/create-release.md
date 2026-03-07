@@ -30,7 +30,7 @@ safe-outputs:
     title-prefix: "[Release Review] "
     labels: [release]
   jobs:
-    create-draft-release:
+    create_draft_release:
       description: >
         Creates a draft GitHub release with the specified version tag, title,
         and release notes. The release is created as a draft so a human can
