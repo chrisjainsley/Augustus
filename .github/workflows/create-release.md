@@ -174,7 +174,7 @@ Calculate the new version from the last release version found in Step 1.
   `0.2.1`), never the minor segment.
 
 > **Common mistake**: Internal improvements such as security hardening,
-> sanitisation, caching, and CI changes are **not** new features even if they
+> sanitization, caching, and CI changes are **not** new features even if they
 > touch core library code. Unless the change exposes a new public type, method,
 > or configuration option that a consumer can call, it is a PATCH.
 
