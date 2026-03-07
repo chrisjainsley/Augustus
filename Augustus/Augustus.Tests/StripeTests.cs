@@ -195,7 +195,7 @@ public class StripeTests
 
         options.EnableCaching.Should().BeTrue();
         options.CacheFolderPath.Should().Be("./mocks");
-        options.OpenAIModel.Should().Be("gpt-5-mini");
+        options.OpenAIModel.Should().Be("gpt-5.3-codex-spark");
         options.Port.Should().Be(9001);
         options.OpenAIApiKey.Should().BeEmpty();
         options.OpenAIEndpoint.Should().BeEmpty();
