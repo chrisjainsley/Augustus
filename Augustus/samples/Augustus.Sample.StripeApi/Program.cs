@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using Augustus.Sample.StripeApi.Models;
 using Augustus.Sample.StripeApi.Services;
 
@@ -7,6 +8,10 @@ builder.Services.AddHttpClient<StripeClient>(client =>
 {
     var baseUrl = builder.Configuration["Stripe:BaseUrl"] ?? "https://api.stripe.com";
     client.BaseAddress = new Uri(baseUrl);
+
+    var secretKey = builder.Configuration["Stripe:SecretKey"];
+    if (!string.IsNullOrEmpty(secretKey))
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
 });
 
 var app = builder.Build();

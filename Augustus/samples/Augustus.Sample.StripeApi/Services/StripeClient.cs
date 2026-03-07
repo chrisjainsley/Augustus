@@ -24,7 +24,8 @@ public class StripeClient
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        return JsonDocument.Parse(json).RootElement;
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
     }
 
     public async Task<JsonElement> GetCustomerAsync(string id)
@@ -33,7 +34,8 @@ public class StripeClient
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        return JsonDocument.Parse(json).RootElement;
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
     }
 
     public async Task<JsonElement> CreateCustomerAsync(string name, string email)
@@ -48,6 +50,7 @@ public class StripeClient
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        return JsonDocument.Parse(json).RootElement;
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
     }
 }
