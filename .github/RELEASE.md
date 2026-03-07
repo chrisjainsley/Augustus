@@ -65,15 +65,18 @@ gh release create v0.1.0-alpha -t "Augustus 0.1.0 Alpha" -n "Early preview" --pr
 Once you publish the release:
 
 1. GitHub Actions automatically triggers the `Publish NuGet Package` workflow
-2. The workflow:
+2. **Important**: The workflow only publishes to NuGet.org if the release is NOT marked as a pre-release
+   - If you publish a release with "This is a pre-release" checked, the workflow will skip publishing
+   - To publish to NuGet.org, you must uncheck the "This is a pre-release" checkbox before publishing
+3. The workflow:
    - Extracts the version from the tag (removes 'v' prefix)
    - Updates `Augustus/Augustus/Augustus.csproj` with the new version
    - Builds the project for all target frameworks (net6.0, net7.0, net8.0, net9.0)
    - Creates NuGet packages (`.nupkg` and `.snupkg` symbol package)
-   - Publishes to NuGet.org
+   - Publishes to NuGet.org (only if NOT a pre-release)
    - Attaches packages to the GitHub release
 
-3. Monitor progress at: https://github.com/chrisjainsley/augustus/actions
+4. Monitor progress at: https://github.com/chrisjainsley/augustus/actions
 
 ### Step 4: Verify Publication
 
@@ -102,6 +105,35 @@ Augustus follows Semantic Versioning 2.0.0:
   - Example: `v0.1.0-alpha`, `v1.0.0-beta`, `v1.0.0-rc.1`
 
 ## Examples
+
+### Standard Release Workflow
+
+For a standard release that should be published to NuGet.org:
+
+1. Create a draft release with the version tag
+2. Review the release notes
+3. **Ensure "This is a pre-release" is unchecked**
+4. Publish the release
+5. The NuGet package will be automatically published to NuGet.org
+
+### Pre-Release Workflow
+
+For pre-releases (alpha, beta, rc) that you want to review before publishing to NuGet.org:
+
+1. Create a draft release with a pre-release version tag (e.g., `v0.3.0-alpha`)
+2. **Check "This is a pre-release"** checkbox
+3. Publish the release (the GitHub release will be public, but NOT published to NuGet)
+4. Review and test the release
+5. When ready to publish to NuGet.org:
+   - Edit the release on GitHub
+   - **Uncheck "This is a pre-release"**
+   - Save the changes
+6. The NuGet publish workflow will automatically trigger and publish to NuGet.org
+
+This workflow allows you to:
+- Create pre-release versions for testing
+- Share them via GitHub releases
+- Control when they are published to NuGet.org
 
 ### Releasing version 0.2.0
 

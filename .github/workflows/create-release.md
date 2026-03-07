@@ -184,8 +184,13 @@ goes live. The issue body must include:
    - Go to **[Releases → Drafts](https://github.com/chrisjainsley/Augustus/releases)**
      and open the draft release named `<release_name>`.
    - Edit the release notes if needed.
-   - Click **"Publish release"** when satisfied — this automatically triggers
-     NuGet packaging and publishing to NuGet.org via the existing CI workflow.
+   - **If this is a pre-release** (marked with "This is a pre-release" checkbox):
+     - You must **uncheck** the "This is a pre-release" checkbox before publishing
+       if you want the package to be published to NuGet.org.
+     - Pre-releases are NOT published to NuGet automatically - only regular releases are.
+   - Click **"Publish release"** when satisfied — if the pre-release checkbox is
+     unchecked, this automatically triggers NuGet packaging and publishing to
+     NuGet.org via the existing CI workflow.
    - To cancel, delete the draft release and close this issue.
 
 Use the issue title: `Augustus <version> - Release Ready for Review`
