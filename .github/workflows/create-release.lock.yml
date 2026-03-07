@@ -23,7 +23,7 @@
 #
 # Analyzes changes since the last release, selects the best semantic version increment, generates release notes, creates a draft GitHub release, and opens a review issue for human approval before the release is published.
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"9ca946fae1da32b384dd6f2f1f0daaceabed02db7f0bdaa1c9a7e32e4c0b74e3","compiler_version":"v0.55.0","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"907c34fa54509d6748cd1f34b984874072242824b4945a79968312e0e71512b2","compiler_version":"v0.55.0","strict":true}
 
 name: "Create Release"
 "on":
@@ -313,7 +313,7 @@ jobs:
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
           cat > /opt/gh-aw/safeoutputs/config.json << 'GH_AW_SAFE_OUTPUTS_CONFIG_EOF'
-          {"create-draft-release":{"description":"Creates a draft GitHub release with the specified version tag, title, and release notes. The release is created as a draft so a human can review and publish it. Returns the URL of the releases page.\n","inputs":{"prerelease":{"default":null,"description":"Set to 'true' if this is a pre-release (alpha/beta/rc)","required":false,"type":"string"}}},"create_issue":{"max":1},"missing_data":{},"missing_tool":{},"noop":{"max":1}}
+          {"create-draft-release":{"description":"Creates a draft GitHub release with the specified version tag, title, and release notes. The release is created as a draft so a human can review and publish it. Returns the URL of the releases page.\n","inputs":{"prerelease":{"default":null,"description":"Set to 'true' if this is a pre-release (alpha/beta/rc)","required":false,"type":"string"},"release_name":{"default":null,"description":"Human-readable release title (e.g. Augustus 1.2.3)","required":true,"type":"string"},"release_notes":{"default":null,"description":"Markdown-formatted release notes","required":true,"type":"string"},"tag_name":{"default":null,"description":"Version tag for the release (e.g. v1.2.3)","required":true,"type":"string"}}},"create_issue":{"max":1},"missing_data":{},"missing_tool":{},"noop":{"max":1}}
           GH_AW_SAFE_OUTPUTS_CONFIG_EOF
           cat > /opt/gh-aw/safeoutputs/tools.json << 'GH_AW_SAFE_OUTPUTS_TOOLS_EOF'
           [
@@ -467,8 +467,25 @@ jobs:
                   "prerelease": {
                     "description": "Set to 'true' if this is a pre-release (alpha/beta/rc)",
                     "type": "string"
+                  },
+                  "release_name": {
+                    "description": "Human-readable release title (e.g. Augustus 1.2.3)",
+                    "type": "string"
+                  },
+                  "release_notes": {
+                    "description": "Markdown-formatted release notes",
+                    "type": "string"
+                  },
+                  "tag_name": {
+                    "description": "Version tag for the release (e.g. v1.2.3)",
+                    "type": "string"
                   }
                 },
+                "required": [
+                  "release_name",
+                  "release_notes",
+                  "tag_name"
+                ],
                 "type": "object"
               },
               "name": "create_draft_release"
