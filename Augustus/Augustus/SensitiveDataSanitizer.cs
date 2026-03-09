@@ -35,7 +35,21 @@ internal static class SensitiveDataSanitizer
     // If none are present, we can skip the expensive regex passes entirely.
     private static readonly string[] SensitiveKeywords = new[]
     {
-        "authorization", "api", "key", "token", "secret", "password", "passphrase", "private"
+        "authorization:",
+        "x-api-key",
+        "api-key",
+        "apikey",
+        "access_token",
+        "access-token",
+        "refresh_token",
+        "refresh-token",
+        "client_secret",
+        "client-secret",
+        "password",
+        "passphrase",
+        "private_key",
+        "private-key",
+        "bearer "
     };
 
     public static string SanitizeSensitiveValues(string input)

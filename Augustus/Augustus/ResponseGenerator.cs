@@ -130,6 +130,13 @@ namespace Augustus
                         }
                     });
                     _pendingCacheWrites.Enqueue(cacheTask);
+
+                    // Prune completed tasks so the queue tracks only in-flight work and
+                    // does not grow unbounded until DrainPendingCacheWritesAsync() is called.
+                    while (_pendingCacheWrites.TryPeek(out var pending) && pending.IsCompleted)
+                    {
+                        _pendingCacheWrites.TryDequeue(out _);
+                    }
                 }
             }
             catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
