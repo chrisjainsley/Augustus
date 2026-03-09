@@ -67,7 +67,7 @@ internal class WebHost : IAsyncDisposable
             // Then drain any in-flight background cache writes that were queued before shutdown
             if (responseGenerator != null)
             {
-                await responseGenerator.DrainPendingCacheWritesAsync().ConfigureAwait(false);
+                await responseGenerator.DrainPendingCacheWritesAsync(cancellationToken).ConfigureAwait(false);
             }
 
             // Dispose of the host after stopping

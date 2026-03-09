@@ -33,16 +33,20 @@ internal static class SensitiveDataSanitizer
 
     // Quick-check keywords that indicate a string might contain sensitive data.
     // If none are present, we can skip the expensive regex passes entirely.
+    // Must cover every key variant the regexes can match to avoid security regressions.
     private static readonly string[] SensitiveKeywords = new[]
     {
         "authorization:",
         "x-api-key",
         "api-key",
+        "api_key",
         "apikey",
         "access_token",
         "access-token",
         "refresh_token",
         "refresh-token",
+        "token",
+        "secret",
         "client_secret",
         "client-secret",
         "password",

@@ -14,7 +14,8 @@ namespace Augustus
         private readonly APISimulatorOptions options;
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
-        private readonly ConcurrentQueue<Task> _pendingCacheWrites = new();
+        private readonly ConcurrentDictionary<int, Task> _pendingCacheWrites = new();
+        private int _cacheWriteId;
 
         public ResponseGenerator(APISimulatorOptions options, InstructionsContainer instructionsContainer, APISimulator.FileManager fileManager)
         {
@@ -118,25 +119,9 @@ namespace Augustus
                 // Tasks are tracked so they can be drained on shutdown via DrainPendingCacheWritesAsync().
                 if (options.EnableCaching)
                 {
-                    var cacheTask = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions).ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
-                        }
-                    });
-                    _pendingCacheWrites.Enqueue(cacheTask);
-
-                    // Prune completed tasks so the queue tracks only in-flight work and
-                    // does not grow unbounded until DrainPendingCacheWritesAsync() is called.
-                    while (_pendingCacheWrites.TryPeek(out var pending) && pending.IsCompleted)
-                    {
-                        _pendingCacheWrites.TryDequeue(out _);
-                    }
+                    var id = Interlocked.Increment(ref _cacheWriteId);
+                    var cacheTask = CacheInBackgroundAsync(id, requestHash, responseContent, curlRequest, instructions);
+                    _pendingCacheWrites.TryAdd(id, cacheTask);
                 }
             }
             catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
@@ -145,21 +130,36 @@ namespace Augustus
             }
         }
 
+        private async Task CacheInBackgroundAsync(int id, string requestHash, string responseContent, string curlRequest, List<string> instructions)
+        {
+            try
+            {
+                await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
+            }
+            finally
+            {
+                _pendingCacheWrites.TryRemove(id, out _);
+            }
+        }
+
         /// <summary>
         /// Waits for all in-flight background cache writes to complete.
         /// Called during shutdown to prevent cache files from being lost.
         /// </summary>
-        public async Task DrainPendingCacheWritesAsync()
+        public async Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
         {
-            var tasks = new List<Task>();
-            while (_pendingCacheWrites.TryDequeue(out var task))
-            {
-                tasks.Add(task);
-            }
+            var tasks = _pendingCacheWrites.Values.ToArray();
 
-            if (tasks.Count > 0)
+            if (tasks.Length > 0)
             {
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                var allTasks = Task.WhenAll(tasks);
+                var cancellationTask = Task.Delay(Timeout.Infinite, cancellationToken);
+                await Task.WhenAny(allTasks, cancellationTask).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
             }
         }
 

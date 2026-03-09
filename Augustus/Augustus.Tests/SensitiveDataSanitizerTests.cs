@@ -1,3 +1,4 @@
+using Augustus;
 using FluentAssertions;
 
 namespace Augustus.Tests;

@@ -1,3 +1,4 @@
+using Augustus;
 using FluentAssertions;
 using System.Diagnostics;
 using System.Text.Json;
@@ -80,7 +81,7 @@ public class PerformanceTests
     }
 
     [Fact]
-    public void SanitizeSensitiveValues_FastPath_ShouldBeQuickerForNonSensitiveStrings()
+    public void SanitizeSensitiveValues_FastPath_ReturnsUnchanged_SlowPath_Redacts()
     {
         // A large string with no sensitive keywords
         var largeNonSensitive = new string('x', 10_000) + " some normal text about items and customers";
