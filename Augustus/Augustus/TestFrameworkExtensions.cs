@@ -123,6 +123,10 @@ public static class TestFrameworkExtensions
         var simulator = testClass.CreateAPISimulator("OpenAI", configure, callerFilePath);
 
         // Add default instructions for OpenAI API format
+        simulator.AddInstruction("CRITICAL: Return ONLY raw JSON. No markdown code fences, no ``` characters, no explanations. Your entire response must be valid, parseable JSON with no surrounding text.");
+
+        simulator.AddInstruction("CRITICAL TYPE REQUIREMENTS: In the JSON response, 'choices' must be a JSON array (not a string), each 'message' must be a JSON object with 'role' and 'content' keys (not a string), 'usage' must be a JSON object (not a string). All numeric fields (index, created, prompt_tokens, completion_tokens, total_tokens) must be JSON numbers, not strings wrapped in quotes.");
+
         simulator.AddInstruction("Return all responses in valid JSON format matching the official OpenAI API specification.");
 
         simulator.AddInstruction(@"For chat completion requests (POST /v1/chat/completions), return responses in this format:
@@ -138,6 +142,7 @@ public static class TestFrameworkExtensions
         ""role"": ""assistant"",
         ""content"": ""[generated response content]""
       },
+      ""logprobs"": null,
       ""finish_reason"": ""stop""
     }
   ],
@@ -145,7 +150,8 @@ public static class TestFrameworkExtensions
     ""prompt_tokens"": [realistic-number],
     ""completion_tokens"": [realistic-number],
     ""total_tokens"": [sum-of-tokens]
-  }
+  },
+  ""system_fingerprint"": ""fp_[random-string]""
 }");
 
         simulator.AddInstruction(@"For completion requests (POST /v1/completions), return responses in this format:
@@ -256,6 +262,8 @@ public static class TestFrameworkExtensions
 
         // Add default instructions for Azure OpenAI API format
         simulator.AddInstruction("CRITICAL: Return ONLY raw JSON. No markdown code fences, no ``` characters, no explanations. Your entire response must be valid, parseable JSON with no surrounding text.");
+
+        simulator.AddInstruction("CRITICAL TYPE REQUIREMENTS: In the JSON response, 'choices' must be a JSON array (not a string), each 'message' must be a JSON object with 'role' and 'content' keys (not a string), 'usage' must be a JSON object (not a string), 'content_filter_results' must be a JSON object (not a string). All numeric fields (index, created, prompt_tokens, completion_tokens, total_tokens) must be JSON numbers, not strings wrapped in quotes.");
 
         simulator.AddInstruction("Return all responses in valid JSON format matching the official Azure OpenAI API specification.");
 
