@@ -111,6 +111,9 @@ namespace Augustus
                 // Strip any markdown code fences the AI may have added despite instructions
                 var responseContent = StripMarkdown(firstContent.Text);
 
+                // Validate and sanitize the response to ensure it matches the expected format
+                responseContent = ValidateAndSanitizeResponse(responseContent);
+
                 // Send the response to the client immediately, before caching
                 httpContext.Response.ContentType = "application/json";
                 await httpContext.Response.WriteAsync(responseContent, cancellationToken);
@@ -175,6 +178,60 @@ namespace Augustus
                 trimmed = trimmed.Substring(0, trimmed.Length - 3);
 
             return trimmed.Trim();
+        }
+
+        /// <summary>
+        /// Validates and sanitizes the AI-generated response to ensure it matches OpenAI SDK requirements.
+        /// This method catches common formatting errors that would cause deserialization failures.
+        /// </summary>
+        private string ValidateAndSanitizeResponse(string responseJson)
+        {
+            try
+            {
+                // Parse the JSON to validate structure
+                using var document = JsonDocument.Parse(responseJson);
+                var root = document.RootElement;
+
+                // Check if this is a chat completion response (has "choices" array)
+                if (root.TryGetProperty("choices", out var choicesElement) && choicesElement.ValueKind == JsonValueKind.Array)
+                {
+                    // Validate each choice has proper structure
+                    foreach (var choice in choicesElement.EnumerateArray())
+                    {
+                        // Ensure "message" is an object, not a string
+                        if (choice.TryGetProperty("message", out var messageElement))
+                        {
+                            if (messageElement.ValueKind == JsonValueKind.String)
+                            {
+                                Console.WriteLine("Warning: 'message' field is a string instead of an object. This will cause deserialization errors.");
+                                throw new JsonException("Invalid response format: 'message' must be an object, not a string");
+                            }
+                        }
+
+                        // Ensure "content_filter_results" (if present) is an object, not a string
+                        if (choice.TryGetProperty("content_filter_results", out var filterElement))
+                        {
+                            if (filterElement.ValueKind == JsonValueKind.String)
+                            {
+                                Console.WriteLine("Warning: 'content_filter_results' field is a string instead of an object. This will cause deserialization errors.");
+                                throw new JsonException("Invalid response format: 'content_filter_results' must be an object, not a string");
+                            }
+                        }
+                    }
+                }
+
+                // If validation passed, return original JSON
+                return responseJson;
+            }
+            catch (JsonException ex)
+            {
+                // Log the error with the problematic JSON for debugging
+                Console.WriteLine($"JSON Validation Error: {ex.Message}");
+                Console.WriteLine($"Problematic JSON (first 500 chars): {responseJson.Substring(0, Math.Min(500, responseJson.Length))}");
+
+                // Re-throw the exception - we don't want to send invalid JSON to clients
+                throw new InvalidOperationException($"The AI generated an invalid response format that would fail SDK deserialization: {ex.Message}. Please regenerate the response.", ex);
+            }
         }
 
         private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken = default)

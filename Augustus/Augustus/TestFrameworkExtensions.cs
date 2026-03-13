@@ -259,6 +259,8 @@ public static class TestFrameworkExtensions
 
         simulator.AddInstruction("Return all responses in valid JSON format matching the official Azure OpenAI API specification.");
 
+        simulator.AddInstruction("CRITICAL STRUCTURE REQUIREMENTS: All nested objects must be proper JSON objects (enclosed in {}), NOT strings. The 'content_filter_results' field must be an object with nested objects for each category (hate, violence, sexual, self_harm), NOT a string. The 'message' field in choices must be an object with 'role' and 'content' properties, NOT a string.");
+
         simulator.AddInstruction("Recognize and handle Azure OpenAI URL patterns: /openai/deployments/{deployment-name}/chat/completions with api-version query parameter.");
 
         simulator.AddInstruction("Accept authentication via 'api-key' header (Azure style) in addition to 'Authorization: Bearer' header (OpenAI style).");
