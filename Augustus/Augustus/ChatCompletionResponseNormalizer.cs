@@ -80,7 +80,10 @@ internal static class ChatCompletionResponseNormalizer
             return;
 
         if (choicesNode is not JsonArray choicesArray)
+        {
+            root["choices"] = new JsonArray();
             return;
+        }
 
         foreach (var choiceItem in choicesArray)
         {
@@ -207,7 +210,10 @@ internal static class ChatCompletionResponseNormalizer
             return;
 
         if (usageNode is not JsonObject usage)
+        {
+            root["usage"] = CreateDefaultUsage();
             return;
+        }
 
         EnsureNumber(usage, "prompt_tokens", () => 0);
         EnsureNumber(usage, "completion_tokens", () => 0);
@@ -237,6 +243,11 @@ internal static class ChatCompletionResponseNormalizer
         try
         {
             var parsed = JsonNode.Parse(str);
+            if (parsed is null)
+            {
+                parent[key] = defaultFactory();
+                return null;
+            }
             parent[key] = parsed;
             return parsed;
         }

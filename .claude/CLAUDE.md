@@ -46,6 +46,18 @@ You can also manually trigger the review at any time by using the `/review-and-f
 
 See `.claude/commands/review-and-fix.md` for detailed review criteria.
 
+## Pull Request Templates
+
+PR templates live in `.github/PULL_REQUEST_TEMPLATE/`. When creating a PR, choose the correct template based on the change type:
+
+| Template | File | Use for |
+|----------|------|---------|
+| **Feature** | `feature.md` | New features, new capabilities |
+| **Bug** | `bug.md` | Bug fixes |
+| **Chore** | `chore.md` | Refactors, dependency updates, config, CI/CD, tooling |
+
+Fill in the template sections (What, Why, Services & Areas Changed, Testing, Breaking Changes, API Changes). Omit sections that don't apply.
+
 ---
 
 **Note**: These guidelines help maintain code quality, consistency, and proper Git workflow throughout development.

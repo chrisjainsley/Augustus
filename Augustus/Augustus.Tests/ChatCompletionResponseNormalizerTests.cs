@@ -76,6 +76,26 @@ public class ChatCompletionResponseNormalizerTests
     #region Choices normalization
 
     [Fact]
+    public void NonArrayChoices_IsReplacedWithEmptyArray()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": {"unexpected": "object"},
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        doc.RootElement.GetProperty("choices").ValueKind.Should().Be(JsonValueKind.Array);
+        doc.RootElement.GetProperty("choices").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
     public void StringifiedChoicesArray_IsParsedToArray()
     {
         var json = """
@@ -359,6 +379,27 @@ public class ChatCompletionResponseNormalizerTests
     #region Usage normalization
 
     [Fact]
+    public void StringifiedNullUsage_IsReplacedWithDefault()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [{"index": 0, "message": {"role": "assistant", "content": "Hi"}, "finish_reason": "stop"}],
+          "usage": "null"
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var usage = doc.RootElement.GetProperty("usage");
+        usage.ValueKind.Should().Be(JsonValueKind.Object);
+        usage.GetProperty("prompt_tokens").GetInt32().Should().Be(0);
+    }
+
+    [Fact]
     public void StringUsage_IsParsedToObject()
     {
         var json = """
@@ -377,6 +418,29 @@ public class ChatCompletionResponseNormalizerTests
         var usage = doc.RootElement.GetProperty("usage");
         usage.ValueKind.Should().Be(JsonValueKind.Object);
         usage.GetProperty("prompt_tokens").GetInt32().Should().Be(10);
+    }
+
+    [Fact]
+    public void NonObjectUsage_IsReplacedWithDefault()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [{"index": 0, "message": {"role": "assistant", "content": "Hi"}, "finish_reason": "stop"}],
+          "usage": [1, 2, 3]
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var usage = doc.RootElement.GetProperty("usage");
+        usage.ValueKind.Should().Be(JsonValueKind.Object);
+        usage.GetProperty("prompt_tokens").GetInt32().Should().Be(0);
+        usage.GetProperty("completion_tokens").GetInt32().Should().Be(0);
+        usage.GetProperty("total_tokens").GetInt32().Should().Be(0);
     }
 
     [Fact]
