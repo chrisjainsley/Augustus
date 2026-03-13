@@ -107,7 +107,7 @@ public partial class APISimulator : IAsyncDisposable
     /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the <paramref name="cancellationToken"/>.</exception>
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        await webHost.StartAsync(cancellationToken);
+        await webHost.StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ public partial class APISimulator : IAsyncDisposable
     /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the <paramref name="cancellationToken"/>.</exception>
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        await webHost.StopAsync(cancellationToken);
+        await webHost.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -188,7 +188,7 @@ public partial class APISimulator : IAsyncDisposable
 
         try
         {
-            await webHost.DisposeAsync();
+            await webHost.DisposeAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {

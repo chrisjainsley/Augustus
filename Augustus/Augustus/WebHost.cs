@@ -22,7 +22,7 @@ internal class WebHost : IAsyncDisposable
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        await startStopLock.WaitAsync(cancellationToken);
+        await startStopLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (webHost != null)
@@ -45,7 +45,7 @@ internal class WebHost : IAsyncDisposable
                 })
                 .Build();
 
-            await webHost.StartAsync(cancellationToken);
+            await webHost.StartAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -55,18 +55,25 @@ internal class WebHost : IAsyncDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        await startStopLock.WaitAsync(cancellationToken);
+        await startStopLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (webHost == null)
                 return;
 
-            await webHost.StopAsync(cancellationToken);
+            // First stop the web host so it no longer accepts or processes requests
+            await webHost.StopAsync(cancellationToken).ConfigureAwait(false);
+
+            // Then drain any in-flight background cache writes that were queued before shutdown
+            if (responseGenerator != null)
+            {
+                await responseGenerator.DrainPendingCacheWritesAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             // Dispose of the host after stopping
             if (webHost is IAsyncDisposable asyncDisposable)
             {
-                await asyncDisposable.DisposeAsync();
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
             }
             else if (webHost is IDisposable disposable)
             {
@@ -96,7 +103,7 @@ internal class WebHost : IAsyncDisposable
 
         try
         {
-            await StopAsync();
+            await StopAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {

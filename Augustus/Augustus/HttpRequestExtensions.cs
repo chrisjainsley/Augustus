@@ -30,7 +30,7 @@ public static class HttpRequestExtensions
 
             using (StreamReader reader = new StreamReader(request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true))
             {
-                string requestBody = await reader.ReadToEndAsync();
+                string requestBody = await reader.ReadToEndAsync().ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(requestBody))
                 {
                     // Escape single quotes in the request body for shell safety

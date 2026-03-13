@@ -2,6 +2,7 @@ using Azure.AI.OpenAI;
 using OpenAI;
 using OpenAI.Chat;
 using Microsoft.AspNetCore.Http;
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace Augustus
@@ -13,6 +14,8 @@ namespace Augustus
         private readonly APISimulatorOptions options;
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
+        private readonly ConcurrentDictionary<int, Task> _pendingCacheWrites = new();
+        private int _cacheWriteId;
 
         public ResponseGenerator(APISimulatorOptions options, InstructionsContainer instructionsContainer, APISimulator.FileManager fileManager)
         {
@@ -41,7 +44,7 @@ namespace Augustus
         {
             try
             {
-                var curlRequest = await httpContext.Request.ToCurlCommandAsync();
+                var curlRequest = await httpContext.Request.ToCurlCommandAsync().ConfigureAwait(false);
 
                 // Get route-specific instructions based on the request path and method
                 // (must happen before hash so route instructions are included in cache key)
@@ -54,7 +57,7 @@ namespace Augustus
                 // Try to get cached response first
                 if (options.EnableCaching)
                 {
-                    var cachedResponse = await fileManager.ReadCachedResponseAsync(requestHash);
+                    var cachedResponse = await fileManager.ReadCachedResponseAsync(requestHash).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(cachedResponse))
                     {
                         // Normalize cached responses for SDK compatibility (handles stale caches)
@@ -92,7 +95,7 @@ namespace Augustus
                 };
 
                 // Send chat messages to OpenAI with retry and backoff logic
-                var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, chatOptions, cancellationToken);
+                var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, chatOptions, cancellationToken).ConfigureAwait(false);
 
                 if (chatResults?.Value?.Content == null || chatResults.Value.Content.Count == 0)
                 {
@@ -115,26 +118,55 @@ namespace Augustus
                 responseContent = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
                     responseContent, httpContext.Request.Path.Value ?? "/");
 
-                // Cache the response if caching is enabled
-                if (options.EnableCaching)
-                {
-                    try
-                    {
-                        await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log caching error but don't fail the request
-                        Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
-                    }
-                }
-
+                // Send the response to the client immediately, before caching
                 httpContext.Response.ContentType = "application/json";
                 await httpContext.Response.WriteAsync(responseContent, cancellationToken);
+
+                // Cache the response after sending — avoids blocking the caller on file I/O.
+                // Tasks are tracked so they can be drained on shutdown via DrainPendingCacheWritesAsync().
+                if (options.EnableCaching)
+                {
+                    var id = Interlocked.Increment(ref _cacheWriteId);
+                    var cacheTask = CacheInBackgroundAsync(id, requestHash, responseContent, curlRequest, instructions);
+                    _pendingCacheWrites.TryAdd(id, cacheTask);
+                }
             }
             catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
             {
                 await WriteErrorResponse(httpContext, $"Internal error: {ex.Message}", 500, cancellationToken);
+            }
+        }
+
+        private async Task CacheInBackgroundAsync(int id, string requestHash, string responseContent, string curlRequest, List<string> instructions)
+        {
+            try
+            {
+                await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
+            }
+            finally
+            {
+                _pendingCacheWrites.TryRemove(id, out _);
+            }
+        }
+
+        /// <summary>
+        /// Waits for all in-flight background cache writes to complete.
+        /// Called during shutdown to prevent cache files from being lost.
+        /// </summary>
+        public async Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
+        {
+            var tasks = _pendingCacheWrites.Values.ToArray();
+
+            if (tasks.Length > 0)
+            {
+                var allTasks = Task.WhenAll(tasks);
+                var cancellationTask = Task.Delay(Timeout.Infinite, cancellationToken);
+                await Task.WhenAny(allTasks, cancellationTask).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
             }
         }
 

@@ -52,7 +52,7 @@ namespace Augustus
             CancellationToken cancellationToken = default)
         {
             // Wait for available slot in the request queue
-            await requestSemaphore.WaitAsync(cancellationToken);
+            await requestSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -88,7 +88,7 @@ namespace Augustus
                 try
                 {
                     // Attempt the API call
-                    return await chatClient.CompleteChatAsync(messages, chatOptions, cancellationToken: cancellationToken);
+                    return await chatClient.CompleteChatAsync(messages, chatOptions, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
                 catch (ClientResultException ex) when (ShouldRetry(ex, attemptCount))
                 {
@@ -96,7 +96,7 @@ namespace Augustus
                     LogRetryAttempt(attemptCount, ex, delayMilliseconds);
 
                     // Wait before retrying with exponential backoff
-                    await Task.Delay(delayMilliseconds, cancellationToken);
+                    await Task.Delay(delayMilliseconds, cancellationToken).ConfigureAwait(false);
 
                     // Double the delay for next retry, but cap at maximum
                     delayMilliseconds = Math.Min(delayMilliseconds * 2, options.MaxRetryDelayMs);
@@ -106,7 +106,7 @@ namespace Augustus
                     // Timeout occurred, retry if we haven't exceeded max retries
                     LogRetryAttempt(attemptCount, new Exception("Request timeout"), delayMilliseconds);
 
-                    await Task.Delay(delayMilliseconds, cancellationToken);
+                    await Task.Delay(delayMilliseconds, cancellationToken).ConfigureAwait(false);
                     delayMilliseconds = Math.Min(delayMilliseconds * 2, options.MaxRetryDelayMs);
                 }
                 catch (HttpRequestException ex) when (ShouldRetryHttpException(ex, attemptCount))
@@ -114,7 +114,7 @@ namespace Augustus
                     // Network errors or transient HTTP errors
                     LogRetryAttempt(attemptCount, ex, delayMilliseconds);
 
-                    await Task.Delay(delayMilliseconds, cancellationToken);
+                    await Task.Delay(delayMilliseconds, cancellationToken).ConfigureAwait(false);
                     delayMilliseconds = Math.Min(delayMilliseconds * 2, options.MaxRetryDelayMs);
                 }
                 // If we reach here without returning or retrying, the exception will propagate

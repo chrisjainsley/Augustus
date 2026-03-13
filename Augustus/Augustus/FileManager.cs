@@ -9,6 +9,8 @@ public partial class APISimulator
 {
     internal class FileManager
     {
+        private static readonly JsonSerializerOptions CacheSerializerOptions = new() { WriteIndented = true };
+
         private readonly string cacheFolderPath;
         private readonly ConcurrentDictionary<string, byte> _touchedHashes = new();
 
@@ -55,7 +57,7 @@ public partial class APISimulator
         public async Task WriteToFileAsync(string filename, string content)
         {
             string fullPath = Path.Combine(cacheFolderPath, filename);
-            await File.WriteAllTextAsync(fullPath, content);
+            await File.WriteAllTextAsync(fullPath, content).ConfigureAwait(false);
         }
 
         public async Task<string?> ReadFromFileAsync(string filename)
@@ -64,7 +66,7 @@ public partial class APISimulator
             if (!File.Exists(fullPath))
                 return null;
 
-            return await File.ReadAllTextAsync(fullPath);
+            return await File.ReadAllTextAsync(fullPath).ConfigureAwait(false);
         }
 
         public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
@@ -80,8 +82,8 @@ public partial class APISimulator
                 Timestamp = DateTime.UtcNow
             };
 
-            var json = JsonSerializer.Serialize(cacheEntry, new JsonSerializerOptions { WriteIndented = true });
-            await WriteToFileAsync($"{requestHash}.json", json);
+            var json = JsonSerializer.Serialize(cacheEntry, CacheSerializerOptions);
+            await WriteToFileAsync($"{requestHash}.json", json).ConfigureAwait(false);
             _touchedHashes.TryAdd(requestHash, 0);
         }
 
