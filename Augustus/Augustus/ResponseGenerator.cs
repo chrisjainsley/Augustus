@@ -60,6 +60,9 @@ namespace Augustus
                     var cachedResponse = await fileManager.ReadCachedResponseAsync(requestHash).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(cachedResponse))
                     {
+                        // Normalize cached responses for SDK compatibility (handles stale caches)
+                        cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
+                            cachedResponse, httpContext.Request.Path.Value ?? "/");
                         httpContext.Response.ContentType = "application/json";
                         await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
                         return;
@@ -110,6 +113,10 @@ namespace Augustus
 
                 // Strip any markdown code fences the AI may have added despite instructions
                 var responseContent = StripMarkdown(firstContent.Text);
+
+                // Normalize chat completion responses for OpenAI SDK compatibility
+                responseContent = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
+                    responseContent, httpContext.Request.Path.Value ?? "/");
 
                 // Send the response to the client immediately, before caching
                 httpContext.Response.ContentType = "application/json";
