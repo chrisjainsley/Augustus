@@ -31,25 +31,14 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Extracted version: ${VERSION}"
 
-      - name: Update version in project file
-        run: |
-          PROJECT_FILE="Augustus/Augustus/Augustus.csproj"
-          VERSION="${{ steps.version.outputs.VERSION }}"
-
-          # Update the Version property in the csproj file
-          sed -i "s/<Version>.*<\/Version>/<Version>${VERSION}<\/Version>/" "$PROJECT_FILE"
-
-          # Verify the change
-          grep -A0 "Version" "$PROJECT_FILE" | head -1
-
       - name: Restore dependencies
         run: dotnet restore Augustus/Augustus/Augustus.csproj
 
       - name: Build
-        run: dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore
+        run: dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Pack NuGet package
-        run: dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg
+        run: dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Publish to NuGet.org
         run: |
