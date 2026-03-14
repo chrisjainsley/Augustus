@@ -20,7 +20,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Extract version from release tag
         id: version
@@ -32,13 +32,43 @@ jobs:
           echo "Extracted version: ${VERSION}"
 
       - name: Restore dependencies
-        run: dotnet restore Augustus/Augustus/Augustus.csproj
+        run: |
+          dotnet restore Augustus/Augustus/Augustus.csproj
+          dotnet restore Augustus/Augustus.Tests/Augustus.Tests.csproj
 
       - name: Build
-        run: dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
+        run: |
+          dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet build Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net10.0
 
       - name: Pack NuGet package
         run: dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Verify package version
+        run: |
+          EXPECTED_VERSION="${{ steps.version.outputs.VERSION }}"
+          NUPKG_COUNT=$(find ./nupkg -name "*.nupkg" -type f | wc -l)
+          if [[ "$NUPKG_COUNT" -eq 0 ]]; then
+            echo "::error::No .nupkg files found in ./nupkg"
+            exit 1
+          fi
+          if [[ "$NUPKG_COUNT" -gt 1 ]]; then
+            echo "::error::Expected exactly 1 .nupkg file but found $NUPKG_COUNT:"
+            find ./nupkg -name "*.nupkg" -type f
+            exit 1
+          fi
+          NUPKG=$(find ./nupkg -name "*.nupkg" -type f)
+          NUPKG_NAME=$(basename "$NUPKG")
+          echo "Package file: $NUPKG_NAME"
+          echo "Expected version: $EXPECTED_VERSION"
+          if [[ "$NUPKG_NAME" != *"${EXPECTED_VERSION}.nupkg" ]]; then
+            echo "::error::Version mismatch! Package '$NUPKG_NAME' does not contain expected version '$EXPECTED_VERSION'"
+            exit 1
+          fi
+          echo "Version verified successfully."
 
       - name: Publish to NuGet.org
         run: |
@@ -50,7 +80,7 @@ jobs:
             --skip-duplicate
 
       - name: Upload artifacts to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             ./nupkg/*.nupkg
