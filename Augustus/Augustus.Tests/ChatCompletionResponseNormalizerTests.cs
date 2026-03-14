@@ -463,6 +463,409 @@ public class ChatCompletionResponseNormalizerTests
 
     #endregion
 
+    #region Stringified tool_calls normalization
+
+    [Fact]
+    public void StringifiedToolCallsArray_IsRehydratedToArray()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": "[{\"id\":\"call_abc\",\"type\":\"function\",\"function\":{\"name\":\"apply_rule\",\"arguments\":\"{\\\"rule_name\\\":\\\"test\\\"}\"}}]"
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var toolCalls = doc.RootElement.GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("tool_calls");
+        toolCalls.ValueKind.Should().Be(JsonValueKind.Array);
+        toolCalls.GetArrayLength().Should().Be(1);
+        toolCalls[0].GetProperty("function").GetProperty("name").GetString().Should().Be("apply_rule");
+    }
+
+    [Fact]
+    public void StringifiedFunctionObject_IsRehydratedToObject()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [
+                  {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": "{\"name\":\"remove_rule\",\"arguments\":\"{\\\"rule_id\\\":\\\"123\\\"}\"}"
+                  }
+                ]
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var func = doc.RootElement.GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("tool_calls")[0]
+            .GetProperty("function");
+        func.ValueKind.Should().Be(JsonValueKind.Object);
+        func.GetProperty("name").GetString().Should().Be("remove_rule");
+        func.GetProperty("arguments").ValueKind.Should().Be(JsonValueKind.String);
+    }
+
+    [Fact]
+    public void UnparseableStringChoiceItem_IsReplacedWithDefaultChoice()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": ["not valid json {{{"],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var choice = doc.RootElement.GetProperty("choices")[0];
+        choice.ValueKind.Should().Be(JsonValueKind.Object);
+        choice.GetProperty("finish_reason").GetString().Should().Be("stop");
+        choice.GetProperty("message").GetProperty("role").GetString().Should().Be("assistant");
+    }
+
+    [Fact]
+    public void ScalarStringChoiceItem_IsReplacedWithDefaultChoice()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": ["null"],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var choice = doc.RootElement.GetProperty("choices")[0];
+        choice.ValueKind.Should().Be(JsonValueKind.Object);
+        choice.GetProperty("finish_reason").GetString().Should().Be("stop");
+    }
+
+    #endregion
+
+    #region Stringified choice items normalization
+
+    [Fact]
+    public void StringifiedChoiceItem_IsRehydratedToObject()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": ["{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":\"stop\"}"],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var choice = doc.RootElement.GetProperty("choices")[0];
+        choice.ValueKind.Should().Be(JsonValueKind.Object);
+        choice.GetProperty("message").GetProperty("content").GetString().Should().Be("Hi");
+    }
+
+    #endregion
+
+    #region Non-array tool_calls normalization
+
+    [Fact]
+    public void ObjectToolCalls_IsReplacedWithEmptyArray()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": {"unexpected": "object"}
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var toolCalls = doc.RootElement.GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("tool_calls");
+        toolCalls.ValueKind.Should().Be(JsonValueKind.Array);
+        toolCalls.GetArrayLength().Should().Be(0);
+    }
+
+    #endregion
+
+    #region Null function normalization
+
+    [Fact]
+    public void NullFunction_IsReplacedWithDefault()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [
+                  {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": null
+                  }
+                ]
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var func = doc.RootElement.GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("tool_calls")[0]
+            .GetProperty("function");
+        func.ValueKind.Should().Be(JsonValueKind.Object);
+        func.GetProperty("name").GetString().Should().Be("unknown");
+        func.GetProperty("arguments").GetString().Should().Be("{}");
+    }
+
+    #endregion
+
+    #region Arguments primitive coercion
+
+    [Fact]
+    public void NumericArguments_IsCoercedToString()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [
+                  {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {
+                      "name": "get_count",
+                      "arguments": 42
+                    }
+                  }
+                ]
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var args = doc.RootElement.GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("tool_calls")[0]
+            .GetProperty("function")
+            .GetProperty("arguments");
+        args.ValueKind.Should().Be(JsonValueKind.String);
+    }
+
+    [Fact]
+    public void BooleanArguments_IsCoercedToString()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [
+                  {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {
+                      "name": "get_flag",
+                      "arguments": true
+                    }
+                  }
+                ]
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var args = doc.RootElement.GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("tool_calls")[0]
+            .GetProperty("function")
+            .GetProperty("arguments");
+        args.ValueKind.Should().Be(JsonValueKind.String);
+    }
+
+    #endregion
+
+    #region Content type coercion
+
+    [Fact]
+    public void NumericContent_IsCoercedToString()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {"role": "assistant", "content": 42},
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content");
+        content.ValueKind.Should().Be(JsonValueKind.String);
+    }
+
+    [Fact]
+    public void BooleanContent_IsCoercedToString()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": {"role": "assistant", "content": true},
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content");
+        content.ValueKind.Should().Be(JsonValueKind.String);
+    }
+
+    [Fact]
+    public void StringifiedMessageObject_IsRehydratedAndNormalized()
+    {
+        var json = """
+        {
+          "id": "chatcmpl-abc",
+          "object": "chat.completion",
+          "created": 1700000000,
+          "model": "gpt-4",
+          "choices": [
+            {
+              "index": 0,
+              "message": "{\"role\":\"assistant\",\"content\":\"Hello from stringified message\"}",
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        }
+        """;
+
+        var result = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(json, ChatCompletionPath);
+        var doc = JsonDocument.Parse(result);
+        var message = doc.RootElement.GetProperty("choices")[0].GetProperty("message");
+        message.ValueKind.Should().Be(JsonValueKind.Object);
+        message.GetProperty("role").GetString().Should().Be("assistant");
+        message.GetProperty("content").GetString().Should().Be("Hello from stringified message");
+    }
+
+    #endregion
+
     #region Azure OpenAI path detection
 
     [Fact]
