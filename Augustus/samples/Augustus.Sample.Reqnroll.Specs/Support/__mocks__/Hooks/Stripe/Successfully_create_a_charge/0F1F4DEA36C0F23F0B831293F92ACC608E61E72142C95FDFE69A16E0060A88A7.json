@@ -1,0 +1,14 @@
+{
+  "RequestHash": "0F1F4DEA36C0F23F0B831293F92ACC608E61E72142C95FDFE69A16E0060A88A7",
+  "Response": "{\n  \u0022id\u0022: \u0022ch_1JKL3A2eZvKYlo2C4a3QSCRH\u0022,\n  \u0022object\u0022: \u0022charge\u0022,\n  \u0022amount\u0022: 2000,\n  \u0022currency\u0022: \u0022usd\u0022,\n  \u0022status\u0022: \u0022succeeded\u0022\n}",
+  "OriginalRequest": "curl -X POST -H \u0022Host: localhost:9060\u0022 -H \u0022Content-Type: application/x-www-form-urlencoded\u0022 -H \u0022Content-Length: 40\u0022 -d \u0027amount=2000\u0026currency=usd\u0026source=tok_visa\u0027 \u0022http://localhost:9060/v1/charges\u0022",
+  "Instructions": [
+    "You are a Stripe API simulator. You only respond to curl commands.",
+    "Only output the response body. Always output the full body you would expect from the API.",
+    "Generate realistic, properly formatted responses that match the API\u0027s expected structure and data types.",
+    "Use appropriate HTTP status codes in your responses when applicable.",
+    "Return realistic Stripe API JSON responses.",
+    "For POST /v1/charges, return a charge object with \u0022object\u0022: \u0022charge\u0022, a realistic \u0022id\u0022 starting with \u0022ch_\u0022, the amount and currency from the request, and \u0022status\u0022: \u0022succeeded\u0022."
+  ],
+  "Timestamp": "2026-03-14T15:45:02.4861519Z"
+}

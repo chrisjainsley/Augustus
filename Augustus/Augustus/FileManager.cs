@@ -11,12 +11,84 @@ public partial class APISimulator
     {
         private static readonly JsonSerializerOptions CacheSerializerOptions = new() { WriteIndented = true };
 
-        private readonly string cacheFolderPath;
-        private readonly ConcurrentDictionary<string, byte> _touchedHashes = new();
+        private string cacheFolderPath;
+        private ConcurrentDictionary<string, byte> _touchedHashes = new();
+        private string? _currentTestContext;
 
         public FileManager(string cacheFolderPath)
         {
             this.cacheFolderPath = cacheFolderPath;
+            EnsureCacheFolderExists();
+        }
+
+        /// <summary>
+        /// Gets the effective cache path. When a test context is set, returns a subdirectory
+        /// named after the context; otherwise returns the base cache folder path.
+        /// </summary>
+        internal string CurrentCachePath =>
+            _currentTestContext != null
+                ? Path.Combine(cacheFolderPath, SanitizeFolderName(_currentTestContext))
+                : cacheFolderPath;
+
+        /// <summary>
+        /// Sets the current test context, routing cache operations to a subdirectory.
+        /// </summary>
+        /// <param name="testName">The test or scenario name to use as the subdirectory.</param>
+        public void SetTestContext(string testName)
+        {
+            _currentTestContext = testName ?? throw new ArgumentNullException(nameof(testName));
+            _touchedHashes = new ConcurrentDictionary<string, byte>();
+            var contextPath = CurrentCachePath;
+            if (!Directory.Exists(contextPath))
+            {
+                Directory.CreateDirectory(contextPath);
+            }
+        }
+
+        /// <summary>
+        /// Clears the current test context. Runs scoped stale entry removal for the
+        /// context's subdirectory before clearing.
+        /// </summary>
+        public void ClearTestContext()
+        {
+            if (_currentTestContext != null)
+            {
+                RemoveStaleEntriesFromPath(CurrentCachePath);
+                _currentTestContext = null;
+                _touchedHashes = new ConcurrentDictionary<string, byte>();
+            }
+        }
+
+        /// <summary>
+        /// Sanitizes a string for use as a folder name by replacing invalid path characters
+        /// with underscores and collapsing whitespace.
+        /// </summary>
+        internal static string SanitizeFolderName(string name)
+        {
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = new char[name.Length];
+            for (int i = 0; i < name.Length; i++)
+            {
+                sanitized[i] = Array.IndexOf(invalidChars, name[i]) >= 0 ? '_' : name[i];
+            }
+
+            // Replace spaces with underscores and collapse consecutive underscores
+            var result = new string(sanitized).Replace(' ', '_');
+            while (result.Contains("__"))
+            {
+                result = result.Replace("__", "_");
+            }
+
+            return result.Trim('_');
+        }
+
+        /// <summary>
+        /// Changes the base cache folder path and ensures the directory exists.
+        /// </summary>
+        /// <param name="newBasePath">The new base path for cache storage.</param>
+        public void SetCacheBasePath(string newBasePath)
+        {
+            cacheFolderPath = newBasePath ?? throw new ArgumentNullException(nameof(newBasePath));
             EnsureCacheFolderExists();
         }
 
@@ -56,13 +128,13 @@ public partial class APISimulator
 
         public async Task WriteToFileAsync(string filename, string content)
         {
-            string fullPath = Path.Combine(cacheFolderPath, filename);
+            string fullPath = Path.Combine(CurrentCachePath, filename);
             await File.WriteAllTextAsync(fullPath, content).ConfigureAwait(false);
         }
 
         public async Task<string?> ReadFromFileAsync(string filename)
         {
-            string fullPath = Path.Combine(cacheFolderPath, filename);
+            string fullPath = Path.Combine(CurrentCachePath, filename);
             if (!File.Exists(fullPath))
                 return null;
 
@@ -111,13 +183,18 @@ public partial class APISimulator
 
         public void RemoveStaleEntries()
         {
-            if (!Directory.Exists(cacheFolderPath))
+            RemoveStaleEntriesFromPath(cacheFolderPath);
+        }
+
+        private void RemoveStaleEntriesFromPath(string path)
+        {
+            if (!Directory.Exists(path))
                 return;
 
             string[] files;
             try
             {
-                files = Directory.GetFiles(cacheFolderPath, "*.json");
+                files = Directory.GetFiles(path, "*.json");
             }
             catch (DirectoryNotFoundException)
             {

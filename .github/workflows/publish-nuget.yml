@@ -32,22 +32,29 @@ jobs:
           echo "Extracted version: ${VERSION}"
 
       - name: Restore dependencies
-        run: dotnet restore Augustus/Augustus/Augustus.csproj
+        run: |
+          dotnet restore Augustus/Augustus/Augustus.csproj
+          dotnet restore Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj
 
       - name: Build
-        run: dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
+        run: |
+          dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet build Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
 
-      - name: Pack NuGet package
-        run: dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+      - name: Pack NuGet packages
+        run: |
+          dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Publish to NuGet.org
         run: |
-          NUPKG=$(find ./nupkg -name "*.nupkg" -type f | head -1)
-          echo "Publishing package: $NUPKG"
-          dotnet nuget push "$NUPKG" \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
-            --source https://api.nuget.org/v3/index.json \
-            --skip-duplicate
+          for NUPKG in ./nupkg/*.nupkg; do
+            echo "Publishing package: $NUPKG"
+            dotnet nuget push "$NUPKG" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
 
       - name: Upload artifacts to release
         uses: softprops/action-gh-release@v1
@@ -60,5 +67,6 @@ jobs:
 
       - name: Publish release notes
         run: |
-          echo "✅ Successfully published Augustus.AI version ${{ steps.version.outputs.VERSION }} to NuGet.org"
-          echo "📦 Package: https://www.nuget.org/packages/Augustus.AI/${{ steps.version.outputs.VERSION }}"
+          echo "✅ Successfully published Augustus.AI and Augustus.AI.Reqnroll version ${{ steps.version.outputs.VERSION }} to NuGet.org"
+          echo "📦 Augustus.AI: https://www.nuget.org/packages/Augustus.AI/${{ steps.version.outputs.VERSION }}"
+          echo "📦 Augustus.AI.Reqnroll: https://www.nuget.org/packages/Augustus.AI.Reqnroll/${{ steps.version.outputs.VERSION }}"
