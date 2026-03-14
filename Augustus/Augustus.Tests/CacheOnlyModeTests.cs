@@ -88,7 +88,7 @@ public class CacheOnlyModeTests
         var simulator = this.CreateAPISimulator("TestAPI", options =>
         {
             options.CacheOnly = true;
-            options.Port = 9055;
+            options.Port = 0;
         })
         .WithInstruction("Return test responses");
 
@@ -110,7 +110,7 @@ public class CacheOnlyModeTests
         var simulator = this.CreateAPISimulator("TestAPI", options =>
         {
             options.CacheOnly = true;
-            options.Port = 9056;
+            options.Port = 0;
         })
         .WithInstruction("Return test responses");
 

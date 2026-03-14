@@ -208,14 +208,14 @@ public class APISimulatorOptions
     /// Ports below 1024 are typically reserved for system services and require elevated privileges.
     /// If the specified port is already in use, starting the simulator will fail.
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 1024 or greater than 65535.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 0 or greater than 65535, or between 1 and 1023.</exception>
     public int Port
     {
         get => _port;
         set
         {
-            if (value < 1024 || value > 65535)
-                throw new ArgumentOutOfRangeException(nameof(Port), "Port must be between 1024 and 65535");
+            if (value < 0 || value > 65535 || (value > 0 && value < 1024))
+                throw new ArgumentOutOfRangeException(nameof(Port), "Port must be 0 (auto-assign) or between 1024 and 65535");
             _port = value;
         }
     }

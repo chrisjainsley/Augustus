@@ -53,11 +53,11 @@ public class StripeTests
         };
 
         // Test invalid port
-        var settingInvalidPort = () => options.Port = 100; // Too low
-        
+        var settingInvalidPort = () => options.Port = 100; // Too low (between 1-1023 is reserved)
+
         settingInvalidPort.Should()
             .Throw<ArgumentOutOfRangeException>()
-            .WithMessage("*Port must be between 1024 and 65535*");
+            .WithMessage("*Port must be 0 (auto-assign) or between 1024 and 65535*");
     }
 
     [Fact]
