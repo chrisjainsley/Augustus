@@ -101,8 +101,17 @@ internal static class ChatCompletionResponseNormalizer
                         choicesArray[i] = parsedChoice;
                         choiceItem = parsedChoice;
                     }
+                    else
+                    {
+                        choicesArray[i] = CreateDefaultChoice();
+                        choiceItem = choicesArray[i];
+                    }
                 }
-                catch (JsonException) { }
+                catch (JsonException)
+                {
+                    choicesArray[i] = CreateDefaultChoice();
+                    choiceItem = choicesArray[i];
+                }
             }
 
             if (choiceItem is not JsonObject choice)
@@ -110,6 +119,20 @@ internal static class ChatCompletionResponseNormalizer
 
             NormalizeChoice(choice);
         }
+    }
+
+    private static JsonObject CreateDefaultChoice()
+    {
+        return new JsonObject
+        {
+            ["index"] = 0,
+            ["message"] = new JsonObject
+            {
+                ["role"] = "assistant",
+                ["content"] = (string?)null
+            },
+            ["finish_reason"] = "stop"
+        };
     }
 
     private static void NormalizeChoice(JsonObject choice)
@@ -208,7 +231,10 @@ internal static class ChatCompletionResponseNormalizer
             return;
 
         if (toolCallsNode is not JsonArray toolCalls)
+        {
+            message["tool_calls"] = new JsonArray();
             return;
+        }
 
         foreach (var tcItem in toolCalls)
         {
@@ -229,8 +255,11 @@ internal static class ChatCompletionResponseNormalizer
 
         // Rehydrate stringified function object (e.g., "{\"name\":\"foo\",\"arguments\":\"{}\"}" as a string)
         funcNode = TryRehydrateStringifiedNode(toolCall, "function", funcNode, () => new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" });
-        if (funcNode is null)
+        if (funcNode is null or JsonValue)
+        {
+            toolCall["function"] = new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" };
             return;
+        }
 
         if (funcNode is not JsonObject function)
         {
@@ -240,11 +269,19 @@ internal static class ChatCompletionResponseNormalizer
 
         EnsureString(function, "name", () => "unknown");
 
-        // "arguments" must be a string (JSON-encoded), not a raw object
-        if (function.TryGetPropertyValue("arguments", out var argsNode)
-            && (argsNode is JsonObject || argsNode is JsonArray))
+        // "arguments" must be a string (JSON-encoded), not a raw object or primitive
+        if (function.TryGetPropertyValue("arguments", out var argsNode))
         {
-            function["arguments"] = argsNode.ToJsonString();
+            if (argsNode is JsonObject || argsNode is JsonArray)
+            {
+                function["arguments"] = argsNode.ToJsonString();
+            }
+            else if (argsNode is JsonValue av
+                     && av.GetValueKind() != JsonValueKind.String
+                     && av.GetValueKind() != JsonValueKind.Null)
+            {
+                function["arguments"] = av.ToString();
+            }
         }
     }
 
