@@ -85,8 +85,26 @@ internal static class ChatCompletionResponseNormalizer
             return;
         }
 
-        foreach (var choiceItem in choicesArray)
+        for (var i = 0; i < choicesArray.Count; i++)
         {
+            var choiceItem = choicesArray[i];
+
+            // Rehydrate stringified choice items (e.g., individual array elements that are strings)
+            if (choiceItem is JsonValue cv && cv.GetValueKind() == JsonValueKind.String)
+            {
+                var str = cv.GetValue<string>();
+                try
+                {
+                    var parsed = JsonNode.Parse(str);
+                    if (parsed is JsonObject parsedChoice)
+                    {
+                        choicesArray[i] = parsedChoice;
+                        choiceItem = parsedChoice;
+                    }
+                }
+                catch (JsonException) { }
+            }
+
             if (choiceItem is not JsonObject choice)
                 continue;
 
@@ -122,14 +140,29 @@ internal static class ChatCompletionResponseNormalizer
             return;
         }
 
-        // If message is a string, wrap it as an object
+        // If message is a string, try to parse as JSON object first, otherwise wrap as content
         if (messageNode is JsonValue mv && mv.GetValueKind() == JsonValueKind.String)
         {
-            var content = mv.GetValue<string>();
+            var str = mv.GetValue<string>();
+
+            // Try to rehydrate stringified message object (e.g., "{\"role\":\"assistant\",\"content\":\"Hi\"}")
+            try
+            {
+                var parsed = JsonNode.Parse(str);
+                if (parsed is JsonObject parsedObj)
+                {
+                    choice["message"] = parsedObj;
+                    NormalizeMessageFields(parsedObj);
+                    return;
+                }
+            }
+            catch (JsonException) { }
+
+            // Plain string — wrap as content
             choice["message"] = new JsonObject
             {
                 ["role"] = "assistant",
-                ["content"] = content
+                ["content"] = str
             };
             return;
         }
@@ -137,13 +170,28 @@ internal static class ChatCompletionResponseNormalizer
         if (messageNode is not JsonObject message)
             return;
 
+        NormalizeMessageFields(message);
+    }
+
+    private static void NormalizeMessageFields(JsonObject message)
+    {
         EnsureString(message, "role", () => "assistant");
 
-        // "content" should be a string or null; if it's an object, serialize it
-        if (message.TryGetPropertyValue("content", out var contentNode)
-            && (contentNode is JsonObject || contentNode is JsonArray))
+        // "content" should be a string or null
+        if (message.TryGetPropertyValue("content", out var contentNode))
         {
-            message["content"] = contentNode.ToJsonString();
+            if (contentNode is JsonObject || contentNode is JsonArray)
+            {
+                // Serialize complex types to string
+                message["content"] = contentNode.ToJsonString();
+            }
+            else if (contentNode is JsonValue cv
+                     && cv.GetValueKind() != JsonValueKind.String
+                     && cv.GetValueKind() != JsonValueKind.Null)
+            {
+                // Coerce non-string primitives (number, boolean) to string
+                message["content"] = cv.ToString();
+            }
         }
 
         NormalizeToolCalls(message);
@@ -151,8 +199,15 @@ internal static class ChatCompletionResponseNormalizer
 
     private static void NormalizeToolCalls(JsonObject message)
     {
-        if (!message.TryGetPropertyValue("tool_calls", out var toolCallsNode)
-            || toolCallsNode is not JsonArray toolCalls)
+        if (!message.TryGetPropertyValue("tool_calls", out var toolCallsNode))
+            return;
+
+        // Rehydrate stringified tool_calls array (e.g., "[{...}]" as a string)
+        toolCallsNode = TryRehydrateStringifiedNode(message, "tool_calls", toolCallsNode, () => new JsonArray());
+        if (toolCallsNode is null)
+            return;
+
+        if (toolCallsNode is not JsonArray toolCalls)
             return;
 
         foreach (var tcItem in toolCalls)
@@ -163,17 +218,33 @@ internal static class ChatCompletionResponseNormalizer
             EnsureString(toolCall, "id", () => $"call_{Guid.NewGuid():N}"[..17]);
             EnsureString(toolCall, "type", () => "function");
 
-            if (toolCall.TryGetPropertyValue("function", out var funcNode) && funcNode is JsonObject function)
-            {
-                EnsureString(function, "name", () => "unknown");
+            NormalizeToolCallFunction(toolCall);
+        }
+    }
 
-                // "arguments" must be a string (JSON-encoded), not a raw object
-                if (function.TryGetPropertyValue("arguments", out var argsNode)
-                    && (argsNode is JsonObject || argsNode is JsonArray))
-                {
-                    function["arguments"] = argsNode.ToJsonString();
-                }
-            }
+    private static void NormalizeToolCallFunction(JsonObject toolCall)
+    {
+        if (!toolCall.TryGetPropertyValue("function", out var funcNode))
+            return;
+
+        // Rehydrate stringified function object (e.g., "{\"name\":\"foo\",\"arguments\":\"{}\"}" as a string)
+        funcNode = TryRehydrateStringifiedNode(toolCall, "function", funcNode, () => new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" });
+        if (funcNode is null)
+            return;
+
+        if (funcNode is not JsonObject function)
+        {
+            toolCall["function"] = new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" };
+            return;
+        }
+
+        EnsureString(function, "name", () => "unknown");
+
+        // "arguments" must be a string (JSON-encoded), not a raw object
+        if (function.TryGetPropertyValue("arguments", out var argsNode)
+            && (argsNode is JsonObject || argsNode is JsonArray))
+        {
+            function["arguments"] = argsNode.ToJsonString();
         }
     }
 
