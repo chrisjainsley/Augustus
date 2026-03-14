@@ -24,7 +24,7 @@ public class CreateChargeSteps
         var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["amount"] = amount.ToString(),
-            ["currency"] = currency.ToLower(),
+            ["currency"] = currency.ToLowerInvariant(),
             ["source"] = source
         });
         _response = await client.PostAsync("/v1/charges", content);
@@ -38,7 +38,7 @@ public class CreateChargeSteps
     public async Task ThenContainsCharge()
     {
         var json = await _response!.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
+        using var doc = JsonDocument.Parse(json);
         doc.RootElement.GetProperty("object").GetString().Should().Be("charge");
     }
 
@@ -46,7 +46,7 @@ public class CreateChargeSteps
     public async Task ThenChargeCurrency(string currency)
     {
         var json = await _response!.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
+        using var doc = JsonDocument.Parse(json);
         doc.RootElement.GetProperty("currency").GetString().Should().Be(currency);
     }
 }

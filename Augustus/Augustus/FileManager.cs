@@ -87,7 +87,13 @@ public partial class APISimulator
                 result = result.Replace("__", "_");
             }
 
-            return result.Trim('_');
+            result = result.Trim('_');
+
+            // Guard against path traversal: reject "." and ".." as final names
+            if (result is "" or "." or "..")
+                return "_";
+
+            return result;
         }
 
         /// <summary>
@@ -96,7 +102,9 @@ public partial class APISimulator
         /// <param name="newBasePath">The new base path for cache storage.</param>
         public void SetCacheBasePath(string newBasePath)
         {
-            cacheFolderPath = newBasePath ?? throw new ArgumentNullException(nameof(newBasePath));
+            if (string.IsNullOrWhiteSpace(newBasePath))
+                throw new ArgumentException("Cache base path cannot be null or whitespace.", nameof(newBasePath));
+            cacheFolderPath = newBasePath;
             EnsureCacheFolderExists();
 
             // If a test context is active, ensure its subdirectory also exists under the new base

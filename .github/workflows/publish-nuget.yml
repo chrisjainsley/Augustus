@@ -42,9 +42,12 @@ jobs:
           dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
           dotnet build Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
           dotnet build Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-restore
+          dotnet build Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net10.0
+        run: |
+          dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net10.0
+          dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-build --verbosity normal
 
       - name: Pack NuGet packages
         run: |
