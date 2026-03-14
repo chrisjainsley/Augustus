@@ -254,41 +254,52 @@ public partial class APISimulator
 
         public void ClearCache()
         {
-            var targetPath = CurrentCachePath;
-            if (!Directory.Exists(targetPath))
+            ClearCacheFromPath(cacheFolderPath);
+
+            // Also clear any subdirectories (e.g., per-scenario context directories)
+            if (Directory.Exists(cacheFolderPath))
+            {
+                try
+                {
+                    foreach (var subDir in Directory.GetDirectories(cacheFolderPath))
+                    {
+                        ClearCacheFromPath(subDir);
+                    }
+                }
+                catch (DirectoryNotFoundException) { }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        private static void ClearCacheFromPath(string path)
+        {
+            if (!Directory.Exists(path))
                 return;
 
-            // Get all files first to avoid enumeration-during-modification issues
             string[] files;
             try
             {
-                files = Directory.GetFiles(targetPath, "*.json");
+                files = Directory.GetFiles(path, "*.json");
             }
             catch (DirectoryNotFoundException)
             {
-                // Directory was deleted between check and enumeration, nothing to do
                 return;
             }
 
-            // Delete each file with proper error handling
             foreach (var file in files)
             {
                 try
                 {
                     File.Delete(file);
                 }
-                catch (FileNotFoundException)
-                {
-                    // File already deleted by another thread/process, continue
-                }
+                catch (FileNotFoundException) { }
                 catch (IOException ex)
                 {
-                    // File in use or other I/O error, log and continue with other files
                     System.Diagnostics.Debug.WriteLine($"Warning: Could not delete cache file {file}: {ex.Message}");
                 }
                 catch (UnauthorizedAccessException ex)
                 {
-                    // Permission issue, log and continue
                     System.Diagnostics.Debug.WriteLine($"Warning: Access denied when deleting {file}: {ex.Message}");
                 }
             }

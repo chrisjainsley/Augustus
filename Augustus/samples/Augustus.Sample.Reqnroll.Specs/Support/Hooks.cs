@@ -13,7 +13,9 @@ public class Hooks
     public static async Task BeforeTestRun()
     {
         var apiKey = TestConfiguration.GetApiKey();
-        if (string.IsNullOrEmpty(apiKey)) return;
+        if (string.IsNullOrEmpty(apiKey))
+            throw new InvalidOperationException(
+                "OPENAI_API_KEY is not configured. Set it via user-secrets or environment variable to run these sample specs.");
 
         _simulator = new Hooks().CreateStripeSimulator(opt =>
         {
