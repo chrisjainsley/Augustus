@@ -67,11 +67,17 @@ public partial class APISimulator
         /// </summary>
         internal static string SanitizeFolderName(string name)
         {
-            var invalidChars = Path.GetInvalidFileNameChars();
+            // Use a fixed cross-platform set so cache folder names are consistent across OSes.
+            // On Unix, Path.GetInvalidFileNameChars() only returns '/' and '\0', but characters
+            // like ':', '<', '>', '"', '\' are problematic for Windows and should always be sanitized.
+            var invalidChars = new HashSet<char>(Path.GetInvalidFileNameChars())
+            {
+                '\\', '/', ':', '*', '?', '"', '<', '>', '|'
+            };
             var sanitized = new char[name.Length];
             for (int i = 0; i < name.Length; i++)
             {
-                sanitized[i] = Array.IndexOf(invalidChars, name[i]) >= 0 ? '_' : name[i];
+                sanitized[i] = invalidChars.Contains(name[i]) ? '_' : name[i];
             }
 
             // Replace spaces with underscores and collapse consecutive underscores
