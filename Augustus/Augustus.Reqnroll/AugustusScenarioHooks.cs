@@ -1,5 +1,6 @@
 namespace Augustus.Reqnroll;
 
+using System.Diagnostics;
 using System.IO;
 using global::Reqnroll;
 
@@ -8,6 +9,12 @@ using global::Reqnroll;
 /// Sets cache base path to {projectRoot}/{featureFolderPath}/__mocks__/{apiName}
 /// and organizes cache entries into per-scenario subdirectories.
 /// </summary>
+/// <remarks>
+/// These hooks mutate shared APISimulator state. If your test runner enables parallel
+/// scenario execution (e.g., xUnit default parallelization), scenarios may race on the
+/// same simulator instance. Disable parallel execution in your test assembly or use
+/// separate simulator instances per collection to avoid cache path conflicts.
+/// </remarks>
 [Binding]
 public class AugustusScenarioHooks
 {
@@ -27,7 +34,10 @@ public class AugustusScenarioHooks
         var projectRoot = AugustusReqnrollContext.ProjectRoot;
 
         if (simulators.Count == 0 || projectRoot == null)
+        {
+            Debug.WriteLine("Augustus.Reqnroll: No simulators registered. Call AugustusReqnrollContext.Register() in [BeforeTestRun].");
             return;
+        }
 
         var featureFolderPath = _featureContext.FeatureInfo.FolderPath;
         var scenarioTitle = _scenarioContext.ScenarioInfo.Title;

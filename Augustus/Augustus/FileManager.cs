@@ -36,7 +36,9 @@ public partial class APISimulator
         /// <param name="testName">The test or scenario name to use as the subdirectory.</param>
         public void SetTestContext(string testName)
         {
-            _currentTestContext = testName ?? throw new ArgumentNullException(nameof(testName));
+            if (string.IsNullOrWhiteSpace(testName))
+                throw new ArgumentException("Test name cannot be null or whitespace.", nameof(testName));
+            _currentTestContext = testName;
             _touchedHashes = new ConcurrentDictionary<string, byte>();
             var contextPath = CurrentCachePath;
             if (!Directory.Exists(contextPath))
@@ -90,6 +92,16 @@ public partial class APISimulator
         {
             cacheFolderPath = newBasePath ?? throw new ArgumentNullException(nameof(newBasePath));
             EnsureCacheFolderExists();
+
+            // If a test context is active, ensure its subdirectory also exists under the new base
+            if (_currentTestContext != null)
+            {
+                var contextPath = CurrentCachePath;
+                if (!Directory.Exists(contextPath))
+                {
+                    Directory.CreateDirectory(contextPath);
+                }
+            }
         }
 
         private void EnsureCacheFolderExists()

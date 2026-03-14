@@ -69,9 +69,20 @@ public static class AugustusReqnrollContext
 
         while (!string.IsNullOrEmpty(current))
         {
-            var csprojFiles = Directory.GetFiles(current, "*.csproj");
-            if (csprojFiles.Length > 0)
-                return current;
+            try
+            {
+                var csprojFiles = Directory.GetFiles(current, "*.csproj");
+                if (csprojFiles.Length > 0)
+                    return current;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Can't enumerate this directory (e.g., restricted CI environment); skip and try parent
+            }
+            catch (IOException)
+            {
+                // I/O error enumerating directory; skip and try parent
+            }
 
             var parent = Directory.GetParent(current);
             if (parent == null)
