@@ -36,6 +36,7 @@ jobs:
           dotnet restore Augustus/Augustus/Augustus.csproj
           dotnet restore Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj
           dotnet restore Augustus/Augustus.Tests/Augustus.Tests.csproj
+          dotnet restore Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj
 
       - name: Build
         run: |

@@ -1,6 +1,5 @@
 namespace Augustus.Reqnroll;
 
-using System.Diagnostics;
 using System.IO;
 using global::Reqnroll;
 
@@ -33,10 +32,18 @@ public class AugustusScenarioHooks
         var simulators = AugustusReqnrollContext.Simulators;
         var projectRoot = AugustusReqnrollContext.ProjectRoot;
 
-        if (simulators.Count == 0 || projectRoot == null)
+        if (simulators.Count == 0)
         {
-            Debug.WriteLine("Augustus.Reqnroll: No simulators registered. Call AugustusReqnrollContext.Register() in [BeforeTestRun].");
-            return;
+            throw new InvalidOperationException(
+                "Augustus.Reqnroll: No simulators registered. " +
+                "Call AugustusReqnrollContext.Register(simulator) in a [BeforeTestRun] hook.");
+        }
+
+        if (projectRoot == null)
+        {
+            throw new InvalidOperationException(
+                "Augustus.Reqnroll: Project root could not be resolved. " +
+                "Ensure AugustusReqnrollContext.Register() is called from a source file within the test project.");
         }
 
         var featureFolderPath = _featureContext.FeatureInfo.FolderPath;

@@ -39,7 +39,7 @@ public partial class APISimulator
             if (string.IsNullOrWhiteSpace(testName))
                 throw new ArgumentException("Test name cannot be null or whitespace.", nameof(testName));
             _currentTestContext = testName;
-            _touchedHashes = new ConcurrentDictionary<string, byte>();
+            _touchedHashes.Clear();
             var contextPath = CurrentCachePath;
             if (!Directory.Exists(contextPath))
             {
@@ -57,7 +57,7 @@ public partial class APISimulator
             {
                 RemoveStaleEntriesFromPath(CurrentCachePath);
                 _currentTestContext = null;
-                _touchedHashes = new ConcurrentDictionary<string, byte>();
+                _touchedHashes.Clear();
             }
         }
 
@@ -105,6 +105,7 @@ public partial class APISimulator
             if (string.IsNullOrWhiteSpace(newBasePath))
                 throw new ArgumentException("Cache base path cannot be null or whitespace.", nameof(newBasePath));
             cacheFolderPath = newBasePath;
+            _touchedHashes.Clear();
             EnsureCacheFolderExists();
 
             // If a test context is active, ensure its subdirectory also exists under the new base
