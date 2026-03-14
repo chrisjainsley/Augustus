@@ -210,7 +210,7 @@ public partial class APISimulator
 
         public void RemoveStaleEntries()
         {
-            RemoveStaleEntriesFromPath(cacheFolderPath);
+            RemoveStaleEntriesFromPath(CurrentCachePath);
         }
 
         private void RemoveStaleEntriesFromPath(string path)
@@ -254,14 +254,15 @@ public partial class APISimulator
 
         public void ClearCache()
         {
-            if (!Directory.Exists(cacheFolderPath))
+            var targetPath = CurrentCachePath;
+            if (!Directory.Exists(targetPath))
                 return;
 
             // Get all files first to avoid enumeration-during-modification issues
             string[] files;
             try
             {
-                files = Directory.GetFiles(cacheFolderPath, "*.json");
+                files = Directory.GetFiles(targetPath, "*.json");
             }
             catch (DirectoryNotFoundException)
             {
