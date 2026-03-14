@@ -34,6 +34,20 @@ public class APISimulatorOptions
     /// </value>
     public bool AutoRemoveStaleCache { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulator operates in cache-only mode.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> to serve only cached responses without requiring an OpenAI API key;
+    /// <c>false</c> to allow forwarding requests to OpenAI on cache misses. Default is <c>false</c>.
+    /// </value>
+    /// <remarks>
+    /// When enabled, no OpenAI API key is required and all responses must come from the cache.
+    /// Cache misses will return HTTP 503. This mode is auto-detected when <see cref="EnableCaching"/>
+    /// is <c>true</c> and no <see cref="OpenAIApiKey"/> is provided.
+    /// </remarks>
+    public bool CacheOnly { get; set; } = false;
+
     private string _cacheFolderPath = "./mocks";
     private bool _cacheFolderPathExplicitlySet;
 
@@ -318,6 +332,21 @@ public class APISimulatorOptions
     /// <exception cref="ValidationException">Thrown if any required configuration is missing or invalid.</exception>
     public void Validate()
     {
+        // Auto-detect cache-only mode: caching enabled but no API key provided
+        if (!CacheOnly && EnableCaching && string.IsNullOrWhiteSpace(OpenAIApiKey))
+        {
+            CacheOnly = true;
+            Console.WriteLine("Warning: No OpenAI API key provided with caching enabled. Activating cache-only mode — cache misses will return HTTP 503.");
+        }
+
+        // In cache-only mode: force caching on, disable stale cache removal, skip API key validation
+        if (CacheOnly)
+        {
+            EnableCaching = true;
+            AutoRemoveStaleCache = false;
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(OpenAIApiKey))
         {
             throw new ValidationException("OpenAI API key is required. Please set APISimulatorOptions.OpenAIApiKey");
