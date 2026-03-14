@@ -1,12 +1,32 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Augustus.Extensions;
 using FluentAssertions;
 
 namespace Augustus.Tests;
 
-public class CacheOnlyModeTests
+public class CacheOnlyModeTests : IDisposable
 {
+    private readonly List<string> _tempDirs = new();
+
+    private string CreateTempCacheDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"augustus_test_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        _tempDirs.Add(dir);
+        return dir;
+    }
+
+    public void Dispose()
+    {
+        foreach (var dir in _tempDirs)
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
     [Fact]
     public void ExplicitCacheOnly_ShouldSkipApiKeyValidation()
     {
@@ -85,9 +105,12 @@ public class CacheOnlyModeTests
     [Fact]
     public async Task CacheHit_ShouldReturnCachedResponse()
     {
+        var cacheDir = CreateTempCacheDir();
+
         var simulator = this.CreateAPISimulator("TestAPI", options =>
         {
             options.CacheOnly = true;
+            options.CacheFolderPath = cacheDir;
             options.Port = 0;
         })
         .WithInstruction("Return test responses");
@@ -97,19 +120,42 @@ public class CacheOnlyModeTests
             await simulator.StartAsync();
             var client = simulator.CreateClient();
 
-            // Make a request — it will be a cache miss and return 503
-            // (This test verifies the simulator starts and serves requests in cache-only mode)
-            var response = await client.GetAsync("/v1/test");
-            response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+            // First request: cache miss — extract the hash from the 503 error body
+            var missResponse = await client.GetAsync("/v1/test");
+            missResponse.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+            var missBody = await missResponse.Content.ReadAsStringAsync();
+            var hashMatch = System.Text.RegularExpressions.Regex.Match(missBody, @"request hash (?:'|\\u0027)([A-F0-9]+)(?:'|\\u0027)");
+            hashMatch.Success.Should().BeTrue("error response should contain the request hash");
+            var requestHash = hashMatch.Groups[1].Value;
+
+            // Pre-populate the cache with a response for that hash
+            var cacheEntry = JsonSerializer.Serialize(new
+            {
+                RequestHash = requestHash,
+                Response = "{\"id\":\"test-123\",\"status\":\"ok\"}",
+                OriginalRequest = "GET /v1/test",
+                Instructions = new[] { "Return test responses" },
+                Timestamp = DateTime.UtcNow
+            }, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(Path.Combine(cacheDir, $"{requestHash}.json"), cacheEntry);
+
+            // Second request: should hit the cache and return 200
+            var hitResponse = await client.GetAsync("/v1/test");
+            hitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var hitBody = await hitResponse.Content.ReadAsStringAsync();
+            hitBody.Should().Contain("test-123");
         }
     }
 
     [Fact]
     public async Task CacheMiss_ShouldReturn503WithDescriptiveError()
     {
+        var cacheDir = CreateTempCacheDir();
+
         var simulator = this.CreateAPISimulator("TestAPI", options =>
         {
             options.CacheOnly = true;
+            options.CacheFolderPath = cacheDir;
             options.Port = 0;
         })
         .WithInstruction("Return test responses");

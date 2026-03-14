@@ -94,14 +94,16 @@ public class APISimulatorOptions
     /// Gets or sets the OpenAI API key used for generating responses.
     /// </summary>
     /// <value>
-    /// The OpenAI API key. This property is required and must be set before starting the simulator.
+    /// The OpenAI API key. Required unless <see cref="CacheOnly"/> is enabled.
     /// </value>
     /// <remarks>
     /// You can obtain an API key from https://platform.openai.com/api-keys.
     /// The value is automatically trimmed of leading/trailing whitespace.
     /// Consider loading this from environment variables or secure configuration rather than hardcoding.
+    /// When <see cref="EnableCaching"/> is <c>true</c> and this property is empty,
+    /// <see cref="Validate"/> will auto-activate <see cref="CacheOnly"/> mode instead of throwing.
     /// </remarks>
-    /// <exception cref="ValidationException">Thrown during <see cref="Validate"/> if this property is not set.</exception>
+    /// <exception cref="ValidationException">Thrown during <see cref="Validate"/> if this property is not set and cache-only mode is not active.</exception>
     public string OpenAIApiKey
     {
         get => _openAIApiKey;

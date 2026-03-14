@@ -11,6 +11,7 @@ namespace Augustus
     {
         private readonly OpenAIClient? openAiClient;
         private readonly OpenAIRequestHandler? requestHandler;
+        private readonly bool cacheOnly;
         private readonly APISimulatorOptions options;
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
@@ -22,9 +23,10 @@ namespace Augustus
             this.options = options ?? throw new ArgumentNullException(nameof(options));
             this.instructionsContainer = instructionsContainer ?? throw new ArgumentNullException(nameof(instructionsContainer));
             this.fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
+            this.cacheOnly = options.CacheOnly;
 
             // In cache-only mode, no OpenAI client is needed
-            if (!options.CacheOnly)
+            if (!cacheOnly)
             {
                 // Validation is now done in APISimulator constructor (fail-fast)
                 // Create appropriate client based on configuration
@@ -74,12 +76,18 @@ namespace Augustus
                 }
 
                 // In cache-only mode, return 503 on cache miss instead of calling OpenAI
-                if (options.CacheOnly)
+                if (cacheOnly)
                 {
                     await WriteErrorResponse(httpContext,
                         $"Cache-only mode: no cached response found for request hash '{requestHash}'. " +
                         "Run tests locally with an OpenAI API key to generate and cache this response.",
                         503, cancellationToken);
+                    return;
+                }
+
+                if (requestHandler is null)
+                {
+                    await WriteErrorResponse(httpContext, "OpenAI client is not initialized. Provide an API key or enable cache-only mode.", 500, cancellationToken);
                     return;
                 }
 
