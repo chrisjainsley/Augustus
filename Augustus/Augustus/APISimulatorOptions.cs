@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace Augustus;
 
@@ -35,26 +35,20 @@ public class APISimulatorOptions
     public bool AutoRemoveStaleCache { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the simulator operates as a reverse proxy.
+    /// Gets or sets a value indicating whether the simulator operates in cache-only mode.
     /// </summary>
     /// <value>
-    /// <c>true</c> to forward requests to <see cref="OpenAIEndpoint"/> and cache responses;
-    /// <c>false</c> to use AI-generated responses (default).
-    /// </value>
-    public bool ProxyMode { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the simulator only serves cached responses.
-    /// </summary>
-    /// <value>
-    /// <c>true</c> to serve only from cache (returning 503 on cache miss);
-    /// <c>false</c> to generate/proxy responses on cache miss (default).
+    /// <c>true</c> to serve only cached responses without requiring an OpenAI API key;
+    /// <c>false</c> to allow forwarding requests to OpenAI on cache misses. Default is <c>false</c>.
     /// </value>
     /// <remarks>
+    /// When enabled, no OpenAI API key is required and all responses must come from the cache.
+    /// Cache misses will return HTTP 503. This mode is auto-detected when <see cref="EnableCaching"/>
+    /// is <c>true</c> and no <see cref="OpenAIApiKey"/> is provided.
     /// When combined with <see cref="ProxyMode"/>, this allows replaying proxy-captured
     /// responses without an API key or upstream connection (e.g., in CI).
     /// </remarks>
-    public bool CacheOnly { get; set; }
+    public bool CacheOnly { get; set; } = false;
 
     private string _cacheFolderPath = "./mocks";
     private bool _cacheFolderPathExplicitlySet;
@@ -102,14 +96,16 @@ public class APISimulatorOptions
     /// Gets or sets the OpenAI API key used for generating responses.
     /// </summary>
     /// <value>
-    /// The OpenAI API key. This property is required and must be set before starting the simulator.
+    /// The OpenAI API key. Required unless <see cref="CacheOnly"/> is enabled.
     /// </value>
     /// <remarks>
     /// You can obtain an API key from https://platform.openai.com/api-keys.
     /// The value is automatically trimmed of leading/trailing whitespace.
     /// Consider loading this from environment variables or secure configuration rather than hardcoding.
+    /// When <see cref="EnableCaching"/> is <c>true</c> and this property is empty,
+    /// <see cref="Validate"/> will auto-activate <see cref="CacheOnly"/> mode instead of throwing.
     /// </remarks>
-    /// <exception cref="ValidationException">Thrown during <see cref="Validate"/> if this property is not set.</exception>
+    /// <exception cref="ValidationException">Thrown during <see cref="Validate"/> if this property is not set and cache-only mode is not active.</exception>
     public string OpenAIApiKey
     {
         get => _openAIApiKey;
@@ -210,20 +206,21 @@ public class APISimulatorOptions
     /// Gets or sets the TCP port number on which the simulator will listen.
     /// </summary>
     /// <value>
-    /// The port number. Must be between 1024 and 65535. Default is 9001.
+    /// The port number. Must be 0 (auto-assign) or between 1024 and 65535. Default is 9001.
     /// </value>
     /// <remarks>
+    /// Set to 0 to let the OS auto-assign an available port — useful for parallel test execution.
     /// Ports below 1024 are typically reserved for system services and require elevated privileges.
     /// If the specified port is already in use, starting the simulator will fail.
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 1024 or greater than 65535.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the value is less than 0 or greater than 65535, or between 1 and 1023.</exception>
     public int Port
     {
         get => _port;
         set
         {
-            if (value < 1024 || value > 65535)
-                throw new ArgumentOutOfRangeException(nameof(Port), "Port must be between 1024 and 65535");
+            if (value < 0 || value > 65535 || (value > 0 && value < 1024))
+                throw new ArgumentOutOfRangeException(nameof(Port), "Port must be 0 (auto-assign) or between 1024 and 65535");
             _port = value;
         }
     }
@@ -301,6 +298,56 @@ public class APISimulatorOptions
         }
     }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulator operates in pass-through proxy mode.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> to forward requests to a real upstream API and cache responses;
+    /// <c>false</c> to use AI-simulated responses (default).
+    /// </value>
+    /// <remarks>
+    /// In proxy mode, requests are forwarded to <see cref="ProxyUpstreamEndpoint"/> and responses
+    /// are cached for replay. This is useful for tool/function calling scenarios where the model
+    /// must actually reason about tool definitions.
+    /// When combined with <see cref="CacheOnly"/>, proxy mode serves only from cache without
+    /// requiring an API key or upstream connection (e.g., for CI replay).
+    /// </remarks>
+    public bool ProxyMode { get; set; }
+
+    private string _proxyUpstreamEndpoint = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the upstream API base URL for proxy mode.
+    /// </summary>
+    /// <value>
+    /// The base URL of the real API to forward requests to (e.g., "https://my-resource.openai.azure.com").
+    /// Required when <see cref="ProxyMode"/> is <c>true</c> and <see cref="CacheOnly"/> is <c>false</c>.
+    /// </value>
+    public string ProxyUpstreamEndpoint
+    {
+        get => _proxyUpstreamEndpoint;
+        set => _proxyUpstreamEndpoint = value?.Trim() ?? string.Empty;
+    }
+
+    private int _proxyTimeoutSeconds = 120;
+
+    /// <summary>
+    /// Gets or sets the timeout in seconds for upstream proxy requests.
+    /// </summary>
+    /// <value>
+    /// The timeout in seconds. Must be between 1 and 600. Default is 120.
+    /// </value>
+    public int ProxyTimeoutSeconds
+    {
+        get => _proxyTimeoutSeconds;
+        set
+        {
+            if (value < 1 || value > 600)
+                throw new ArgumentOutOfRangeException(nameof(ProxyTimeoutSeconds), "ProxyTimeoutSeconds must be between 1 and 600");
+            _proxyTimeoutSeconds = value;
+        }
+    }
+
     private int _maxConcurrentRequests = 10;
 
     /// <summary>
@@ -340,25 +387,47 @@ public class APISimulatorOptions
     /// <exception cref="ValidationException">Thrown if any required configuration is missing or invalid.</exception>
     public void Validate()
     {
-        ApplyModeDefaults();
-
         // ProxyMode + CacheOnly: no API key or upstream needed, just serve from cache
         if (ProxyMode && CacheOnly)
+        {
+            EnableCaching = true;
+            AutoRemoveStaleCache = false;
             return;
+        }
 
+        // Proxy mode always requires an API key and upstream endpoint
         if (ProxyMode)
         {
-            // Proxy mode needs an upstream endpoint but not necessarily an OpenAI API key
-            if (string.IsNullOrWhiteSpace(OpenAIEndpoint))
+            if (string.IsNullOrWhiteSpace(OpenAIApiKey))
             {
-                throw new ValidationException("OpenAI endpoint is required in proxy mode. Please set APISimulatorOptions.OpenAIEndpoint to the upstream API URL.");
+                throw new ValidationException("OpenAI API key is required for proxy mode. Please set APISimulatorOptions.OpenAIApiKey");
             }
 
-            if (!Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))
+            if (string.IsNullOrWhiteSpace(ProxyUpstreamEndpoint))
             {
-                throw new ValidationException("OpenAI endpoint must be a valid absolute URI");
+                throw new ValidationException("ProxyUpstreamEndpoint is required when ProxyMode is true. Please set APISimulatorOptions.ProxyUpstreamEndpoint to the upstream API base URL");
             }
 
+            if (!Uri.IsWellFormedUriString(ProxyUpstreamEndpoint, UriKind.Absolute))
+            {
+                throw new ValidationException("ProxyUpstreamEndpoint must be a valid absolute URI");
+            }
+
+            return;
+        }
+
+        // Auto-detect cache-only mode: caching enabled but no API key provided
+        if (!CacheOnly && EnableCaching && string.IsNullOrWhiteSpace(OpenAIApiKey))
+        {
+            CacheOnly = true;
+            System.Diagnostics.Trace.WriteLine("Augustus: No OpenAI API key provided with caching enabled. Activating cache-only mode — cache misses will return HTTP 503.");
+        }
+
+        // In cache-only mode: force caching on, disable stale cache removal, skip API key validation
+        if (CacheOnly)
+        {
+            EnableCaching = true;
+            AutoRemoveStaleCache = false;
             return;
         }
 
@@ -384,16 +453,6 @@ public class APISimulatorOptions
             {
                 throw new ValidationException("Azure deployment name is required when UseAzureOpenAI is true. Please set APISimulatorOptions.AzureDeploymentName");
             }
-        }
-    }
-
-    private void ApplyModeDefaults()
-    {
-        if (ProxyMode)
-        {
-            EnableCaching = true;
-            if (CacheOnly)
-                AutoRemoveStaleCache = false;
         }
     }
 }

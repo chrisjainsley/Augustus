@@ -29,10 +29,11 @@ public class StripeTests
     [Fact]
     public void APISimulator_ShouldHandleMissingApiKey()
     {
-        // Test that missing API key is handled gracefully
+        // Test that missing API key is handled gracefully (with caching disabled to prevent auto-detection)
         var options = new APISimulatorOptions
         {
             OpenAIApiKey = "", // Empty API key
+            EnableCaching = false, // Prevent cache-only auto-detection
             Port = 9011
         };
 
@@ -52,11 +53,11 @@ public class StripeTests
         };
 
         // Test invalid port
-        var settingInvalidPort = () => options.Port = 100; // Too low
-        
+        var settingInvalidPort = () => options.Port = 100; // Too low (between 1-1023 is reserved)
+
         settingInvalidPort.Should()
             .Throw<ArgumentOutOfRangeException>()
-            .WithMessage("*Port must be between 1024 and 65535*");
+            .WithMessage("*Port must be 0 (auto-assign) or between 1024 and 65535*");
     }
 
     [Fact]
@@ -205,6 +206,7 @@ public class StripeTests
         options.InitialRetryDelayMs.Should().Be(1000);
         options.MaxRetryDelayMs.Should().Be(32000);
         options.MaxConcurrentRequests.Should().Be(10);
+        options.CacheOnly.Should().BeFalse();
     }
 
     [Fact]

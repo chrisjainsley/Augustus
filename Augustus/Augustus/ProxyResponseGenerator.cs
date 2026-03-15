@@ -3,124 +3,151 @@ using System.Text.Json;
 
 namespace Augustus;
 
-internal class ProxyResponseGenerator : IResponseGenerator, IDisposable
+internal class ProxyResponseGenerator : IRequestHandler, IDisposable
 {
     private static readonly HashSet<string> HopByHopHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Connection", "Keep-Alive", "Transfer-Encoding", "TE",
-        "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Authenticate"
+        "Host", "Connection", "Keep-Alive", "Transfer-Encoding",
+        "TE", "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Authenticate"
     };
-
-    private static readonly List<string> EmptyInstructions = new();
 
     private readonly APISimulatorOptions options;
     private readonly APISimulator.FileManager fileManager;
-    private readonly BackgroundCacheWriter cacheWriter;
-    private readonly HttpClient? upstreamClient;
+    private readonly HttpClient? httpClient;
+    private readonly BackgroundCacheWriter _cacheWriter = new();
 
     public ProxyResponseGenerator(APISimulatorOptions options, APISimulator.FileManager fileManager)
     {
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
-        this.cacheWriter = new BackgroundCacheWriter(fileManager);
 
         if (!options.CacheOnly)
         {
-            upstreamClient = new HttpClient
+            httpClient = new HttpClient
             {
-                BaseAddress = new Uri(options.OpenAIEndpoint)
+                BaseAddress = new Uri(options.ProxyUpstreamEndpoint),
+                Timeout = TimeSpan.FromSeconds(options.ProxyTimeoutSeconds)
             };
         }
     }
 
-    public async Task GenerateResponse(HttpContext httpContext, CancellationToken cancellationToken = default)
+    public async Task HandleAsync(HttpContext context, CancellationToken cancellationToken)
     {
         try
         {
-            var bodyBytes = await httpContext.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
+            var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
+            var cacheKey = CacheKeyComputer.ComputeCacheKey(context.Request.Method, context.Request.Path.Value ?? "/", context.Request.QueryString.Value, bodyBytes);
 
-            var method = httpContext.Request.Method;
-            var path = httpContext.Request.Path.Value ?? "/";
-            var queryString = httpContext.Request.QueryString.Value;
-
-            var requestHash = CacheKeyComputer.ComputeCacheKey(method, path, queryString, bodyBytes);
-
-            // Try cache first
             if (options.EnableCaching)
             {
-                var cachedResponse = await fileManager.ReadCachedResponseAsync(requestHash).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(cachedResponse))
+                var cached = await fileManager.ReadCachedResponseAsync(cacheKey).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(cached))
                 {
-                    httpContext.Response.ContentType = "application/json";
-                    await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
+                    context.Response.ContentType = "application/json";
+                    await context.Response.WriteAsync(cached, cancellationToken).ConfigureAwait(false);
                     return;
                 }
             }
 
-            // Cache miss in CacheOnly mode → 503
+            // Cache miss in CacheOnly mode -> 503
             if (options.CacheOnly)
             {
-                httpContext.Response.StatusCode = 503;
-                httpContext.Response.ContentType = "application/json";
+                context.Response.StatusCode = 503;
+                context.Response.ContentType = "application/json";
                 var error = JsonSerializer.Serialize(new
                 {
                     error = "Cache miss in CacheOnly mode. No cached response found for this request.",
                     status = 503,
-                    requestHash
+                    requestHash = cacheKey
                 });
-                await httpContext.Response.WriteAsync(error, cancellationToken);
+                await context.Response.WriteAsync(error, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
-            // Forward request to upstream
-            var upstreamRequest = new HttpRequestMessage(new HttpMethod(method), path + httpContext.Request.QueryString);
-            upstreamRequest.Content = new ByteArrayContent(bodyBytes);
+            using var upstreamRequest = BuildUpstreamRequest(context.Request, bodyBytes);
+            using var upstreamResponse = await httpClient!.SendAsync(upstreamRequest, cancellationToken).ConfigureAwait(false);
 
-            // Copy relevant headers
-            foreach (var header in httpContext.Request.Headers)
-            {
-                if (HopByHopHeaders.Contains(header.Key) || header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase))
-                    continue;
+            var responseBody = await upstreamResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-                if (header.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
-                {
-                    upstreamRequest.Content.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
-                }
-                else
-                {
-                    upstreamRequest.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
-                }
-            }
+            context.Response.StatusCode = (int)upstreamResponse.StatusCode;
+            context.Response.ContentType = upstreamResponse.Content.Headers.ContentType?.ToString() ?? "application/json";
+            await context.Response.WriteAsync(responseBody, cancellationToken).ConfigureAwait(false);
 
-            var upstreamResponse = await upstreamClient!.SendAsync(upstreamRequest, cancellationToken).ConfigureAwait(false);
-            var responseContent = await upstreamResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            // Write response to client
-            httpContext.Response.StatusCode = (int)upstreamResponse.StatusCode;
-            httpContext.Response.ContentType = upstreamResponse.Content.Headers.ContentType?.ToString() ?? "application/json";
-            await httpContext.Response.WriteAsync(responseContent, cancellationToken);
-
-            // Cache successful responses in the background
             if (options.EnableCaching && upstreamResponse.IsSuccessStatusCode)
             {
-                var curlRequest = await httpContext.Request.ToCurlCommandAsync().ConfigureAwait(false);
-                cacheWriter.Enqueue(requestHash, responseContent, curlRequest, EmptyInstructions);
+                var method = context.Request.Method;
+                var path = context.Request.Path.Value ?? "/";
+                _cacheWriter.Enqueue(() =>
+                {
+                    var requestInfo = $"PROXY {method} {path}";
+                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>());
+                });
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            httpContext.Response.StatusCode = 502;
-            httpContext.Response.ContentType = "application/json";
-            var error = JsonSerializer.Serialize(new { error = $"Proxy error: {ex.Message}", status = 502 });
-            await httpContext.Response.WriteAsync(error, cancellationToken);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = 502;
+                context.Response.ContentType = "application/json";
+                var errorResponse = JsonSerializer.Serialize(new { error = $"Proxy error: {ex.Message}", status = 502 });
+                await context.Response.WriteAsync(errorResponse, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
     public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
-        => cacheWriter.DrainAsync(cancellationToken);
+        => _cacheWriter.DrainAsync(cancellationToken);
+
+    private HttpRequestMessage BuildUpstreamRequest(HttpRequest incoming, byte[] bodyBytes)
+    {
+        var uri = $"{incoming.Path}{incoming.QueryString}";
+        var request = new HttpRequestMessage(new HttpMethod(incoming.Method), uri);
+
+        if (bodyBytes.Length > 0)
+        {
+            request.Content = new ByteArrayContent(bodyBytes);
+            if (incoming.ContentType != null)
+            {
+                request.Content.Headers.TryAddWithoutValidation("Content-Type", incoming.ContentType);
+            }
+        }
+
+        foreach (var header in incoming.Headers)
+        {
+            if (HopByHopHeaders.Contains(header.Key))
+                continue;
+            if (header.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (header.Key.Equals("api-key", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            request.Headers.TryAddWithoutValidation(header.Key, (IEnumerable<string>)header.Value);
+        }
+
+        // Set auth from configured credentials (never forward the client's original auth)
+        if (options.UseAzureOpenAI)
+        {
+            request.Headers.TryAddWithoutValidation("api-key", options.OpenAIApiKey);
+        }
+        else
+        {
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {options.OpenAIApiKey}");
+        }
+
+        return request;
+    }
 
     public void Dispose()
     {
-        upstreamClient?.Dispose();
+        httpClient?.Dispose();
     }
 }

@@ -62,7 +62,18 @@ public partial class APISimulator : IAsyncDisposable
 
         fileManager = new FileManager(options.CacheFolderPath);
         instructionsContainer = new InstructionsContainer(apiName);
-        webHost.Initialize(options, instructionsContainer, fileManager);
+
+        IRequestHandler handler;
+        if (options.ProxyMode)
+        {
+            handler = new ProxyResponseGenerator(options, fileManager);
+        }
+        else
+        {
+            handler = new ResponseGenerator(options, instructionsContainer, fileManager);
+        }
+
+        webHost.Initialize(options, handler);
     }
 
     /// <summary>
@@ -87,6 +98,20 @@ public partial class APISimulator : IAsyncDisposable
     public void ClearInstructions()
     {
         instructionsContainer.ClearInstructions();
+    }
+
+    /// <summary>
+    /// Gets the name of the API being simulated.
+    /// </summary>
+    public string ApiName => apiName;
+
+    /// <summary>
+    /// Changes the base cache folder path for this simulator.
+    /// </summary>
+    /// <param name="path">The new base path for cache storage.</param>
+    public void SetCacheBasePath(string path)
+    {
+        fileManager.SetCacheBasePath(path);
     }
 
     /// <summary>
@@ -136,6 +161,31 @@ public partial class APISimulator : IAsyncDisposable
     public HttpClient CreateClient()
     {
         return webHost.CreateClient();
+    }
+
+    /// <summary>
+    /// Sets the current test context, routing cache operations to a per-test subdirectory.
+    /// </summary>
+    /// <remarks>
+    /// In BDD frameworks like SpecFlow/Reqnroll, call this in [BeforeScenario] to organize
+    /// cache files by scenario name. Each scenario gets its own subdirectory under the cache folder.
+    /// </remarks>
+    /// <param name="testName">The test or scenario name (e.g., ScenarioContext.ScenarioInfo.Title).</param>
+    public void SetTestContext(string testName)
+    {
+        fileManager.SetTestContext(testName);
+    }
+
+    /// <summary>
+    /// Clears the current test context and runs scoped stale cache removal for that context's subdirectory.
+    /// </summary>
+    /// <remarks>
+    /// In BDD frameworks like SpecFlow/Reqnroll, call this in [AfterScenario] to clean up
+    /// stale cache entries for the completed scenario.
+    /// </remarks>
+    public void ClearTestContext()
+    {
+        fileManager.ClearTestContext();
     }
 
     /// <summary>

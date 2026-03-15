@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using Augustus;
 using Augustus.Extensions;
 using FluentAssertions;
 
@@ -7,6 +8,67 @@ namespace Augustus.Tests;
 
 public class ProxyTests
 {
+    [Fact]
+    public void ProxyMode_RequiresUpstreamEndpoint()
+    {
+        var options = new APISimulatorOptions
+        {
+            OpenAIApiKey = "test-key",
+            ProxyMode = true
+        };
+
+        var act = () => options.Validate();
+
+        act.Should().Throw<ValidationException>()
+            .WithMessage("*ProxyUpstreamEndpoint*");
+    }
+
+    [Fact]
+    public void ProxyMode_RequiresApiKey()
+    {
+        var options = new APISimulatorOptions
+        {
+            ProxyMode = true,
+            ProxyUpstreamEndpoint = "https://api.openai.com"
+        };
+
+        var act = () => options.Validate();
+
+        act.Should().Throw<ValidationException>()
+            .WithMessage("*API key*");
+    }
+
+    [Fact]
+    public void ProxyMode_RequiresValidUri()
+    {
+        var options = new APISimulatorOptions
+        {
+            OpenAIApiKey = "test-key",
+            ProxyMode = true,
+            ProxyUpstreamEndpoint = "not-a-uri"
+        };
+
+        var act = () => options.Validate();
+
+        act.Should().Throw<ValidationException>()
+            .WithMessage("*valid absolute URI*");
+    }
+
+    [Fact]
+    public void ProxyMode_ValidatesSuccessfully()
+    {
+        var options = new APISimulatorOptions
+        {
+            OpenAIApiKey = "test-key",
+            ProxyMode = true,
+            ProxyUpstreamEndpoint = "https://api.openai.com"
+        };
+
+        var act = () => options.Validate();
+
+        act.Should().NotThrow();
+    }
+
     [Fact]
     public void ProxyMode_CacheOnly_ShouldNotRequireApiKey()
     {
@@ -21,28 +83,21 @@ public class ProxyTests
     }
 
     [Fact]
-    public void ProxyMode_WithoutEndpoint_ShouldThrow()
+    public void ProxyTimeoutSeconds_RejectsInvalidValues()
     {
-        var creating = () => this.CreateAzureOpenAIProxy(options =>
-        {
-            options.OpenAIEndpoint = "";
-            options.Port = 9051;
-        });
+        var options = new APISimulatorOptions();
 
-        creating.Should().Throw<ValidationException>()
-            .WithMessage("*endpoint*required*proxy*");
+        var act = () => options.ProxyTimeoutSeconds = 0;
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     [Fact]
-    public void ProxyMode_WithEndpoint_ShouldSucceed()
+    public void ProxyTimeoutSeconds_DefaultIs120()
     {
-        var creating = () => this.CreateAzureOpenAIProxy(options =>
-        {
-            options.OpenAIEndpoint = "https://my-resource.openai.azure.com";
-            options.Port = 9052;
-        });
+        var options = new APISimulatorOptions();
 
-        creating.Should().NotThrow();
+        options.ProxyTimeoutSeconds.Should().Be(120);
     }
 
     [Fact]
@@ -162,5 +217,29 @@ public class ProxyTests
         var hash2 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", "?api-version=2024-02-01", body);
 
         hash1.Should().NotBe(hash2);
+    }
+
+    [Fact]
+    public void CreateOpenAIProxy_SetsProxyMode()
+    {
+        var simulator = this.CreateOpenAIProxy(opt =>
+        {
+            opt.OpenAIApiKey = "test-key";
+            opt.ProxyUpstreamEndpoint = "https://api.openai.com";
+        });
+
+        simulator.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void CreateAzureOpenAIProxy_SetsProxyMode()
+    {
+        var simulator = this.CreateAzureOpenAIProxy(opt =>
+        {
+            opt.OpenAIApiKey = "test-key";
+            opt.ProxyUpstreamEndpoint = "https://my-resource.openai.azure.com";
+        });
+
+        simulator.Should().NotBeNull();
     }
 }

@@ -6,40 +6,45 @@ using System.Text.Json;
 
 namespace Augustus
 {
-    internal class ResponseGenerator : IResponseGenerator
+    internal class ResponseGenerator : IRequestHandler
     {
-        private readonly OpenAIClient openAiClient;
-        private readonly OpenAIRequestHandler requestHandler;
+        private readonly OpenAIClient? openAiClient;
+        private readonly OpenAIRequestHandler? requestHandler;
+        private readonly bool cacheOnly;
         private readonly APISimulatorOptions options;
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
-        private readonly BackgroundCacheWriter cacheWriter;
+        private readonly BackgroundCacheWriter _cacheWriter = new();
 
         public ResponseGenerator(APISimulatorOptions options, InstructionsContainer instructionsContainer, APISimulator.FileManager fileManager)
         {
             this.options = options ?? throw new ArgumentNullException(nameof(options));
             this.instructionsContainer = instructionsContainer ?? throw new ArgumentNullException(nameof(instructionsContainer));
             this.fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
-            this.cacheWriter = new BackgroundCacheWriter(fileManager);
+            this.cacheOnly = options.CacheOnly;
 
-            // Validation is now done in APISimulator constructor (fail-fast)
-            // Create appropriate client based on configuration
-            if (options.UseAzureOpenAI && !string.IsNullOrEmpty(options.OpenAIEndpoint))
+            // In cache-only mode, no OpenAI client is needed
+            if (!cacheOnly)
             {
-                // Use Azure OpenAI client
-                openAiClient = new AzureOpenAIClient(
-                    new Uri(options.OpenAIEndpoint),
-                    new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
+                // Validation is now done in APISimulator constructor (fail-fast)
+                // Create appropriate client based on configuration
+                if (options.UseAzureOpenAI && !string.IsNullOrEmpty(options.OpenAIEndpoint))
+                {
+                    // Use Azure OpenAI client
+                    openAiClient = new AzureOpenAIClient(
+                        new Uri(options.OpenAIEndpoint),
+                        new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
+                }
+                else
+                {
+                    // Use standard OpenAI client
+                    openAiClient = new OpenAIClient(options.OpenAIApiKey);
+                }
+                requestHandler = new OpenAIRequestHandler(openAiClient, options);
             }
-            else
-            {
-                // Use standard OpenAI client
-                openAiClient = new OpenAIClient(options.OpenAIApiKey);
-            }
-            requestHandler = new OpenAIRequestHandler(openAiClient, options);
         }
 
-        public async Task GenerateResponse(HttpContext httpContext, CancellationToken cancellationToken = default)
+        public async Task HandleAsync(HttpContext httpContext, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -73,6 +78,22 @@ namespace Augustus
                         await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
                         return;
                     }
+                }
+
+                // In cache-only mode, return 503 on cache miss instead of calling OpenAI
+                if (cacheOnly)
+                {
+                    await WriteErrorResponse(httpContext,
+                        $"Cache-only mode: no cached response found for request hash '{requestHash}'. " +
+                        "Run tests locally with an OpenAI API key to generate and cache this response.",
+                        503, cancellationToken);
+                    return;
+                }
+
+                if (requestHandler is null)
+                {
+                    await WriteErrorResponse(httpContext, "OpenAI client is not initialized. Provide an API key or enable cache-only mode.", 500, cancellationToken);
+                    return;
                 }
 
                 if (!instructions.Any())
@@ -131,7 +152,7 @@ namespace Augustus
                 // Cache the response after sending — avoids blocking the caller on file I/O.
                 if (options.EnableCaching)
                 {
-                    cacheWriter.Enqueue(requestHash, responseContent, curlRequest, instructions);
+                    _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions));
                 }
             }
             catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
@@ -141,7 +162,7 @@ namespace Augustus
         }
 
         public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
-            => cacheWriter.DrainAsync(cancellationToken);
+            => _cacheWriter.DrainAsync(cancellationToken);
 
         private static string StripMarkdown(string text)
         {
@@ -164,6 +185,5 @@ namespace Augustus
             var errorResponse = JsonSerializer.Serialize(new { error = message, status = statusCode });
             await context.Response.WriteAsync(errorResponse, cancellationToken);
         }
-
     }
 }
