@@ -418,6 +418,26 @@ CRITICAL: The ""arguments"" field in tool_calls must be a JSON-encoded STRING (n
     }
 
     /// <summary>
+    /// Creates a new API simulator configured as a reverse proxy to an Azure OpenAI endpoint.
+    /// </summary>
+    /// <param name="testClass">The test class instance (typically <c>this</c>).</param>
+    /// <param name="configure">Optional action to configure simulator options.</param>
+    /// <returns>A new <see cref="APISimulator"/> configured in proxy mode.</returns>
+    /// <remarks>
+    /// <para>The proxy forwards requests to the configured <see cref="APISimulatorOptions.OpenAIEndpoint"/>
+    /// and caches responses. Use <see cref="APISimulatorOptions.CacheOnly"/> to replay cached
+    /// responses without an API key (e.g., in CI).</para>
+    /// </remarks>
+    public static APISimulator CreateAzureOpenAIProxy(this object testClass, Action<APISimulatorOptions>? configure = null, [CallerFilePath] string callerFilePath = "")
+    {
+        return testClass.CreateAPISimulator("Azure OpenAI Proxy", opt =>
+        {
+            opt.ProxyMode = true;
+            configure?.Invoke(opt);
+        }, callerFilePath);
+    }
+
+    /// <summary>
     /// Starts the simulator asynchronously and returns it for method chaining.
     /// </summary>
     /// <param name="simulator">The simulator to start.</param>

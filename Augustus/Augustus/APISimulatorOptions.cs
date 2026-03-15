@@ -34,6 +34,28 @@ public class APISimulatorOptions
     /// </value>
     public bool AutoRemoveStaleCache { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulator operates as a reverse proxy.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> to forward requests to <see cref="OpenAIEndpoint"/> and cache responses;
+    /// <c>false</c> to use AI-generated responses (default).
+    /// </value>
+    public bool ProxyMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulator only serves cached responses.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> to serve only from cache (returning 503 on cache miss);
+    /// <c>false</c> to generate/proxy responses on cache miss (default).
+    /// </value>
+    /// <remarks>
+    /// When combined with <see cref="ProxyMode"/>, this allows replaying proxy-captured
+    /// responses without an API key or upstream connection (e.g., in CI).
+    /// </remarks>
+    public bool CacheOnly { get; set; }
+
     private string _cacheFolderPath = "./mocks";
     private bool _cacheFolderPathExplicitlySet;
 
@@ -318,6 +340,28 @@ public class APISimulatorOptions
     /// <exception cref="ValidationException">Thrown if any required configuration is missing or invalid.</exception>
     public void Validate()
     {
+        ApplyModeDefaults();
+
+        // ProxyMode + CacheOnly: no API key or upstream needed, just serve from cache
+        if (ProxyMode && CacheOnly)
+            return;
+
+        if (ProxyMode)
+        {
+            // Proxy mode needs an upstream endpoint but not necessarily an OpenAI API key
+            if (string.IsNullOrWhiteSpace(OpenAIEndpoint))
+            {
+                throw new ValidationException("OpenAI endpoint is required in proxy mode. Please set APISimulatorOptions.OpenAIEndpoint to the upstream API URL.");
+            }
+
+            if (!Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))
+            {
+                throw new ValidationException("OpenAI endpoint must be a valid absolute URI");
+            }
+
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(OpenAIApiKey))
         {
             throw new ValidationException("OpenAI API key is required. Please set APISimulatorOptions.OpenAIApiKey");
@@ -340,6 +384,16 @@ public class APISimulatorOptions
             {
                 throw new ValidationException("Azure deployment name is required when UseAzureOpenAI is true. Please set APISimulatorOptions.AzureDeploymentName");
             }
+        }
+    }
+
+    private void ApplyModeDefaults()
+    {
+        if (ProxyMode)
+        {
+            EnableCaching = true;
+            if (CacheOnly)
+                AutoRemoveStaleCache = false;
         }
     }
 }

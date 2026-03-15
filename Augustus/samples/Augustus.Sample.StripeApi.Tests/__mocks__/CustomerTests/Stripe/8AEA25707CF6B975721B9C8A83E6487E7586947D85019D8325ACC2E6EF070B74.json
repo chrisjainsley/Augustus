@@ -1,5 +1,5 @@
 {
-  "RequestHash": "8A592490CD3E313663771E2D3F59B9EA449FD95A824670B7C3040A9E0ED33318",
+  "RequestHash": "8AEA25707CF6B975721B9C8A83E6487E7586947D85019D8325ACC2E6EF070B74",
   "Response": "{\n  \u0022object\u0022: \u0022customer\u0022,\n  \u0022id\u0022: \u0022cus_test123\u0022,\n  \u0022name\u0022: \u0022John Doe\u0022,\n  \u0022email\u0022: \u0022john.doe@example.com\u0022\n}",
   "OriginalRequest": "curl -X GET -H \u0022Host: localhost:9052\u0022 \u0022http://localhost:9052/v1/customers/cus_test123\u0022",
   "Instructions": [
@@ -10,5 +10,5 @@
     "Return realistic Stripe API JSON responses. Always return raw JSON only, no markdown.",
     "Return a customer object with \u0022object\u0022: \u0022customer\u0022, the \u0022id\u0022 from the URL path, \u0022name\u0022, and \u0022email\u0022 fields."
   ],
-  "Timestamp": "2026-03-07T17:12:49.5379124Z"
+  "Timestamp": "2026-03-15T14:49:01.9924978Z"
 }

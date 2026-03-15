@@ -8,7 +8,7 @@ internal class WebHost : IAsyncDisposable
 {
     private string url = "http://localhost:9001";
     private IHost? webHost;
-    private ResponseGenerator? responseGenerator;
+    private IResponseGenerator? responseGenerator;
     private APISimulatorOptions? options;
     private readonly SemaphoreSlim startStopLock = new SemaphoreSlim(1, 1);
     private bool disposed;
@@ -17,7 +17,15 @@ internal class WebHost : IAsyncDisposable
     {
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.url = $"http://localhost:{options.Port}";
-        this.responseGenerator = new ResponseGenerator(options, instructionsContainer, fileManager);
+
+        if (options.ProxyMode)
+        {
+            this.responseGenerator = new ProxyResponseGenerator(options, fileManager);
+        }
+        else
+        {
+            this.responseGenerator = new ResponseGenerator(options, instructionsContainer, fileManager);
+        }
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -109,6 +117,11 @@ internal class WebHost : IAsyncDisposable
         {
             // Log but don't throw during disposal
             System.Diagnostics.Debug.WriteLine($"Error during WebHost disposal: {ex}");
+        }
+
+        if (responseGenerator is IDisposable disposableGenerator)
+        {
+            disposableGenerator.Dispose();
         }
 
         startStopLock.Dispose();
