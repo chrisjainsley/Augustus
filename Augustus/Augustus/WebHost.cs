@@ -12,18 +12,18 @@ internal class WebHost : IAsyncDisposable
     private string bindUrl = "http://localhost:9001";
     private string? resolvedUrl;
     private IHost? webHost;
-    private ResponseGenerator? responseGenerator;
+    private IRequestHandler? requestHandler;
     private APISimulatorOptions? options;
     private readonly SemaphoreSlim startStopLock = new SemaphoreSlim(1, 1);
     private bool disposed;
 
-    public void Initialize(APISimulatorOptions options, InstructionsContainer instructionsContainer, APISimulator.FileManager fileManager)
+    public void Initialize(APISimulatorOptions options, IRequestHandler requestHandler)
     {
         this.options = options ?? throw new ArgumentNullException(nameof(options));
+        this.requestHandler = requestHandler ?? throw new ArgumentNullException(nameof(requestHandler));
         // Use 127.0.0.1 instead of localhost when port is 0 (Kestrel requires explicit IP for dynamic port binding)
         var host = options.Port == 0 ? "127.0.0.1" : "localhost";
         this.bindUrl = $"http://{host}:{options.Port}";
-        this.responseGenerator = new ResponseGenerator(options, instructionsContainer, fileManager);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -34,7 +34,7 @@ internal class WebHost : IAsyncDisposable
             if (webHost != null)
                 throw new InvalidOperationException("WebHost is already started. Call StopAsync() before starting again.");
 
-            if (responseGenerator == null)
+            if (requestHandler == null)
                 throw new InvalidOperationException("WebHost must be initialized before starting");
 
             webHost = Host.CreateDefaultBuilder()
@@ -45,7 +45,7 @@ internal class WebHost : IAsyncDisposable
                     {
                         app.Run(async context =>
                         {
-                            await responseGenerator.GenerateResponse(context, context.RequestAborted);
+                            await requestHandler.HandleAsync(context, context.RequestAborted);
                         });
                     });
                 })
@@ -76,9 +76,9 @@ internal class WebHost : IAsyncDisposable
             await webHost.StopAsync(cancellationToken).ConfigureAwait(false);
 
             // Then drain any in-flight background cache writes that were queued before shutdown
-            if (responseGenerator != null)
+            if (requestHandler != null)
             {
-                await responseGenerator.DrainPendingCacheWritesAsync(cancellationToken).ConfigureAwait(false);
+                await requestHandler.DrainPendingCacheWritesAsync(cancellationToken).ConfigureAwait(false);
             }
 
             // Dispose of the host after stopping
@@ -122,6 +122,7 @@ internal class WebHost : IAsyncDisposable
             System.Diagnostics.Debug.WriteLine($"Error during WebHost disposal: {ex}");
         }
 
+        (requestHandler as IDisposable)?.Dispose();
         startStopLock.Dispose();
         disposed = true;
         GC.SuppressFinalize(this);
