@@ -9,8 +9,9 @@ namespace Augustus
 {
     internal class ResponseGenerator
     {
-        private readonly OpenAIClient openAiClient;
-        private readonly OpenAIRequestHandler requestHandler;
+        private readonly OpenAIClient? openAiClient;
+        private readonly OpenAIRequestHandler? requestHandler;
+        private readonly bool cacheOnly;
         private readonly APISimulatorOptions options;
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
@@ -22,22 +23,27 @@ namespace Augustus
             this.options = options ?? throw new ArgumentNullException(nameof(options));
             this.instructionsContainer = instructionsContainer ?? throw new ArgumentNullException(nameof(instructionsContainer));
             this.fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
+            this.cacheOnly = options.CacheOnly;
 
-            // Validation is now done in APISimulator constructor (fail-fast)
-            // Create appropriate client based on configuration
-            if (options.UseAzureOpenAI && !string.IsNullOrEmpty(options.OpenAIEndpoint))
+            // In cache-only mode, no OpenAI client is needed
+            if (!cacheOnly)
             {
-                // Use Azure OpenAI client
-                openAiClient = new AzureOpenAIClient(
-                    new Uri(options.OpenAIEndpoint),
-                    new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
+                // Validation is now done in APISimulator constructor (fail-fast)
+                // Create appropriate client based on configuration
+                if (options.UseAzureOpenAI && !string.IsNullOrEmpty(options.OpenAIEndpoint))
+                {
+                    // Use Azure OpenAI client
+                    openAiClient = new AzureOpenAIClient(
+                        new Uri(options.OpenAIEndpoint),
+                        new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
+                }
+                else
+                {
+                    // Use standard OpenAI client
+                    openAiClient = new OpenAIClient(options.OpenAIApiKey);
+                }
+                requestHandler = new OpenAIRequestHandler(openAiClient, options);
             }
-            else
-            {
-                // Use standard OpenAI client
-                openAiClient = new OpenAIClient(options.OpenAIApiKey);
-            }
-            requestHandler = new OpenAIRequestHandler(openAiClient, options);
         }
 
         public async Task GenerateResponse(HttpContext httpContext, CancellationToken cancellationToken = default)
@@ -67,6 +73,22 @@ namespace Augustus
                         await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
                         return;
                     }
+                }
+
+                // In cache-only mode, return 503 on cache miss instead of calling OpenAI
+                if (cacheOnly)
+                {
+                    await WriteErrorResponse(httpContext,
+                        $"Cache-only mode: no cached response found for request hash '{requestHash}'. " +
+                        "Run tests locally with an OpenAI API key to generate and cache this response.",
+                        503, cancellationToken);
+                    return;
+                }
+
+                if (requestHandler is null)
+                {
+                    await WriteErrorResponse(httpContext, "OpenAI client is not initialized. Provide an API key or enable cache-only mode.", 500, cancellationToken);
+                    return;
                 }
 
                 if (!instructions.Any())
@@ -194,11 +216,36 @@ namespace Augustus
 
         private string GenerateRequestHash(string curlRequest, List<string> instructions)
         {
-            var combinedContent = string.Join("|", instructions) + "|" + curlRequest;
+            // Normalize the curl string so cache keys are portable across different ports/hosts.
+            // This allows caches generated on one port (e.g., 9001) to be reused when running
+            // on a different port (e.g., auto-assigned port 0 in CI).
+            var normalizedCurl = NormalizeCurlForHashing(curlRequest);
+            var combinedContent = string.Join("|", instructions) + "|" + normalizedCurl;
             var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combinedContent));
             // Use full hash to prevent collisions (64 hex characters from SHA256)
             // File systems can handle long names, and cache correctness is more important than brevity
             return Convert.ToHexString(hash);
+        }
+
+        /// <summary>
+        /// Strips host:port from the curl command so cache keys are stable across environments.
+        /// Replaces the URL authority and Host header value with a fixed placeholder.
+        /// </summary>
+        private static string NormalizeCurlForHashing(string curlRequest)
+        {
+            // Replace the URL at the end: "http://localhost:9001/path" → "http://localhost/path"
+            var normalized = System.Text.RegularExpressions.Regex.Replace(
+                curlRequest,
+                @"""https?://[^/""]+(/[^""]*)""",
+                @"""http://localhost$1""");
+
+            // Replace the Host header value: -H "Host: localhost:9001" → -H "Host: localhost"
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized,
+                @"-H ""Host:\s*[^""]+""",
+                @"-H ""Host: localhost""");
+
+            return normalized;
         }
     }
 }
