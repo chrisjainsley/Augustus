@@ -9,7 +9,7 @@ using Microsoft.Extensions.Hosting;
 
 internal class WebHost : IAsyncDisposable
 {
-    private string url = "http://localhost:9001";
+    private string bindUrl = "http://localhost:9001";
     private string? resolvedUrl;
     private IHost? webHost;
     private ResponseGenerator? responseGenerator;
@@ -22,7 +22,7 @@ internal class WebHost : IAsyncDisposable
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         // Use 127.0.0.1 instead of localhost when port is 0 (Kestrel requires explicit IP for dynamic port binding)
         var host = options.Port == 0 ? "127.0.0.1" : "localhost";
-        this.url = $"http://{host}:{options.Port}";
+        this.bindUrl = $"http://{host}:{options.Port}";
         this.responseGenerator = new ResponseGenerator(options, instructionsContainer, fileManager);
     }
 
@@ -40,7 +40,7 @@ internal class WebHost : IAsyncDisposable
             webHost = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseUrls(url);
+                    webBuilder.UseUrls(bindUrl);
                     webBuilder.Configure(app =>
                     {
                         app.Run(async context =>
@@ -56,7 +56,7 @@ internal class WebHost : IAsyncDisposable
             // Resolve the actual listening URL (important when port 0 is used for auto-assignment)
             var server = webHost.Services.GetRequiredService<IServer>();
             var addressFeature = server.Features.Get<IServerAddressesFeature>();
-            resolvedUrl = addressFeature?.Addresses.FirstOrDefault() ?? url;
+            resolvedUrl = addressFeature?.Addresses.FirstOrDefault() ?? bindUrl;
         }
         finally
         {
@@ -104,7 +104,7 @@ internal class WebHost : IAsyncDisposable
         if (webHost == null)
             throw new InvalidOperationException("WebHost must be started before creating clients. Call StartAsync() first.");
 
-        return new HttpClient() { BaseAddress = new Uri(resolvedUrl ?? url) };
+        return new HttpClient() { BaseAddress = new Uri(resolvedUrl ?? bindUrl) };
     }
 
     public async ValueTask DisposeAsync()

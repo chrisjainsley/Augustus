@@ -1,7 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Augustus.Extensions;
 using FluentAssertions;
@@ -20,6 +18,17 @@ public class CacheOnlyModeTests : IDisposable
         return dir;
     }
 
+    private APISimulator CreateCacheOnlySimulator(string cacheDir)
+    {
+        return this.CreateAPISimulator("TestAPI", options =>
+        {
+            options.CacheOnly = true;
+            options.CacheFolderPath = cacheDir;
+            options.Port = 0;
+        })
+        .WithInstruction("Return test responses");
+    }
+
     public void Dispose()
     {
         foreach (var dir in _tempDirs)
@@ -27,14 +36,14 @@ public class CacheOnlyModeTests : IDisposable
             try { Directory.Delete(dir, true); } catch { }
         }
     }
+
     [Fact]
     public void ExplicitCacheOnly_ShouldSkipApiKeyValidation()
     {
         var options = new APISimulatorOptions
         {
             CacheOnly = true,
-            OpenAIApiKey = "",
-            Port = 9050
+            OpenAIApiKey = ""
         };
 
         var creating = () => new APISimulator("TestAPI", options);
@@ -47,8 +56,7 @@ public class CacheOnlyModeTests : IDisposable
         var options = new APISimulatorOptions
         {
             EnableCaching = true,
-            OpenAIApiKey = "",
-            Port = 9051
+            OpenAIApiKey = ""
         };
 
         options.Validate();
@@ -63,8 +71,7 @@ public class CacheOnlyModeTests : IDisposable
         var options = new APISimulatorOptions
         {
             EnableCaching = false,
-            OpenAIApiKey = "",
-            Port = 9052
+            OpenAIApiKey = ""
         };
 
         var validating = () => options.Validate();
@@ -78,8 +85,7 @@ public class CacheOnlyModeTests : IDisposable
         var options = new APISimulatorOptions
         {
             CacheOnly = true,
-            AutoRemoveStaleCache = true,
-            Port = 9053
+            AutoRemoveStaleCache = true
         };
 
         options.Validate();
@@ -93,8 +99,7 @@ public class CacheOnlyModeTests : IDisposable
         var options = new APISimulatorOptions
         {
             CacheOnly = true,
-            EnableCaching = false,
-            Port = 9054
+            EnableCaching = false
         };
 
         options.Validate();
@@ -106,19 +111,12 @@ public class CacheOnlyModeTests : IDisposable
     public async Task CacheHit_ShouldReturnCachedResponse()
     {
         var cacheDir = CreateTempCacheDir();
-
-        var simulator = this.CreateAPISimulator("TestAPI", options =>
-        {
-            options.CacheOnly = true;
-            options.CacheFolderPath = cacheDir;
-            options.Port = 0;
-        })
-        .WithInstruction("Return test responses");
+        var simulator = CreateCacheOnlySimulator(cacheDir);
 
         await using (simulator)
         {
             await simulator.StartAsync();
-            var client = simulator.CreateClient();
+            using var client = simulator.CreateClient();
 
             // First request: cache miss — extract the hash from the 503 error body
             var missResponse = await client.GetAsync("/v1/test");
@@ -151,19 +149,12 @@ public class CacheOnlyModeTests : IDisposable
     public async Task CacheMiss_ShouldReturn503WithDescriptiveError()
     {
         var cacheDir = CreateTempCacheDir();
-
-        var simulator = this.CreateAPISimulator("TestAPI", options =>
-        {
-            options.CacheOnly = true;
-            options.CacheFolderPath = cacheDir;
-            options.Port = 0;
-        })
-        .WithInstruction("Return test responses");
+        var simulator = CreateCacheOnlySimulator(cacheDir);
 
         await using (simulator)
         {
             await simulator.StartAsync();
-            var client = simulator.CreateClient();
+            using var client = simulator.CreateClient();
 
             var response = await client.GetAsync("/v1/uncached-endpoint");
 
