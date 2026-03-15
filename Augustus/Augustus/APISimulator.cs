@@ -62,7 +62,18 @@ public partial class APISimulator : IAsyncDisposable
 
         fileManager = new FileManager(options.CacheFolderPath);
         instructionsContainer = new InstructionsContainer(apiName);
-        webHost.Initialize(options, instructionsContainer, fileManager);
+
+        IRequestHandler handler;
+        if (options.ProxyMode)
+        {
+            handler = new ProxyResponseGenerator(options, fileManager);
+        }
+        else
+        {
+            handler = new ResponseGenerator(options, instructionsContainer, fileManager);
+        }
+
+        webHost.Initialize(options, handler);
     }
 
     /// <summary>

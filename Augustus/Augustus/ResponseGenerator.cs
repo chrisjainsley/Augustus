@@ -2,20 +2,18 @@ using Azure.AI.OpenAI;
 using OpenAI;
 using OpenAI.Chat;
 using Microsoft.AspNetCore.Http;
-using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace Augustus
 {
-    internal class ResponseGenerator
+    internal class ResponseGenerator : IRequestHandler
     {
         private readonly OpenAIClient openAiClient;
         private readonly OpenAIRequestHandler requestHandler;
         private readonly APISimulatorOptions options;
         private readonly APISimulator.FileManager fileManager;
         private readonly InstructionsContainer instructionsContainer;
-        private readonly ConcurrentDictionary<int, Task> _pendingCacheWrites = new();
-        private int _cacheWriteId;
+        private readonly BackgroundCacheWriter _cacheWriter = new();
 
         public ResponseGenerator(APISimulatorOptions options, InstructionsContainer instructionsContainer, APISimulator.FileManager fileManager)
         {
@@ -40,7 +38,7 @@ namespace Augustus
             requestHandler = new OpenAIRequestHandler(openAiClient, options);
         }
 
-        public async Task GenerateResponse(HttpContext httpContext, CancellationToken cancellationToken = default)
+        public async Task HandleAsync(HttpContext httpContext, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -126,9 +124,7 @@ namespace Augustus
                 // Tasks are tracked so they can be drained on shutdown via DrainPendingCacheWritesAsync().
                 if (options.EnableCaching)
                 {
-                    var id = Interlocked.Increment(ref _cacheWriteId);
-                    var cacheTask = CacheInBackgroundAsync(id, requestHash, responseContent, curlRequest, instructions);
-                    _pendingCacheWrites.TryAdd(id, cacheTask);
+                    _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions));
                 }
             }
             catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
@@ -137,38 +133,8 @@ namespace Augustus
             }
         }
 
-        private async Task CacheInBackgroundAsync(int id, string requestHash, string responseContent, string curlRequest, List<string> instructions)
-        {
-            try
-            {
-                await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
-            }
-            finally
-            {
-                _pendingCacheWrites.TryRemove(id, out _);
-            }
-        }
-
-        /// <summary>
-        /// Waits for all in-flight background cache writes to complete.
-        /// Called during shutdown to prevent cache files from being lost.
-        /// </summary>
-        public async Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
-        {
-            var tasks = _pendingCacheWrites.Values.ToArray();
-
-            if (tasks.Length > 0)
-            {
-                var allTasks = Task.WhenAll(tasks);
-                var cancellationTask = Task.Delay(Timeout.Infinite, cancellationToken);
-                await Task.WhenAny(allTasks, cancellationTask).ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
-            }
-        }
+        public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
+            => _cacheWriter.DrainAsync(cancellationToken);
 
         private static string StripMarkdown(string text)
         {

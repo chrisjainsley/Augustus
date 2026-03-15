@@ -279,6 +279,54 @@ public class APISimulatorOptions
         }
     }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the simulator operates in pass-through proxy mode.
+    /// </summary>
+    /// <value>
+    /// <c>true</c> to forward requests to a real upstream API and cache responses;
+    /// <c>false</c> to use AI-simulated responses (default).
+    /// </value>
+    /// <remarks>
+    /// In proxy mode, requests are forwarded to <see cref="ProxyUpstreamEndpoint"/> and responses
+    /// are cached for replay. This is useful for tool/function calling scenarios where the model
+    /// must actually reason about tool definitions.
+    /// </remarks>
+    public bool ProxyMode { get; set; }
+
+    private string _proxyUpstreamEndpoint = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the upstream API base URL for proxy mode.
+    /// </summary>
+    /// <value>
+    /// The base URL of the real API to forward requests to (e.g., "https://my-resource.openai.azure.com").
+    /// Required when <see cref="ProxyMode"/> is <c>true</c>.
+    /// </value>
+    public string ProxyUpstreamEndpoint
+    {
+        get => _proxyUpstreamEndpoint;
+        set => _proxyUpstreamEndpoint = value?.Trim() ?? string.Empty;
+    }
+
+    private int _proxyTimeoutSeconds = 120;
+
+    /// <summary>
+    /// Gets or sets the timeout in seconds for upstream proxy requests.
+    /// </summary>
+    /// <value>
+    /// The timeout in seconds. Must be between 1 and 600. Default is 120.
+    /// </value>
+    public int ProxyTimeoutSeconds
+    {
+        get => _proxyTimeoutSeconds;
+        set
+        {
+            if (value < 1 || value > 600)
+                throw new ArgumentOutOfRangeException(nameof(ProxyTimeoutSeconds), "ProxyTimeoutSeconds must be between 1 and 600");
+            _proxyTimeoutSeconds = value;
+        }
+    }
+
     private int _maxConcurrentRequests = 10;
 
     /// <summary>
@@ -321,6 +369,21 @@ public class APISimulatorOptions
         if (string.IsNullOrWhiteSpace(OpenAIApiKey))
         {
             throw new ValidationException("OpenAI API key is required. Please set APISimulatorOptions.OpenAIApiKey");
+        }
+
+        if (ProxyMode)
+        {
+            if (string.IsNullOrWhiteSpace(ProxyUpstreamEndpoint))
+            {
+                throw new ValidationException("ProxyUpstreamEndpoint is required when ProxyMode is true. Please set APISimulatorOptions.ProxyUpstreamEndpoint to the upstream API base URL");
+            }
+
+            if (!Uri.IsWellFormedUriString(ProxyUpstreamEndpoint, UriKind.Absolute))
+            {
+                throw new ValidationException("ProxyUpstreamEndpoint must be a valid absolute URI");
+            }
+
+            return;
         }
 
         if (!string.IsNullOrEmpty(OpenAIEndpoint) && !Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))
