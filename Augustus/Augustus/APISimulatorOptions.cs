@@ -386,6 +386,11 @@ public class APISimulatorOptions
         // Proxy mode always requires an API key (used for upstream auth)
         if (ProxyMode)
         {
+            if (CacheOnly)
+            {
+                throw new ValidationException("ProxyMode and CacheOnly cannot both be true. ProxyMode forwards to an upstream API; CacheOnly serves only from cache");
+            }
+
             if (string.IsNullOrWhiteSpace(OpenAIApiKey))
             {
                 throw new ValidationException("OpenAI API key is required for proxy mode. Please set APISimulatorOptions.OpenAIApiKey");

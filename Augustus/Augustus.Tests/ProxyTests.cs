@@ -133,4 +133,21 @@ public class ProxyTests
 
         options.ProxyTimeoutSeconds.Should().Be(120);
     }
+
+    [Fact]
+    public void ProxyMode_RejectsCacheOnlyCombination()
+    {
+        var options = new APISimulatorOptions
+        {
+            OpenAIApiKey = "test-key",
+            ProxyMode = true,
+            CacheOnly = true,
+            ProxyUpstreamEndpoint = "https://api.openai.com"
+        };
+
+        var act = () => options.Validate();
+
+        act.Should().Throw<ValidationException>()
+            .WithMessage("*ProxyMode*CacheOnly*");
+    }
 }

@@ -14,6 +14,7 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
     };
 
     private static readonly string[] ProxyModeTag = new[] { "proxy-mode" };
+    private static readonly byte[] Separator = Encoding.UTF8.GetBytes("|");
 
     private readonly APISimulatorOptions options;
     private readonly APISimulator.FileManager fileManager;
@@ -76,10 +77,13 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
         }
         catch (Exception ex)
         {
-            context.Response.StatusCode = 502;
-            context.Response.ContentType = "application/json";
-            var errorResponse = JsonSerializer.Serialize(new { error = $"Proxy error: {ex.Message}", status = 502 });
-            await context.Response.WriteAsync(errorResponse, cancellationToken).ConfigureAwait(false);
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = 502;
+                context.Response.ContentType = "application/json";
+                var errorResponse = JsonSerializer.Serialize(new { error = $"Proxy error: {ex.Message}", status = 502 });
+                await context.Response.WriteAsync(errorResponse, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -95,14 +99,13 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
 
     internal static string ComputeCacheKey(string method, string path, string? queryString, byte[] body)
     {
-        var separator = Encoding.UTF8.GetBytes("|");
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         sha.AppendData(Encoding.UTF8.GetBytes(method));
-        sha.AppendData(separator);
+        sha.AppendData(Separator);
         sha.AppendData(Encoding.UTF8.GetBytes(path));
-        sha.AppendData(separator);
+        sha.AppendData(Separator);
         sha.AppendData(Encoding.UTF8.GetBytes(queryString ?? string.Empty));
-        sha.AppendData(separator);
+        sha.AppendData(Separator);
         sha.AppendData(body);
         return Convert.ToHexString(sha.GetHashAndReset());
     }
@@ -129,10 +132,15 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
                 continue;
             if (header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
                 continue;
+            if (header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (header.Key.Equals("api-key", StringComparison.OrdinalIgnoreCase))
+                continue;
 
             request.Headers.TryAddWithoutValidation(header.Key, (IEnumerable<string>)header.Value);
         }
 
+        // Set auth from configured credentials (never forward the client's original auth)
         if (options.UseAzureOpenAI)
         {
             request.Headers.TryAddWithoutValidation("api-key", options.OpenAIApiKey);
