@@ -216,11 +216,36 @@ namespace Augustus
 
         private string GenerateRequestHash(string curlRequest, List<string> instructions)
         {
-            var combinedContent = string.Join("|", instructions) + "|" + curlRequest;
+            // Normalize the curl string so cache keys are portable across different ports/hosts.
+            // This allows caches generated on one port (e.g., 9001) to be reused when running
+            // on a different port (e.g., auto-assigned port 0 in CI).
+            var normalizedCurl = NormalizeCurlForHashing(curlRequest);
+            var combinedContent = string.Join("|", instructions) + "|" + normalizedCurl;
             var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combinedContent));
             // Use full hash to prevent collisions (64 hex characters from SHA256)
             // File systems can handle long names, and cache correctness is more important than brevity
             return Convert.ToHexString(hash);
+        }
+
+        /// <summary>
+        /// Strips host:port from the curl command so cache keys are stable across environments.
+        /// Replaces the URL authority and Host header value with a fixed placeholder.
+        /// </summary>
+        private static string NormalizeCurlForHashing(string curlRequest)
+        {
+            // Replace the URL at the end: "http://localhost:9001/path" → "http://localhost/path"
+            var normalized = System.Text.RegularExpressions.Regex.Replace(
+                curlRequest,
+                @"""https?://[^/""]+(/[^""]*)""",
+                @"""http://localhost$1""");
+
+            // Replace the Host header value: -H "Host: localhost:9001" → -H "Host: localhost"
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized,
+                @"-H ""Host:\s*[^""]+""",
+                @"-H ""Host: localhost""");
+
+            return normalized;
         }
     }
 }

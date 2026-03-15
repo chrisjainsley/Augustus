@@ -204,9 +204,10 @@ public class APISimulatorOptions
     /// Gets or sets the TCP port number on which the simulator will listen.
     /// </summary>
     /// <value>
-    /// The port number. Must be between 1024 and 65535. Default is 9001.
+    /// The port number. Must be 0 (auto-assign) or between 1024 and 65535. Default is 9001.
     /// </value>
     /// <remarks>
+    /// Set to 0 to let the OS auto-assign an available port — useful for parallel test execution.
     /// Ports below 1024 are typically reserved for system services and require elevated privileges.
     /// If the specified port is already in use, starting the simulator will fail.
     /// </remarks>
@@ -338,7 +339,7 @@ public class APISimulatorOptions
         if (!CacheOnly && EnableCaching && string.IsNullOrWhiteSpace(OpenAIApiKey))
         {
             CacheOnly = true;
-            Console.WriteLine("Warning: No OpenAI API key provided with caching enabled. Activating cache-only mode — cache misses will return HTTP 503.");
+            System.Diagnostics.Trace.WriteLine("Augustus: No OpenAI API key provided with caching enabled. Activating cache-only mode — cache misses will return HTTP 503.");
         }
 
         // In cache-only mode: force caching on, disable stale cache removal, skip API key validation
