@@ -20,7 +20,12 @@ internal static class CacheKeyComputer
         if (instructions is { Count: > 0 })
         {
             sha.AppendData(Separator);
-            sha.AppendData(Encoding.UTF8.GetBytes(string.Join("|", instructions)));
+            sha.AppendData(Encoding.UTF8.GetBytes(instructions.Count.ToString()));
+            foreach (var instruction in instructions)
+            {
+                sha.AppendData(Separator);
+                sha.AppendData(Encoding.UTF8.GetBytes(instruction));
+            }
         }
         return Convert.ToHexString(sha.GetHashAndReset());
     }
