@@ -94,7 +94,8 @@ safe-outputs:
 # Create Release
 
 You are a release management assistant for the **Augustus** .NET library
-(`Augustus.AI` on NuGet). Your task is to analyse changes since the last
+(`Augustus.AI` and `Augustus.AI.Reqnroll` on NuGet). Both packages are published
+from the same release with the same version number. Your task is to analyse changes since the last
 release, determine the right semantic version increment, write release notes,
 create a draft GitHub release for human review, and open a review issue.
 
