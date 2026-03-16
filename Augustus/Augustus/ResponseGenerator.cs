@@ -48,6 +48,8 @@ namespace Augustus
         {
             try
             {
+                var bodyBytes = await httpContext.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
+
                 var curlRequest = await httpContext.Request.ToCurlCommandAsync().ConfigureAwait(false);
 
                 // Get route-specific instructions based on the request path and method
@@ -56,7 +58,12 @@ namespace Augustus
                     httpContext.Request.Path.Value ?? "/",
                     httpContext.Request.Method);
 
-                var requestHash = GenerateRequestHash(curlRequest, instructions);
+                var requestHash = CacheKeyComputer.ComputeCacheKey(
+                    httpContext.Request.Method,
+                    httpContext.Request.Path.Value ?? "/",
+                    httpContext.Request.QueryString.Value,
+                    bodyBytes,
+                    instructions);
 
                 // Try to get cached response first
                 if (options.EnableCaching)
@@ -143,7 +150,6 @@ namespace Augustus
                 await httpContext.Response.WriteAsync(responseContent, cancellationToken);
 
                 // Cache the response after sending — avoids blocking the caller on file I/O.
-                // Tasks are tracked so they can be drained on shutdown via DrainPendingCacheWritesAsync().
                 if (options.EnableCaching)
                 {
                     _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions));
@@ -178,40 +184,6 @@ namespace Augustus
             context.Response.ContentType = "application/json";
             var errorResponse = JsonSerializer.Serialize(new { error = message, status = statusCode });
             await context.Response.WriteAsync(errorResponse, cancellationToken);
-        }
-
-        private string GenerateRequestHash(string curlRequest, List<string> instructions)
-        {
-            // Normalize the curl string so cache keys are portable across different ports/hosts.
-            // This allows caches generated on one port (e.g., 9001) to be reused when running
-            // on a different port (e.g., auto-assigned port 0 in CI).
-            var normalizedCurl = NormalizeCurlForHashing(curlRequest);
-            var combinedContent = string.Join("|", instructions) + "|" + normalizedCurl;
-            var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combinedContent));
-            // Use full hash to prevent collisions (64 hex characters from SHA256)
-            // File systems can handle long names, and cache correctness is more important than brevity
-            return Convert.ToHexString(hash);
-        }
-
-        /// <summary>
-        /// Strips host:port from the curl command so cache keys are stable across environments.
-        /// Replaces the URL authority and Host header value with a fixed placeholder.
-        /// </summary>
-        private static string NormalizeCurlForHashing(string curlRequest)
-        {
-            // Replace the URL at the end: "http://localhost:9001/path" → "http://localhost/path"
-            var normalized = System.Text.RegularExpressions.Regex.Replace(
-                curlRequest,
-                @"""https?://[^/""]+(/[^""]*)""",
-                @"""http://localhost$1""");
-
-            // Replace the Host header value: -H "Host: localhost:9001" → -H "Host: localhost"
-            normalized = System.Text.RegularExpressions.Regex.Replace(
-                normalized,
-                @"-H ""Host:\s*[^""]+""",
-                @"-H ""Host: localhost""");
-
-            return normalized;
         }
     }
 }

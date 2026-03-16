@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace Augustus;
 
@@ -45,6 +45,8 @@ public class APISimulatorOptions
     /// When enabled, no OpenAI API key is required and all responses must come from the cache.
     /// Cache misses will return HTTP 503. This mode is auto-detected when <see cref="EnableCaching"/>
     /// is <c>true</c> and no <see cref="OpenAIApiKey"/> is provided.
+    /// When combined with <see cref="ProxyMode"/>, this allows replaying proxy-captured
+    /// responses without an API key or upstream connection (e.g., in CI).
     /// </remarks>
     public bool CacheOnly { get; set; } = false;
 
@@ -307,6 +309,8 @@ public class APISimulatorOptions
     /// In proxy mode, requests are forwarded to <see cref="ProxyUpstreamEndpoint"/> and responses
     /// are cached for replay. This is useful for tool/function calling scenarios where the model
     /// must actually reason about tool definitions.
+    /// When combined with <see cref="CacheOnly"/>, proxy mode serves only from cache without
+    /// requiring an API key or upstream connection (e.g., for CI replay).
     /// </remarks>
     public bool ProxyMode { get; set; }
 
@@ -317,7 +321,7 @@ public class APISimulatorOptions
     /// </summary>
     /// <value>
     /// The base URL of the real API to forward requests to (e.g., "https://my-resource.openai.azure.com").
-    /// Required when <see cref="ProxyMode"/> is <c>true</c>.
+    /// Required when <see cref="ProxyMode"/> is <c>true</c> and <see cref="CacheOnly"/> is <c>false</c>.
     /// </value>
     public string ProxyUpstreamEndpoint
     {
@@ -383,14 +387,17 @@ public class APISimulatorOptions
     /// <exception cref="ValidationException">Thrown if any required configuration is missing or invalid.</exception>
     public void Validate()
     {
-        // Proxy mode always requires an API key (used for upstream auth)
+        // ProxyMode + CacheOnly: no API key or upstream needed, just serve from cache
+        if (ProxyMode && CacheOnly)
+        {
+            EnableCaching = true;
+            AutoRemoveStaleCache = false;
+            return;
+        }
+
+        // Proxy mode always requires an API key and upstream endpoint
         if (ProxyMode)
         {
-            if (CacheOnly)
-            {
-                throw new ValidationException("ProxyMode and CacheOnly cannot both be true. ProxyMode forwards to an upstream API; CacheOnly serves only from cache");
-            }
-
             if (string.IsNullOrWhiteSpace(OpenAIApiKey))
             {
                 throw new ValidationException("OpenAI API key is required for proxy mode. Please set APISimulatorOptions.OpenAIApiKey");

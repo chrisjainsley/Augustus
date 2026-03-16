@@ -1,6 +1,4 @@
 using Microsoft.AspNetCore.Http;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace Augustus;
@@ -13,12 +11,9 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
         "TE", "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Authenticate"
     };
 
-    private static readonly string[] ProxyModeTag = new[] { "proxy-mode" };
-    private static readonly byte[] Separator = Encoding.UTF8.GetBytes("|");
-
     private readonly APISimulatorOptions options;
     private readonly APISimulator.FileManager fileManager;
-    private readonly HttpClient httpClient;
+    private readonly HttpClient? httpClient;
     private readonly BackgroundCacheWriter _cacheWriter = new();
 
     public ProxyResponseGenerator(APISimulatorOptions options, APISimulator.FileManager fileManager)
@@ -26,19 +21,22 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
 
-        httpClient = new HttpClient
+        if (!options.CacheOnly)
         {
-            BaseAddress = new Uri(options.ProxyUpstreamEndpoint),
-            Timeout = TimeSpan.FromSeconds(options.ProxyTimeoutSeconds)
-        };
+            httpClient = new HttpClient
+            {
+                BaseAddress = new Uri(options.ProxyUpstreamEndpoint),
+                Timeout = TimeSpan.FromSeconds(options.ProxyTimeoutSeconds)
+            };
+        }
     }
 
     public async Task HandleAsync(HttpContext context, CancellationToken cancellationToken)
     {
         try
         {
-            var bodyBytes = await ReadRequestBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
-            var cacheKey = ComputeCacheKey(context.Request.Method, context.Request.Path, context.Request.QueryString.Value, bodyBytes);
+            var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
+            var cacheKey = CacheKeyComputer.ComputeCacheKey(context.Request.Method, context.Request.Path.Value ?? "/", context.Request.QueryString.Value, bodyBytes);
 
             if (options.EnableCaching)
             {
@@ -51,8 +49,23 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
                 }
             }
 
+            // Cache miss in CacheOnly mode -> 503
+            if (options.CacheOnly)
+            {
+                context.Response.StatusCode = 503;
+                context.Response.ContentType = "application/json";
+                var error = JsonSerializer.Serialize(new
+                {
+                    error = "Cache miss in CacheOnly mode. No cached response found for this request.",
+                    status = 503,
+                    requestHash = cacheKey
+                });
+                await context.Response.WriteAsync(error, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             using var upstreamRequest = BuildUpstreamRequest(context.Request, bodyBytes);
-            using var upstreamResponse = await httpClient.SendAsync(upstreamRequest, cancellationToken).ConfigureAwait(false);
+            using var upstreamResponse = await httpClient!.SendAsync(upstreamRequest, cancellationToken).ConfigureAwait(false);
 
             var responseBody = await upstreamResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
@@ -67,7 +80,7 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
                 _cacheWriter.Enqueue(() =>
                 {
                     var requestInfo = $"PROXY {method} {path}";
-                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, ProxyModeTag.ToList());
+                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>());
                 });
             }
         }
@@ -89,26 +102,6 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
 
     public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
         => _cacheWriter.DrainAsync(cancellationToken);
-
-    private static async Task<byte[]> ReadRequestBodyAsync(HttpRequest request, CancellationToken cancellationToken)
-    {
-        using var ms = new MemoryStream(capacity: (int)(request.ContentLength ?? 256));
-        await request.Body.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-        return ms.ToArray();
-    }
-
-    internal static string ComputeCacheKey(string method, string path, string? queryString, byte[] body)
-    {
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        sha.AppendData(Encoding.UTF8.GetBytes(method));
-        sha.AppendData(Separator);
-        sha.AppendData(Encoding.UTF8.GetBytes(path));
-        sha.AppendData(Separator);
-        sha.AppendData(Encoding.UTF8.GetBytes(queryString ?? string.Empty));
-        sha.AppendData(Separator);
-        sha.AppendData(body);
-        return Convert.ToHexString(sha.GetHashAndReset());
-    }
 
     private HttpRequestMessage BuildUpstreamRequest(HttpRequest incoming, byte[] bodyBytes)
     {
@@ -155,6 +148,6 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
 
     public void Dispose()
     {
-        httpClient.Dispose();
+        httpClient?.Dispose();
     }
 }
