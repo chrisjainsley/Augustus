@@ -2,52 +2,61 @@ namespace Augustus;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System.Text.Json;
 
-/// <summary>
-/// Internal web host for the API simulator.
-/// </summary>
 internal class WebHost : IAsyncDisposable
 {
-    private readonly string url;
-    private readonly APISimulator apiSimulator;
-    private readonly SemaphoreSlim startStopLock = new(1, 1);
+    private string bindUrl = "http://localhost:9001";
+    private string? resolvedUrl;
     private IHost? webHost;
+    private IRequestHandler? requestHandler;
+    private APISimulatorOptions? options;
+    private readonly SemaphoreSlim startStopLock = new SemaphoreSlim(1, 1);
     private bool disposed;
 
-    public WebHost(APISimulatorOptions options, APISimulator apiSimulator)
+    public void Initialize(APISimulatorOptions options, IRequestHandler requestHandler)
     {
-        this.url = $"http://localhost:{options.Port}";
-        this.apiSimulator = apiSimulator ?? throw new ArgumentNullException(nameof(apiSimulator));
+        this.options = options ?? throw new ArgumentNullException(nameof(options));
+        this.requestHandler = requestHandler ?? throw new ArgumentNullException(nameof(requestHandler));
+        // Use 127.0.0.1 instead of localhost when port is 0 (Kestrel requires explicit IP for dynamic port binding)
+        var host = options.Port == 0 ? "127.0.0.1" : "localhost";
+        this.bindUrl = $"http://{host}:{options.Port}";
     }
-
-    public bool IsRunning => webHost != null;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        await startStopLock.WaitAsync(cancellationToken);
+        await startStopLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (webHost != null)
                 throw new InvalidOperationException("WebHost is already started. Call StopAsync() before starting again.");
 
+            if (requestHandler == null)
+                throw new InvalidOperationException("WebHost must be initialized before starting");
+
             webHost = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseUrls(url);
+                    webBuilder.UseUrls(bindUrl);
                     webBuilder.Configure(app =>
                     {
                         app.Run(async context =>
                         {
-                            await HandleRequestAsync(context, context.RequestAborted);
+                            await requestHandler.HandleAsync(context, context.RequestAborted);
                         });
                     });
                 })
                 .Build();
 
-            await webHost.StartAsync(cancellationToken);
+            await webHost.StartAsync(cancellationToken).ConfigureAwait(false);
+
+            // Resolve the actual listening URL (important when port 0 is used for auto-assignment)
+            var server = webHost.Services.GetRequiredService<IServer>();
+            var addressFeature = server.Features.Get<IServerAddressesFeature>();
+            resolvedUrl = addressFeature?.Addresses.FirstOrDefault() ?? bindUrl;
         }
         finally
         {
@@ -57,17 +66,25 @@ internal class WebHost : IAsyncDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        await startStopLock.WaitAsync(cancellationToken);
+        await startStopLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (webHost == null)
                 return;
 
-            await webHost.StopAsync(cancellationToken);
+            // First stop the web host so it no longer accepts or processes requests
+            await webHost.StopAsync(cancellationToken).ConfigureAwait(false);
 
+            // Then drain any in-flight background cache writes that were queued before shutdown
+            if (requestHandler != null)
+            {
+                await requestHandler.DrainPendingCacheWritesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // Dispose of the host after stopping
             if (webHost is IAsyncDisposable asyncDisposable)
             {
-                await asyncDisposable.DisposeAsync();
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
             }
             else if (webHost is IDisposable disposable)
             {
@@ -87,51 +104,7 @@ internal class WebHost : IAsyncDisposable
         if (webHost == null)
             throw new InvalidOperationException("WebHost must be started before creating clients. Call StartAsync() first.");
 
-        return new HttpClient() { BaseAddress = new Uri(url) };
-    }
-
-    private async Task HandleRequestAsync(HttpContext context, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var path = context.Request.Path.Value ?? "/";
-            var method = context.Request.Method;
-
-            var route = apiSimulator.GetRouteForRequest(path, method);
-
-            if (route?.ResponseStrategy == null)
-            {
-                await WriteNotFoundResponse(context, path, method, cancellationToken);
-                return;
-            }
-
-            await route.ResponseStrategy.GenerateResponseAsync(context, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Request handling error: {ex}");
-            await WriteErrorResponse(context, "Internal server error", 500, cancellationToken);
-        }
-    }
-
-    private async Task WriteNotFoundResponse(HttpContext context, string path, string method, CancellationToken cancellationToken)
-    {
-        context.Response.StatusCode = 404;
-        context.Response.ContentType = "application/json";
-        var errorResponse = JsonSerializer.Serialize(new
-        {
-            error = $"No route configured for {method} {path}",
-            status = 404
-        });
-        await context.Response.WriteAsync(errorResponse, cancellationToken);
-    }
-
-    private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken)
-    {
-        context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/json";
-        var errorResponse = JsonSerializer.Serialize(new { error = message, status = statusCode });
-        await context.Response.WriteAsync(errorResponse, cancellationToken);
+        return new HttpClient() { BaseAddress = new Uri(resolvedUrl ?? bindUrl) };
     }
 
     public async ValueTask DisposeAsync()
@@ -141,15 +114,17 @@ internal class WebHost : IAsyncDisposable
 
         try
         {
-            await StopAsync();
+            await StopAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
+            // Log but don't throw during disposal
             System.Diagnostics.Debug.WriteLine($"Error during WebHost disposal: {ex}");
         }
 
-        disposed = true;
+        (requestHandler as IDisposable)?.Dispose();
         startStopLock.Dispose();
+        disposed = true;
         GC.SuppressFinalize(this);
     }
 }

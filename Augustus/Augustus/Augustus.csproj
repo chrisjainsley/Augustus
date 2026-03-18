@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <InternalsVisibleTo>Augustus.Tests</InternalsVisibleTo>
     <PackageId>Augustus</PackageId>
-    <Version>1.0.0</Version>
+    <Version>0.0.1</Version>
     <Authors>Augustus Contributors</Authors>
-    <Description>A flexible API mocking library for .NET inspired by WireMock. Create mock HTTP endpoints with fluent API, JSON file responses, and dynamic route management.</Description>
-    <PackageTags>testing;mocking;api;simulator;wiremock;http;xunit;nunit;mstest</PackageTags>
+    <Description>An AI-powered API simulator library for .NET that generates realistic mock responses using OpenAI, with intelligent caching for test frameworks.</Description>
+    <PackageTags>testing;mocking;ai;openai;api;simulator;xunit;nunit;mstest</PackageTags>
     <RepositoryUrl>https://github.com/chrisjainsley/augustus</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -18,6 +19,11 @@
   
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="OpenAI" Version="2.9.1" />
   </ItemGroup>
   
   <ItemGroup>

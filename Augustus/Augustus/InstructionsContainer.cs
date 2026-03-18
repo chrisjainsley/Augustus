@@ -1,6 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Augustus.Tests")]
+[assembly: InternalsVisibleTo("Augustus.Stripe.Tests")]
 
 namespace Augustus;
 
@@ -10,7 +11,7 @@ namespace Augustus;
 /// <remarks>
 /// This class is instance-based to support running multiple independent simulators concurrently.
 /// </remarks>
-public class InstructionsContainer
+internal class InstructionsContainer
 {
     private readonly string apiName;
     private readonly List<string> defaultInstructions;

@@ -30,7 +30,7 @@ When you request branch or worktree work, the branch-worktree-manager agent will
 
 **Automatic execution via Stop hook:**
 
-A Claude Code Stop hook is configured to automatically run `/review-and-fix` when Claude stops processing. This ensures consistent code quality after each development session.
+A Claude Code Stop hook is configured to automatically run an agent-based code review when Claude stops processing. This ensures consistent code quality after each development session.
 
 **The code review process:**
 
@@ -45,6 +45,18 @@ A Claude Code Stop hook is configured to automatically run `/review-and-fix` whe
 You can also manually trigger the review at any time by using the `/review-and-fix` command.
 
 See `.claude/commands/review-and-fix.md` for detailed review criteria.
+
+## Pull Request Templates
+
+PR templates live in `.github/PULL_REQUEST_TEMPLATE/`. When creating a PR, choose the correct template based on the change type:
+
+| Template | File | Use for |
+|----------|------|---------|
+| **Feature** | `feature.md` | New features, new capabilities |
+| **Bug** | `bug.md` | Bug fixes |
+| **Chore** | `chore.md` | Refactors, dependency updates, config, CI/CD, tooling |
+
+Fill in the template sections (What, Why, Services & Areas Changed, Testing, Breaking Changes, API Changes). Omit sections that don't apply.
 
 ---
 

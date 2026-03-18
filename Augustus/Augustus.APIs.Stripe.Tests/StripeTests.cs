@@ -28,10 +28,12 @@ public class StripeTests
     [Fact]
     public void APISimulator_ShouldHandleMissingApiKey()
     {
-        // Test that missing API key is handled gracefully
+        // Test that missing API key is handled gracefully (with caching disabled to prevent auto-detection)
         var options = new APISimulatorOptions
         {
-            OpenAIApiKey = "" // Empty API key
+            OpenAIApiKey = "", // Empty API key
+            EnableCaching = false, // Prevent cache-only auto-detection
+            Port = 9011
         };
 
         var creatingSimulator = () => new APISimulator("Stripe", options);
@@ -50,7 +52,7 @@ public class StripeTests
         };
 
         // Test invalid port
-        var settingInvalidPort = () => options.Port = 100; // Too low
+        var settingInvalidPort = () => options.Port = 100; // Too low (between 1-1023 is reserved)
 
         settingInvalidPort.Should()
             .Throw<ArgumentOutOfRangeException>()
@@ -190,8 +192,8 @@ public class StripeTests
 
         options.EnableCaching.Should().BeTrue();
         options.CacheFolderPath.Should().Be("./mocks");
-        options.OpenAIModel.Should().Be("gpt-5-mini");
-        options.Port.Should().BeGreaterThanOrEqualTo(10000).And.BeLessThan(60000); // Random port assignment
+        options.OpenAIModel.Should().Be("gpt-5.3-codex-spark");
+        options.Port.Should().Be(9001);
         options.OpenAIApiKey.Should().BeEmpty();
         options.OpenAIEndpoint.Should().BeEmpty();
 
@@ -200,6 +202,7 @@ public class StripeTests
         options.InitialRetryDelayMs.Should().Be(1000);
         options.MaxRetryDelayMs.Should().Be(32000);
         options.MaxConcurrentRequests.Should().Be(10);
+        options.CacheOnly.Should().BeFalse();
     }
 
     [Fact]
