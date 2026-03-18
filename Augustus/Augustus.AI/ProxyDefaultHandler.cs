@@ -1,38 +1,48 @@
 using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 
-namespace Augustus;
+namespace Augustus.AI;
 
-internal class ProxyResponseGenerator : IRequestHandler, IDisposable
+/// <summary>
+/// An <see cref="IRequestHandler"/> that proxies requests to a real upstream API and caches responses.
+/// Installed as the default handler on the simulator's routing pipeline.
+/// </summary>
+internal class ProxyDefaultHandler : IRequestHandler, IDisposable
 {
-    private static readonly HashSet<string> HopByHopHeaders = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> SkippedHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
         "Host", "Connection", "Keep-Alive", "Transfer-Encoding",
-        "TE", "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Authenticate"
+        "TE", "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Authenticate",
+        "Content-Type", "Content-Length", "Authorization", "api-key"
     };
 
-    private readonly APISimulatorOptions options;
-    private readonly APISimulator.FileManager fileManager;
+    private readonly AIOptions aiOptions;
+    private readonly APISimulator simulator;
+    private readonly string upstreamEndpoint;
     private readonly HttpClient? httpClient;
     private readonly BackgroundCacheWriter _cacheWriter = new();
 
-    public ProxyResponseGenerator(APISimulatorOptions options, APISimulator.FileManager fileManager)
+    public ProxyDefaultHandler(APISimulator simulator, AIOptions aiOptions, string upstreamEndpoint)
     {
-        this.options = options ?? throw new ArgumentNullException(nameof(options));
-        this.fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
+        this.simulator = simulator ?? throw new ArgumentNullException(nameof(simulator));
+        this.aiOptions = aiOptions ?? throw new ArgumentNullException(nameof(aiOptions));
+        this.upstreamEndpoint = upstreamEndpoint ?? throw new ArgumentNullException(nameof(upstreamEndpoint));
 
-        if (!options.CacheOnly)
+        if (!simulator.Options.CacheOnly)
         {
             httpClient = new HttpClient
             {
-                BaseAddress = new Uri(options.ProxyUpstreamEndpoint),
-                Timeout = TimeSpan.FromSeconds(options.ProxyTimeoutSeconds)
+                BaseAddress = new Uri(upstreamEndpoint),
+                Timeout = TimeSpan.FromSeconds(aiOptions.ProxyTimeoutSeconds)
             };
         }
     }
 
     public async Task HandleAsync(HttpContext context, CancellationToken cancellationToken)
     {
+        var fileManager = simulator.CacheFileManager;
+        var options = simulator.Options;
+
         try
         {
             var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
@@ -49,7 +59,6 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
                 }
             }
 
-            // Cache miss in CacheOnly mode -> 503
             if (options.CacheOnly)
             {
                 context.Response.StatusCode = 503;
@@ -119,28 +128,19 @@ internal class ProxyResponseGenerator : IRequestHandler, IDisposable
 
         foreach (var header in incoming.Headers)
         {
-            if (HopByHopHeaders.Contains(header.Key))
-                continue;
-            if (header.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (header.Key.Equals("api-key", StringComparison.OrdinalIgnoreCase))
+            if (SkippedHeaders.Contains(header.Key))
                 continue;
 
             request.Headers.TryAddWithoutValidation(header.Key, (IEnumerable<string>)header.Value);
         }
 
-        // Set auth from configured credentials (never forward the client's original auth)
-        if (options.UseAzureOpenAI)
+        if (aiOptions.UseAzureOpenAI)
         {
-            request.Headers.TryAddWithoutValidation("api-key", options.OpenAIApiKey);
+            request.Headers.TryAddWithoutValidation("api-key", aiOptions.OpenAIApiKey);
         }
         else
         {
-            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {options.OpenAIApiKey}");
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {aiOptions.OpenAIApiKey}");
         }
 
         return request;

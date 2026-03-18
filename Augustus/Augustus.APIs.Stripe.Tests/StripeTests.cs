@@ -1,4 +1,5 @@
 using System.Net;
+using Augustus.AI;
 using Augustus.Extensions;
 using FluentAssertions;
 
@@ -10,16 +11,16 @@ public class StripeTests
     public void APISimulator_ShouldInitializeCorrectly()
     {
         // Test that we can create and configure a simulator without API calls
-        var simulator = this.CreateStripeSimulator(options => 
+        var simulator = this.CreateStripeSimulator(options =>
         {
-            options.OpenAIApiKey = "test-key-for-testing";
             options.EnableCaching = true;
-        })
-        .WithInstruction("Test instruction");
+        });
+        simulator.UseAI(new AIOptions { OpenAIApiKey = "test-key-for-testing" });
+        simulator.WithInstruction("Test instruction");
 
         // Should initialize without throwing
         simulator.Should().NotBeNull();
-        
+
         // Test clearing cache - should not throw
         var clearingCache = () => simulator.ClearCache();
         clearingCache.Should().NotThrow();
@@ -28,17 +29,19 @@ public class StripeTests
     [Fact]
     public void APISimulator_ShouldHandleMissingApiKey()
     {
-        // Test that missing API key is handled gracefully (with caching disabled to prevent auto-detection)
-        var options = new APISimulatorOptions
+        // Test that missing API key is handled gracefully when using AI default handler
+        var simulator = this.CreateAPISimulator("Stripe", options =>
         {
-            OpenAIApiKey = "", // Empty API key
-            EnableCaching = false, // Prevent cache-only auto-detection
-            Port = 9011
-        };
+            options.EnableCaching = false; // Prevent cache-only auto-detection
+            options.Port = 9011;
+        });
 
-        var creatingSimulator = () => new APISimulator("Stripe", options);
-        
-        creatingSimulator.Should()
+        var configuringAI = () => simulator.UseAI(new AIOptions
+        {
+            OpenAIApiKey = "" // Empty API key
+        });
+
+        configuringAI.Should()
             .Throw<System.ComponentModel.DataAnnotations.ValidationException>()
             .WithMessage("*OpenAI API key is required*");
     }
@@ -46,10 +49,7 @@ public class StripeTests
     [Fact]
     public void APISimulator_ShouldValidatePortRange()
     {
-        var options = new APISimulatorOptions
-        {
-            OpenAIApiKey = "test-key"
-        };
+        var options = new APISimulatorOptions();
 
         // Test invalid port
         var settingInvalidPort = () => options.Port = 100; // Too low (between 1-1023 is reserved)
@@ -63,10 +63,9 @@ public class StripeTests
     public void FluentAPI_ShouldConfigureRouteSpecificInstructions()
     {
         // Test the new fluent API for route-specific instructions
-        var simulator = this.CreateStripeSimulator(options =>
-        {
-            options.OpenAIApiKey = "test-key-for-testing";
-        })
+        var simulator = this.CreateStripeSimulator();
+        simulator.UseAI(new AIOptions { OpenAIApiKey = "test-key-for-testing" });
+        simulator
         .ForGet("/v1/customers/{id}")
             .WithInstruction("Customer exists with provided ID")
             .WithJsonResponse("{\"id\": \"{id}\", \"name\": \"Test Customer\"}")
@@ -94,10 +93,9 @@ public class StripeTests
     [Fact]
     public void FluentAPI_ShouldSupportMethodSpecificRoutes()
     {
-        var simulator = this.CreateAPISimulator("TestAPI", options =>
-        {
-            options.OpenAIApiKey = "test-key-for-testing";
-        })
+        var simulator = this.CreateAPISimulator("TestAPI");
+        simulator.UseAI(new AIOptions { OpenAIApiKey = "test-key-for-testing" });
+        simulator
         .ConfigureRoutes()
             .ForGet("/api/items/{id}")
                 .WithInstruction("Return item details")
@@ -111,7 +109,7 @@ public class StripeTests
         .Build();
 
         simulator.Should().NotBeNull();
-        
+
         // Verify the ConfigureRoutes and Build pattern works correctly
         var buildResult = () => simulator.ConfigureRoutes().Build();
         buildResult.Should().NotThrow();
@@ -122,17 +120,17 @@ public class StripeTests
     {
         // Test route pattern matching
         var routeInstruction = new RouteInstruction("/api/customers/{id}", "GET");
-        
+
         // Should match valid patterns
         routeInstruction.Matches("/api/customers/123", "GET").Should().BeTrue();
         routeInstruction.Matches("/api/customers/cus_abc123", "GET").Should().BeTrue();
-        
+
         // Should not match different HTTP methods
         routeInstruction.Matches("/api/customers/123", "POST").Should().BeFalse();
-        
+
         // Should not match different patterns
         routeInstruction.Matches("/api/orders/123", "GET").Should().BeFalse();
-        
+
         // Should not match incomplete paths
         routeInstruction.Matches("/api/customers", "GET").Should().BeFalse();
     }
@@ -141,10 +139,8 @@ public class StripeTests
     public void InstructionsContainer_ShouldReturnRouteSpecificInstructions()
     {
         // Create a simulator with a test API
-        var simulator = this.CreateAPISimulator("TestAPI", options =>
-        {
-            options.OpenAIApiKey = "test-key-for-testing";
-        });
+        var simulator = this.CreateAPISimulator("TestAPI");
+        simulator.UseAI(new AIOptions { OpenAIApiKey = "test-key-for-testing" });
 
         // Add global instruction
         simulator.AddInstruction("Global instruction");
@@ -172,14 +168,14 @@ public class StripeTests
     {
         // Test route instruction with wildcard method
         var wildcardRoute = new RouteInstruction("/api/health", "*");
-        
+
         // Should match any HTTP method
         wildcardRoute.Matches("/api/health", "GET").Should().BeTrue();
         wildcardRoute.Matches("/api/health", "POST").Should().BeTrue();
         wildcardRoute.Matches("/api/health", "PUT").Should().BeTrue();
         wildcardRoute.Matches("/api/health", "DELETE").Should().BeTrue();
         wildcardRoute.Matches("/api/health", "PATCH").Should().BeTrue();
-        
+
         // Should not match different paths
         wildcardRoute.Matches("/api/status", "GET").Should().BeFalse();
     }
@@ -187,138 +183,139 @@ public class StripeTests
     [Fact]
     public void APISimulatorOptions_ShouldHaveCorrectDefaults()
     {
-        // Test default values
+        // Test default values for core options
         var options = new APISimulatorOptions();
 
         options.EnableCaching.Should().BeTrue();
         options.CacheFolderPath.Should().Be("./mocks");
-        options.OpenAIModel.Should().Be("gpt-5.3-codex-spark");
         options.Port.Should().Be(9001);
-        options.OpenAIApiKey.Should().BeEmpty();
-        options.OpenAIEndpoint.Should().BeEmpty();
-
-        // Test retry configuration defaults
-        options.MaxRetries.Should().Be(5);
-        options.InitialRetryDelayMs.Should().Be(1000);
-        options.MaxRetryDelayMs.Should().Be(32000);
-        options.MaxConcurrentRequests.Should().Be(10);
         options.CacheOnly.Should().BeFalse();
+
+        // Test default values for AI options
+        var aiOptions = new AIOptions();
+        aiOptions.OpenAIModel.Should().Be("gpt-4o-mini");
+        aiOptions.OpenAIApiKey.Should().BeEmpty();
+        aiOptions.OpenAIEndpoint.Should().BeEmpty();
+        aiOptions.MaxRetries.Should().Be(5);
+        aiOptions.InitialRetryDelayMs.Should().Be(1000);
+        aiOptions.MaxRetryDelayMs.Should().Be(32000);
+        aiOptions.MaxConcurrentRequests.Should().Be(10);
     }
 
     [Fact]
-    public void APISimulatorOptions_ShouldValidateMaxRetries()
+    public void AIOptions_ShouldValidateMaxRetries()
     {
-        var options = new APISimulatorOptions();
+        var aiOptions = new AIOptions();
 
         // Valid values should not throw
-        var settingValidMaxRetries = () => options.MaxRetries = 5;
+        var settingValidMaxRetries = () => aiOptions.MaxRetries = 5;
         settingValidMaxRetries.Should().NotThrow();
 
         // Test minimum valid value (0 = no retries)
-        options.MaxRetries = 0;
-        options.MaxRetries.Should().Be(0);
+        aiOptions.MaxRetries = 0;
+        aiOptions.MaxRetries.Should().Be(0);
 
         // Test maximum valid value
-        options.MaxRetries = 10;
-        options.MaxRetries.Should().Be(10);
+        aiOptions.MaxRetries = 10;
+        aiOptions.MaxRetries.Should().Be(10);
 
         // Test invalid values
-        var settingNegativeMaxRetries = () => options.MaxRetries = -1;
+        var settingNegativeMaxRetries = () => aiOptions.MaxRetries = -1;
         settingNegativeMaxRetries.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*MaxRetries must be between 0 and 10*");
 
-        var settingTooHighMaxRetries = () => options.MaxRetries = 11;
+        var settingTooHighMaxRetries = () => aiOptions.MaxRetries = 11;
         settingTooHighMaxRetries.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*MaxRetries must be between 0 and 10*");
     }
 
     [Fact]
-    public void APISimulatorOptions_ShouldValidateInitialRetryDelay()
+    public void AIOptions_ShouldValidateInitialRetryDelay()
     {
-        var options = new APISimulatorOptions();
+        var aiOptions = new AIOptions();
 
         // Valid values should not throw
-        var settingValidDelay = () => options.InitialRetryDelayMs = 2000;
+        var settingValidDelay = () => aiOptions.InitialRetryDelayMs = 2000;
         settingValidDelay.Should().NotThrow();
-        options.InitialRetryDelayMs.Should().Be(2000);
+        aiOptions.InitialRetryDelayMs.Should().Be(2000);
 
         // Test minimum valid value
-        options.InitialRetryDelayMs = 100;
-        options.InitialRetryDelayMs.Should().Be(100);
+        aiOptions.InitialRetryDelayMs = 100;
+        aiOptions.InitialRetryDelayMs.Should().Be(100);
 
         // Test maximum valid value
-        options.InitialRetryDelayMs = 60000;
-        options.InitialRetryDelayMs.Should().Be(60000);
+        aiOptions.InitialRetryDelayMs = 60000;
+        aiOptions.InitialRetryDelayMs.Should().Be(60000);
 
         // Test invalid values
-        var settingTooLowDelay = () => options.InitialRetryDelayMs = 99;
+        var settingTooLowDelay = () => aiOptions.InitialRetryDelayMs = 99;
         settingTooLowDelay.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*InitialRetryDelayMs must be between 100 and 60000*");
 
-        var settingTooHighDelay = () => options.InitialRetryDelayMs = 60001;
+        var settingTooHighDelay = () => aiOptions.InitialRetryDelayMs = 60001;
         settingTooHighDelay.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*InitialRetryDelayMs must be between 100 and 60000*");
     }
 
     [Fact]
-    public void APISimulatorOptions_ShouldValidateMaxRetryDelay()
+    public void AIOptions_ShouldValidateMaxRetryDelay()
     {
-        var options = new APISimulatorOptions();
+        var aiOptions = new AIOptions();
 
         // Valid values should not throw
-        var settingValidMaxDelay = () => options.MaxRetryDelayMs = 16000;
+        var settingValidMaxDelay = () => aiOptions.MaxRetryDelayMs = 16000;
         settingValidMaxDelay.Should().NotThrow();
-        options.MaxRetryDelayMs.Should().Be(16000);
+        aiOptions.MaxRetryDelayMs.Should().Be(16000);
 
         // Test minimum valid value
-        options.MaxRetryDelayMs = 1000;
-        options.MaxRetryDelayMs.Should().Be(1000);
+        aiOptions.MaxRetryDelayMs = 1000;
+        aiOptions.MaxRetryDelayMs.Should().Be(1000);
 
         // Test maximum valid value
-        options.MaxRetryDelayMs = 300000;
-        options.MaxRetryDelayMs.Should().Be(300000);
+        aiOptions.MaxRetryDelayMs = 300000;
+        aiOptions.MaxRetryDelayMs.Should().Be(300000);
 
         // Test invalid values
-        var settingTooLowMaxDelay = () => options.MaxRetryDelayMs = 999;
+        var settingTooLowMaxDelay = () => aiOptions.MaxRetryDelayMs = 999;
         settingTooLowMaxDelay.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*MaxRetryDelayMs must be between 1000 and 300000*");
 
-        var settingTooHighMaxDelay = () => options.MaxRetryDelayMs = 300001;
+        var settingTooHighMaxDelay = () => aiOptions.MaxRetryDelayMs = 300001;
         settingTooHighMaxDelay.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*MaxRetryDelayMs must be between 1000 and 300000*");
     }
 
     [Fact]
-    public void APISimulatorOptions_ShouldValidateMaxConcurrentRequests()
+    public void AIOptions_ShouldValidateMaxConcurrentRequests()
     {
-        var options = new APISimulatorOptions();
+        var aiOptions = new AIOptions();
 
         // Valid values should not throw
-        var settingValidConcurrency = () => options.MaxConcurrentRequests = 20;
+        var settingValidConcurrency = () => aiOptions.MaxConcurrentRequests = 20;
         settingValidConcurrency.Should().NotThrow();
-        options.MaxConcurrentRequests.Should().Be(20);
+        aiOptions.MaxConcurrentRequests.Should().Be(20);
 
         // Test minimum valid value
-        options.MaxConcurrentRequests = 1;
-        options.MaxConcurrentRequests.Should().Be(1);
+        aiOptions.MaxConcurrentRequests = 1;
+        aiOptions.MaxConcurrentRequests.Should().Be(1);
 
         // Test maximum valid value
-        options.MaxConcurrentRequests = 100;
-        options.MaxConcurrentRequests.Should().Be(100);
+        aiOptions.MaxConcurrentRequests = 100;
+        aiOptions.MaxConcurrentRequests.Should().Be(100);
 
         // Test invalid values
-        var settingZeroConcurrency = () => options.MaxConcurrentRequests = 0;
+        var settingZeroConcurrency = () => aiOptions.MaxConcurrentRequests = 0;
         settingZeroConcurrency.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*MaxConcurrentRequests must be between 1 and 100*");
 
-        var settingTooHighConcurrency = () => options.MaxConcurrentRequests = 101;
+        var settingTooHighConcurrency = () => aiOptions.MaxConcurrentRequests = 101;
         settingTooHighConcurrency.Should()
             .Throw<ArgumentOutOfRangeException>()
             .WithMessage("*MaxConcurrentRequests must be between 1 and 100*");
@@ -327,14 +324,15 @@ public class StripeTests
     [Fact]
     public void APISimulator_ShouldAllowCustomRetryConfiguration()
     {
-        // Test that retry configuration can be customized
-        var simulator = this.CreateStripeSimulator(options =>
+        // Test that retry configuration can be customized via AIOptions
+        var simulator = this.CreateStripeSimulator();
+        simulator.UseAI(new AIOptions
         {
-            options.OpenAIApiKey = "test-key-for-testing";
-            options.MaxRetries = 3;
-            options.InitialRetryDelayMs = 500;
-            options.MaxRetryDelayMs = 8000;
-            options.MaxConcurrentRequests = 5;
+            OpenAIApiKey = "test-key-for-testing",
+            MaxRetries = 3,
+            InitialRetryDelayMs = 500,
+            MaxRetryDelayMs = 8000,
+            MaxConcurrentRequests = 5
         });
 
         simulator.Should().NotBeNull();

@@ -61,7 +61,7 @@ public class AIResponseStrategy : IResponseStrategy, IDisposable
             messages.Add(ChatMessage.CreateUserMessage(curlRequest));
 
             // Call OpenAI
-            var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, cancellationToken);
+            var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, null, cancellationToken);
 
             if (chatResults?.Value?.Content == null || chatResults.Value.Content.Count == 0)
             {

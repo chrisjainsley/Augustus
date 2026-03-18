@@ -1,3 +1,7 @@
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Augustus.AI.Tests")]
+
 namespace Augustus.AI;
 
 using System.ComponentModel.DataAnnotations;
@@ -41,6 +45,34 @@ public class AIOptions
     {
         get => _openAIModel;
         set => _openAIModel = string.IsNullOrWhiteSpace(value) ? "gpt-4o-mini" : value.Trim();
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to use Azure OpenAI service instead of standard OpenAI.
+    /// </summary>
+    public bool UseAzureOpenAI { get; set; } = false;
+
+    private string _azureDeploymentName = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Azure OpenAI deployment name.
+    /// Required when <see cref="UseAzureOpenAI"/> is <c>true</c>.
+    /// </summary>
+    public string AzureDeploymentName
+    {
+        get => _azureDeploymentName;
+        set => _azureDeploymentName = value?.Trim() ?? string.Empty;
+    }
+
+    private string _azureApiVersion = "2024-06-01";
+
+    /// <summary>
+    /// Gets or sets the Azure OpenAI API version.
+    /// </summary>
+    public string AzureApiVersion
+    {
+        get => _azureApiVersion;
+        set => _azureApiVersion = string.IsNullOrWhiteSpace(value) ? "2024-06-01" : value.Trim();
     }
 
     /// <summary>
@@ -113,6 +145,22 @@ public class AIOptions
         }
     }
 
+    private int _proxyTimeoutSeconds = 120;
+
+    /// <summary>
+    /// Gets or sets the timeout in seconds for upstream proxy requests.
+    /// </summary>
+    public int ProxyTimeoutSeconds
+    {
+        get => _proxyTimeoutSeconds;
+        set
+        {
+            if (value < 1 || value > 600)
+                throw new ArgumentOutOfRangeException(nameof(ProxyTimeoutSeconds), "ProxyTimeoutSeconds must be between 1 and 600");
+            _proxyTimeoutSeconds = value;
+        }
+    }
+
     /// <summary>
     /// Validates that all required configuration is present and correct.
     /// </summary>
@@ -127,6 +175,19 @@ public class AIOptions
         if (!string.IsNullOrEmpty(OpenAIEndpoint) && !Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))
         {
             throw new ValidationException("OpenAI endpoint must be a valid absolute URI");
+        }
+
+        if (UseAzureOpenAI)
+        {
+            if (string.IsNullOrWhiteSpace(OpenAIEndpoint))
+            {
+                throw new ValidationException("OpenAI endpoint is required when UseAzureOpenAI is true. Please set AIOptions.OpenAIEndpoint to your Azure OpenAI resource URL (e.g., https://your-resource.openai.azure.com)");
+            }
+
+            if (string.IsNullOrWhiteSpace(AzureDeploymentName))
+            {
+                throw new ValidationException("Azure deployment name is required when UseAzureOpenAI is true. Please set AIOptions.AzureDeploymentName");
+            }
         }
     }
 }

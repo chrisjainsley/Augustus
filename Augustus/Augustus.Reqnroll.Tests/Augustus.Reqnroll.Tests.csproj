@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Augustus.Reqnroll\Augustus.Reqnroll.csproj" />
+    <ProjectReference Include="..\Augustus.AI\Augustus.AI.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,4 @@
+using Augustus.AI;
 using Augustus.Extensions;
 using static Augustus.Sample.StripeApi.Tests.TestConfiguration;
 
@@ -19,13 +20,17 @@ public class CacheManagementTests
         {
             await using var simulator = this.CreateStripeSimulator(opt =>
             {
-                opt.OpenAIApiKey = apiKey;
-                opt.OpenAIModel = GetModel();
                 opt.Port = 9053;
                 opt.AutoRemoveStaleCache = true;
             })
             .WithInstruction("Return realistic Stripe API JSON responses.")
             .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\".");
+
+            simulator.UseAI(new AIOptions
+            {
+                OpenAIApiKey = apiKey,
+                OpenAIModel = GetModel()
+            });
 
             await simulator.StartAsync();
             var client = simulator.CreateClient();
@@ -66,13 +71,17 @@ public class CacheManagementTests
         {
             await using var simulator = this.CreateStripeSimulator(opt =>
             {
-                opt.OpenAIApiKey = apiKey;
-                opt.OpenAIModel = GetModel();
                 opt.Port = 9054;
                 opt.AutoRemoveStaleCache = false;
             })
             .WithInstruction("Return realistic Stripe API JSON responses.")
             .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\".");
+
+            simulator.UseAI(new AIOptions
+            {
+                OpenAIApiKey = apiKey,
+                OpenAIModel = GetModel()
+            });
 
             await simulator.StartAsync();
             var client = simulator.CreateClient();

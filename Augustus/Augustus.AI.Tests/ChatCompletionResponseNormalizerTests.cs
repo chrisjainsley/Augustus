@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Augustus.AI;
 
-namespace Augustus.Tests;
+namespace Augustus.AI.Tests;
 
 public class ChatCompletionResponseNormalizerTests
 {

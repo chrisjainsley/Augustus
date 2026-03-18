@@ -23,13 +23,14 @@ internal class OpenAIRequestHandler : IDisposable
 
     public async Task<ClientResult<ChatCompletion>> CompleteChatWithRetryAsync(
         IEnumerable<ChatMessage> messages,
+        ChatCompletionOptions? chatOptions = null,
         CancellationToken cancellationToken = default)
     {
         await requestSemaphore.WaitAsync(cancellationToken);
 
         try
         {
-            return await ExecuteWithRetryAsync(messages, cancellationToken);
+            return await ExecuteWithRetryAsync(messages, chatOptions, cancellationToken);
         }
         finally
         {
@@ -39,9 +40,14 @@ internal class OpenAIRequestHandler : IDisposable
 
     private async Task<ClientResult<ChatCompletion>> ExecuteWithRetryAsync(
         IEnumerable<ChatMessage> messages,
+        ChatCompletionOptions? chatOptions,
         CancellationToken cancellationToken)
     {
-        var chatClient = openAiClient.GetChatClient(options.OpenAIModel);
+        // For Azure OpenAI, use the deployment name; otherwise use the model name
+        var modelOrDeployment = options.UseAzureOpenAI
+            ? options.AzureDeploymentName
+            : options.OpenAIModel;
+        var chatClient = openAiClient.GetChatClient(modelOrDeployment);
         int attemptCount = 0;
         int delayMilliseconds = options.InitialRetryDelayMs;
 
@@ -51,7 +57,7 @@ internal class OpenAIRequestHandler : IDisposable
 
             try
             {
-                return await chatClient.CompleteChatAsync(messages, cancellationToken: cancellationToken);
+                return await chatClient.CompleteChatAsync(messages, chatOptions, cancellationToken: cancellationToken);
             }
             catch (ClientResultException ex) when (ShouldRetry(ex, attemptCount))
             {

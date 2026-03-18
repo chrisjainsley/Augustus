@@ -4,23 +4,19 @@ using System;
 using System.Threading.Tasks;
 
 /// <summary>
-/// An AI-powered HTTP API simulator that generates realistic responses using OpenAI.
+/// An HTTP API simulator that serves configured route responses with optional AI-powered default handler.
 /// </summary>
 /// <remarks>
-/// The API simulator creates a local web server that intercepts HTTP requests and generates
-/// appropriate responses based on instructions provided. It uses OpenAI's language models to
-/// create realistic API responses and caches them for performance.
+/// The API simulator creates a local web server that intercepts HTTP requests and dispatches them
+/// to configured route strategies (static JSON, file-based, or custom). When the Augustus.AI package
+/// is installed, an AI-powered default handler can generate realistic responses for unmatched routes.
 /// Implements <see cref="IAsyncDisposable"/> for proper resource cleanup.
 /// </remarks>
 /// <example>
 /// <code>
-/// var options = new APISimulatorOptions
-/// {
-///     OpenAIApiKey = "your-key",
-///     Port = 9001
-/// };
+/// var options = new APISimulatorOptions { Port = 9001 };
 /// await using var simulator = new APISimulator("Stripe", options);
-/// simulator.AddInstruction("Return realistic Stripe API responses");
+/// simulator.ForGet("/v1/customers/{id}").WithJsonFile("./mocks/customer.json").Add();
 /// await simulator.StartAsync();
 /// var client = simulator.CreateClient();
 /// // Make requests to the client...
@@ -34,15 +30,16 @@ public partial class APISimulator : IAsyncDisposable
     private readonly WebHost webHost = new();
     private readonly InstructionsContainer instructionsContainer;
     private readonly FileManager fileManager;
+    private readonly RoutingRequestHandler routingHandler;
     private bool disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="APISimulator"/> class.
     /// </summary>
-    /// <param name="apiName">The name of the API being simulated (e.g., "Stripe", "PayPal"). Used for context in AI responses.</param>
-    /// <param name="options">Configuration options for the simulator, including OpenAI API key and port settings.</param>
+    /// <param name="apiName">The name of the API being simulated (e.g., "Stripe", "PayPal"). Used for context in responses.</param>
+    /// <param name="options">Configuration options for the simulator, including port and caching settings.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="apiName"/> or <paramref name="options"/> is null.</exception>
-    /// <exception cref="System.ComponentModel.DataAnnotations.ValidationException">Thrown when options validation fails (e.g., missing API key or invalid endpoint).</exception>
+    /// <exception cref="System.ComponentModel.DataAnnotations.ValidationException">Thrown when options validation fails.</exception>
     public APISimulator(string apiName, APISimulatorOptions options)
     {
         this.apiName = apiName ?? throw new ArgumentNullException(nameof(apiName));
@@ -63,17 +60,8 @@ public partial class APISimulator : IAsyncDisposable
         fileManager = new FileManager(options.CacheFolderPath);
         instructionsContainer = new InstructionsContainer(apiName);
 
-        IRequestHandler handler;
-        if (options.ProxyMode)
-        {
-            handler = new ProxyResponseGenerator(options, fileManager);
-        }
-        else
-        {
-            handler = new ResponseGenerator(options, instructionsContainer, fileManager);
-        }
-
-        webHost.Initialize(options, handler);
+        routingHandler = new RoutingRequestHandler(this);
+        webHost.Initialize(options, routingHandler);
     }
 
     /// <summary>
@@ -118,6 +106,23 @@ public partial class APISimulator : IAsyncDisposable
     /// Gets the instructions container for this simulator instance.
     /// </summary>
     internal InstructionsContainer InstructionsContainer => instructionsContainer;
+
+    /// <summary>
+    /// Gets the routing request handler for this simulator instance.
+    /// Used by Augustus.AI to install default handlers.
+    /// </summary>
+    internal RoutingRequestHandler RoutingHandler => routingHandler;
+
+    /// <summary>
+    /// Gets the file manager for cache operations.
+    /// Used by Augustus.AI default handlers for cache read/write.
+    /// </summary>
+    internal FileManager CacheFileManager => fileManager;
+
+    /// <summary>
+    /// Gets the configuration options for this simulator instance.
+    /// </summary>
+    internal APISimulatorOptions Options => options;
 
     /// <summary>
     /// Starts the API simulator web server asynchronously.

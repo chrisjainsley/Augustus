@@ -1,6 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Augustus.Tests")]
+[assembly: InternalsVisibleTo("Augustus.AI")]
+[assembly: InternalsVisibleTo("Augustus.AI.Tests")]
 [assembly: InternalsVisibleTo("Augustus.Stripe.Tests")]
 
 namespace Augustus;
