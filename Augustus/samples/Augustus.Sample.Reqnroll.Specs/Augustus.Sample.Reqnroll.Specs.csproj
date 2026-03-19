@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <UserSecretsId>reqnroll-sample-augustus</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Reqnroll" Version="2.3.0" />
+    <PackageReference Include="Reqnroll.xUnit" Version="2.3.0" />
+    <PackageReference Include="FluentAssertions" Version="6.12.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Augustus\Augustus.csproj" />
+    <ProjectReference Include="..\..\Augustus.AI\Augustus.AI.csproj" />
+    <ProjectReference Include="..\..\Augustus.Reqnroll\Augustus.Reqnroll.csproj" />
+    <ProjectReference Include="..\Augustus.Sample.StripeApi\Augustus.Sample.StripeApi.csproj" />
+  </ItemGroup>
+
+</Project>

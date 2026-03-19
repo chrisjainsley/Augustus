@@ -5,6 +5,15 @@ namespace Augustus;
 
 public static class HttpRequestExtensions
 {
+    public static async Task<byte[]> ReadBodyBytesAsync(this HttpRequest request, CancellationToken cancellationToken = default)
+    {
+        request.EnableBuffering();
+        using var ms = new MemoryStream();
+        await request.Body.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+        request.Body.Position = 0;
+        return ms.ToArray();
+    }
+
     public static async Task<string> ToCurlCommandAsync(this HttpRequest request)
     {
         StringBuilder curlCommand = new StringBuilder(256); // Pre-allocate with estimated capacity

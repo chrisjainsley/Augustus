@@ -17,10 +17,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Extract version from release tag
         id: version
@@ -34,20 +36,28 @@ jobs:
       - name: Restore dependencies
         run: |
           dotnet restore Augustus/Augustus/Augustus.csproj
+          dotnet restore Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj
           dotnet restore Augustus/Augustus.Tests/Augustus.Tests.csproj
+          dotnet restore Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj
 
       - name: Build
         run: |
           dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet build Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
           dotnet build Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-restore
+          dotnet build Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net10.0
+        run: |
+          dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net10.0
+          dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-build --verbosity normal
 
-      - name: Pack NuGet package
-        run: dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+      - name: Pack NuGet packages
+        run: |
+          dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
 
-      - name: Verify package version
+      - name: Verify package versions
         run: |
           EXPECTED_VERSION="${{ steps.version.outputs.VERSION }}"
           NUPKG_COUNT=$(find ./nupkg -name "*.nupkg" -type f | wc -l)
@@ -55,29 +65,30 @@ jobs:
             echo "::error::No .nupkg files found in ./nupkg"
             exit 1
           fi
-          if [[ "$NUPKG_COUNT" -gt 1 ]]; then
-            echo "::error::Expected exactly 1 .nupkg file but found $NUPKG_COUNT:"
-            find ./nupkg -name "*.nupkg" -type f
+          echo "Found $NUPKG_COUNT package(s). Expected version: $EXPECTED_VERSION"
+          FAILED=0
+          for NUPKG in $(find ./nupkg -name "*.nupkg" -type f); do
+            NUPKG_NAME=$(basename "$NUPKG")
+            echo "Checking: $NUPKG_NAME"
+            if [[ "$NUPKG_NAME" != *"${EXPECTED_VERSION}.nupkg" ]]; then
+              echo "::error::Version mismatch! Package '$NUPKG_NAME' does not contain expected version '$EXPECTED_VERSION'"
+              FAILED=1
+            fi
+          done
+          if [[ "$FAILED" -eq 1 ]]; then
             exit 1
           fi
-          NUPKG=$(find ./nupkg -name "*.nupkg" -type f)
-          NUPKG_NAME=$(basename "$NUPKG")
-          echo "Package file: $NUPKG_NAME"
-          echo "Expected version: $EXPECTED_VERSION"
-          if [[ "$NUPKG_NAME" != *"${EXPECTED_VERSION}.nupkg" ]]; then
-            echo "::error::Version mismatch! Package '$NUPKG_NAME' does not contain expected version '$EXPECTED_VERSION'"
-            exit 1
-          fi
-          echo "Version verified successfully."
+          echo "All package versions verified successfully."
 
       - name: Publish to NuGet.org
         run: |
-          NUPKG=$(find ./nupkg -name "*.nupkg" -type f | head -1)
-          echo "Publishing package: $NUPKG"
-          dotnet nuget push "$NUPKG" \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
-            --source https://api.nuget.org/v3/index.json \
-            --skip-duplicate
+          for NUPKG in ./nupkg/*.nupkg; do
+            echo "Publishing package: $NUPKG"
+            dotnet nuget push "$NUPKG" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
 
       - name: Upload artifacts to release
         uses: softprops/action-gh-release@v2
@@ -90,5 +101,6 @@ jobs:
 
       - name: Publish release notes
         run: |
-          echo "✅ Successfully published Augustus.AI version ${{ steps.version.outputs.VERSION }} to NuGet.org"
-          echo "📦 Package: https://www.nuget.org/packages/Augustus.AI/${{ steps.version.outputs.VERSION }}"
+          echo "✅ Successfully published Augustus.AI and Augustus.AI.Reqnroll version ${{ steps.version.outputs.VERSION }} to NuGet.org"
+          echo "📦 Augustus.AI: https://www.nuget.org/packages/Augustus.AI/${{ steps.version.outputs.VERSION }}"
+          echo "📦 Augustus.AI.Reqnroll: https://www.nuget.org/packages/Augustus.AI.Reqnroll/${{ steps.version.outputs.VERSION }}"
