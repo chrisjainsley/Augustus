@@ -21,6 +21,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
             9.0.x
             10.0.x
 
@@ -49,7 +52,11 @@ jobs:
 
       - name: Run tests
         run: |
-          dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net10.0
+          for fw in net6.0 net7.0 net8.0 net9.0 net10.0; do
+            echo "::group::Augustus.Tests ($fw)"
+            dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework $fw
+            echo "::endgroup::"
+          done
           dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-build --verbosity normal
 
       - name: Pack NuGet packages

@@ -243,12 +243,15 @@ internal static class ChatCompletionResponseNormalizer
         if (!toolCall.TryGetPropertyValue("function", out var funcNode))
             return;
 
-        funcNode = TryRehydrateStringifiedNode(toolCall, "function", funcNode, () => new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" });
-        if (funcNode is null or JsonValue)
+        if (funcNode is null)
         {
             toolCall["function"] = new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" };
             return;
         }
+
+        funcNode = TryRehydrateStringifiedNode(toolCall, "function", funcNode, () => new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" });
+        if (funcNode is null)
+            return; // Default already set by TryRehydrateStringifiedNode
 
         if (funcNode is not JsonObject function)
         {
