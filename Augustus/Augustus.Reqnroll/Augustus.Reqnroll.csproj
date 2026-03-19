@@ -29,6 +29,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Reqnroll" Version="2.3.0" />
+    <PackageReference Include="Reqnroll" Version="3.3.3" />
   </ItemGroup>
 </Project>
