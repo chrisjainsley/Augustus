@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Augustus\Augustus.csproj" />
+    <ProjectReference Include="..\..\Augustus.AI\Augustus.AI.csproj" />
     <ProjectReference Include="..\..\Augustus.Reqnroll\Augustus.Reqnroll.csproj" />
     <ProjectReference Include="..\Augustus.Sample.StripeApi\Augustus.Sample.StripeApi.csproj" />
   </ItemGroup>
