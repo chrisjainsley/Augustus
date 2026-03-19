@@ -40,11 +40,13 @@ public class RouteConfiguration
     {
         try
         {
-            // Convert simple patterns like "/api/customers/{id}" to regex
-            var regexPattern = pattern
-                .Replace("{id}", @"[^/]+")
-                .Replace("{*}", ".*")
-                .Replace("/", @"\/");
+            // Escape the pattern first so metacharacters are treated as literals,
+            // then substitute our supported placeholders with regex tokens.
+            // Note: Regex.Escape escapes '{' but not '}', so our tokens become \{id} and \{*}
+            var escaped = Regex.Escape(pattern);
+            var regexPattern = escaped
+                .Replace(@"\{id}", @"[^/]+")
+                .Replace(@"\{*}", ".*");
 
             return new Regex($"^{regexPattern}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         }

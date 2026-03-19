@@ -110,7 +110,6 @@ public class RouteBuilder
     /// Adds this route configuration to the API simulator.
     /// </summary>
     /// <returns>The <see cref="APISimulator"/> instance for further configuration.</returns>
-    /// <exception cref="InvalidOperationException">Thrown if no response strategy was configured.</exception>
     public APISimulator Add()
     {
         // Only require response strategy if we're finalizing this route
