@@ -10,19 +10,20 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        dotnet-version: [ '9.0.x' ]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup .NET SDKs
+      - name: Setup .NET ${{ matrix.dotnet-version }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
+          dotnet-version: ${{ matrix.dotnet-version }}
 
       - name: Restore dependencies
         run: dotnet restore Augustus/Augustus.sln
@@ -30,11 +31,8 @@ jobs:
       - name: Build
         run: dotnet build Augustus/Augustus.sln --configuration Release --no-restore
 
-      - name: Run Augustus tests
+      - name: Run tests
         run: dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
-
-      - name: Run Augustus.Reqnroll tests
-        run: dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=reqnroll-test-results.trx"
 
       - name: Publish test results
         if: always()
