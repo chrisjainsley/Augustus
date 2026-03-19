@@ -244,11 +244,8 @@ internal static class ChatCompletionResponseNormalizer
             return;
 
         funcNode = TryRehydrateStringifiedNode(toolCall, "function", funcNode, () => new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" });
-        if (funcNode is null or JsonValue)
-        {
-            toolCall["function"] = new JsonObject { ["name"] = "unknown", ["arguments"] = "{}" };
-            return;
-        }
+        if (funcNode is null)
+            return; // Default already set
 
         if (funcNode is not JsonObject function)
         {

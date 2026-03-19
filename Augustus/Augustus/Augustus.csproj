@@ -6,7 +6,7 @@
     <InternalsVisibleTo>Augustus.Tests</InternalsVisibleTo>
     <InternalsVisibleTo>Augustus.AI</InternalsVisibleTo>
     <PackageId>Augustus</PackageId>
-    <Version>0.0.1</Version>
+    <Version>0.0.0-local</Version>
     <Authors>Augustus Contributors</Authors>
     <Description>A lightweight API simulator library for .NET that serves configured route responses (static JSON, file-based, or custom strategies) with optional AI-powered fallback via the Augustus.AI package.</Description>
     <PackageTags>testing;mocking;api;simulator;xunit;nunit;mstest</PackageTags>
