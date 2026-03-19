@@ -46,7 +46,7 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
         try
         {
             var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
-            var cacheKey = CacheKeyComputer.ComputeCacheKey(context.Request.Method, context.Request.Path.Value ?? "/", context.Request.QueryString.Value, bodyBytes);
+            var cacheKey = CacheKeyComputer.ComputeCacheKey(context.Request.Method, context.Request.Path.Value ?? "/", context.Request.QueryString.Value, bodyBytes, dynamicContentFields: options.DynamicContentFields);
 
             if (options.EnableCaching)
             {

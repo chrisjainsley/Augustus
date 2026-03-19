@@ -124,4 +124,29 @@ public class CacheKeyTests
 
         hash1.Should().NotBe(hash2);
     }
+
+    [Fact]
+    public void CacheKeyComputer_WithNormalization_DifferentGuids_ProduceSameHash()
+    {
+        var body1 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_abc123\",\"model\":\"gpt-4\"}");
+        var body2 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_xyz789\",\"model\":\"gpt-4\"}");
+        var fields = new List<string> { "tool_call_id" };
+
+        var hash1 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body1, dynamicContentFields: fields);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body2, dynamicContentFields: fields);
+
+        hash1.Should().Be(hash2);
+    }
+
+    [Fact]
+    public void CacheKeyComputer_WithoutNormalization_DifferentGuids_ProduceDifferentHashes()
+    {
+        var body1 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_abc123\",\"model\":\"gpt-4\"}");
+        var body2 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_xyz789\",\"model\":\"gpt-4\"}");
+
+        var hash1 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body1);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body2);
+
+        hash1.Should().NotBe(hash2);
+    }
 }

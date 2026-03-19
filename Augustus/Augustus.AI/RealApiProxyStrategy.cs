@@ -14,8 +14,9 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
     private readonly CacheManager? cacheManager;
     private readonly HttpClient httpClient;
     private readonly Dictionary<string, string> defaultHeaders;
+    private readonly List<string>? dynamicContentFields;
 
-    public RealApiProxyStrategy(string baseUrl, AIOptions? options = null, Dictionary<string, string>? headers = null)
+    public RealApiProxyStrategy(string baseUrl, AIOptions? options = null, Dictionary<string, string>? headers = null, IReadOnlyList<string>? dynamicContentFields = null)
     {
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new ArgumentException("Base URL cannot be null or empty", nameof(baseUrl));
@@ -23,6 +24,9 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
         this.baseUrl = baseUrl.TrimEnd('/');
         this.enableCaching = options?.EnableCaching ?? true;
         this.defaultHeaders = headers ?? new Dictionary<string, string>();
+        this.dynamicContentFields = dynamicContentFields is { Count: > 0 }
+            ? dynamicContentFields.ToList()
+            : null;
 
         httpClient = new HttpClient();
 
@@ -44,7 +48,7 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
             var bodyBytes = await httpContext.Request.ReadBodyBytesAsync(cancellationToken);
 
             // Generate cache key (includes body for correct POST/PUT/PATCH caching)
-            var cacheKey = CacheKeyComputer.ComputeCacheKey(method, path, queryString, bodyBytes);
+            var cacheKey = CacheKeyComputer.ComputeCacheKey(method, path, queryString, bodyBytes, dynamicContentFields: dynamicContentFields);
 
             // Try cache first
             if (cacheManager != null)
