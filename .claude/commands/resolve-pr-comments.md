@@ -43,10 +43,28 @@ $ARGUMENTS — the PR number (e.g. `28`) or a GitHub PR URL. If empty, detect th
    - Write a clear commit message summarizing what was fixed and why.
    - Push to the PR branch.
 
-8. **Report**
+8. **Reply to and resolve AI-generated comments**
+   After pushing, for each comment that was addressed:
+   - Identify the review thread ID using the GraphQL API:
+     ```
+     gh api graphql -f query='query { repository(owner: "{owner}", name: "{repo}") { pullRequest(number: {pr}) { reviewThreads(first: 50) { nodes { id isResolved comments(first: 1) { nodes { databaseId } } } } } } }'
+     ```
+   - Match each thread to the comment by `databaseId` (the REST API comment `id`).
+   - **Reply** to the comment thread explaining what was done:
+     ```
+     gh api repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies -f body="Fixed: <brief description of the fix>"
+     ```
+   - **Resolve** the thread (only for AI-generated comments, i.e. `user.login` is `Copilot`, `github-actions[bot]`, or similar bot accounts — never auto-resolve human reviewer comments):
+     ```
+     gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "{thread_id}"}) { thread { isResolved } } }'
+     ```
+   - Skip resolving threads for comments that were intentionally not addressed.
+
+9. **Report**
    - List each comment that was addressed and what was changed.
    - List any comments that were intentionally skipped and why.
    - Show CI status.
+   - Show which comment threads were replied to and resolved.
 
 ## Important Notes
 
@@ -55,3 +73,4 @@ $ARGUMENTS — the PR number (e.g. `28`) or a GitHub PR URL. If empty, detect th
 - If a reviewer suggestion conflicts with project conventions or would introduce a bug, skip it and explain why in the report.
 - Preserve existing test behavior.
 - Do NOT force-push or amend commits.
+- Only auto-resolve comments from bot/AI reviewers. Never auto-resolve comments from human reviewers — those require explicit human sign-off.
