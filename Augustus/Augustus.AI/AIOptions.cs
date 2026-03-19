@@ -9,7 +9,7 @@ using System.ComponentModel.DataAnnotations;
 /// <summary>
 /// Configuration options for AI-powered response generation.
 /// </summary>
-public class AIOptions
+public sealed class AIOptions
 {
     private string _openAIApiKey = string.Empty;
     private string _openAIEndpoint = string.Empty;

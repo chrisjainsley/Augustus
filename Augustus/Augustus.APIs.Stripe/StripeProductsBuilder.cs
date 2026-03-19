@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe product API endpoints.
 /// </summary>
-public class StripeProductsBuilder
+public sealed class StripeProductsBuilder
 {
     private readonly APISimulator apiSimulator;
 

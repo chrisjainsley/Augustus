@@ -9,11 +9,9 @@ public class CacheOnlyModeTests
     {
         var options = new APISimulatorOptions
         {
-            CacheOnly = true,
-            AutoRemoveStaleCache = true
+            AutoRemoveStaleCache = true,
+            CacheOnly = true
         };
-
-        options.Validate();
 
         options.AutoRemoveStaleCache.Should().BeFalse();
     }
@@ -23,11 +21,9 @@ public class CacheOnlyModeTests
     {
         var options = new APISimulatorOptions
         {
-            CacheOnly = true,
-            EnableCaching = false
+            EnableCaching = false,
+            CacheOnly = true
         };
-
-        options.Validate();
 
         options.EnableCaching.Should().BeTrue();
     }

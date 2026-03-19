@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe token API endpoints.
 /// </summary>
-public class StripeTokensBuilder
+public sealed class StripeTokensBuilder
 {
     private readonly APISimulator apiSimulator;
 

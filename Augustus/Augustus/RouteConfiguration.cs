@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 /// <summary>
 /// Represents a route configuration for a mock server endpoint.
 /// </summary>
-public class RouteConfiguration
+public sealed class RouteConfiguration
 {
     /// <summary>
     /// Gets the URL pattern to match against incoming requests.
@@ -18,9 +18,9 @@ public class RouteConfiguration
     public string HttpMethod { get; }
 
     /// <summary>
-    /// Gets or sets the response strategy for this route.
+    /// Gets or initializes the response strategy for this route.
     /// </summary>
-    public IResponseStrategy? ResponseStrategy { get; set; }
+    public IResponseStrategy? ResponseStrategy { get; init; }
 
     private readonly Regex compiledPattern;
 
@@ -34,6 +34,16 @@ public class RouteConfiguration
         Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
         HttpMethod = httpMethod?.ToUpperInvariant() ?? "*";
         compiledPattern = CompilePattern(pattern);
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RouteConfiguration"/> class.
+    /// </summary>
+    /// <param name="pattern">The URL pattern to match. Supports {id} for path segments and {*} for wildcards.</param>
+    /// <param name="httpVerb">The HTTP method to match.</param>
+    public RouteConfiguration(string pattern, HttpVerb httpVerb)
+        : this(pattern, httpVerb.ToMethodString())
+    {
     }
 
     private static Regex CompilePattern(string pattern)

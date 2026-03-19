@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe event API endpoints.
 /// </summary>
-public class StripeEventsBuilder
+public sealed class StripeEventsBuilder
 {
     private readonly APISimulator apiSimulator;
 

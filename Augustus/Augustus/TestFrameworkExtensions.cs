@@ -120,6 +120,14 @@ public static class TestFrameworkExtensions
     }
 
     /// <summary>
+    /// Configures route-specific instructions for a given URL pattern and HTTP method.
+    /// </summary>
+    public static InstructionBuilder ForRoute(this APISimulator simulator, string pattern, HttpVerb httpVerb)
+    {
+        return simulator.ConfigureRoutes().ForRoute(pattern, httpVerb);
+    }
+
+    /// <summary>
     /// Configures route-specific instructions for HTTP GET requests matching the pattern.
     /// </summary>
     public static InstructionBuilder ForGet(this APISimulator simulator, string pattern)

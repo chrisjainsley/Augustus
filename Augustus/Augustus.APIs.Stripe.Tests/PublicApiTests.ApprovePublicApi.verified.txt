@@ -1,0 +1,208 @@
+﻿[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/chrisjainsley/augustus")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Augustus.Stripe.Tests")]
+namespace Augustus.APIs.Stripe
+{
+    public sealed class StripeBalanceBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get() { }
+    }
+    public sealed class StripeBalanceTransactionsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string balanceTransactionId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+    }
+    public sealed class StripeChargesBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Capture(string chargeId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string chargeId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+    }
+    public sealed class StripeCouponsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Delete(string couponId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string couponId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string couponId = "{id}") { }
+    }
+    public sealed class StripeCustomersBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Delete(string customerId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string customerId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string customerId = "{id}") { }
+    }
+    public sealed class StripeDisputesBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Close(string disputeId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string disputeId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string disputeId = "{id}") { }
+    }
+    public static class StripeErrors
+    {
+        public static string ApiError(string message = "An internal error occurred") { }
+        public static string AuthenticationError(string message = "Invalid API Key provided") { }
+        public static string CardError(string message, string? code = null, string? declineCode = null) { }
+        public static string IdempotencyError(string message) { }
+        public static string InvalidRequestError(string message, string? param = null) { }
+        public static string RateLimitError(string message = "Too many requests") { }
+    }
+    public sealed class StripeEventsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string eventId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+    }
+    public static class StripeExtensions
+    {
+        public static Augustus.APIs.Stripe.StripeMock CreateStripeMock(this object testClass, System.Action<Augustus.APISimulatorOptions>? configureOptions = null) { }
+        public static Augustus.APIs.Stripe.StripeRouteBuilder Stripe(this Augustus.APISimulator apiSimulator) { }
+        public static Augustus.APIs.Stripe.StripeRouteBuilder Stripe(this Augustus.APIs.Stripe.StripeMock stripeMock) { }
+    }
+    public sealed class StripeInvoiceItemsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Delete(string invoiceItemId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string invoiceItemId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string invoiceItemId = "{id}") { }
+    }
+    public sealed class StripeInvoicesBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Delete(string invoiceId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Finalize(string invoiceId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string invoiceId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Pay(string invoiceId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string invoiceId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Void(string invoiceId = "{id}") { }
+    }
+    public sealed class StripeMock
+    {
+        public Augustus.APISimulator APISimulator { get; }
+        public bool IsRunning { get; }
+        public Augustus.APIs.Stripe.StripeBalanceBuilder Balance() { }
+        public Augustus.APIs.Stripe.StripeBalanceTransactionsBuilder BalanceTransactions() { }
+        public Augustus.APISimulator Build() { }
+        public Augustus.APIs.Stripe.StripeChargesBuilder Charges() { }
+        public Augustus.APIs.Stripe.StripeCouponsBuilder Coupons() { }
+        public System.Net.Http.HttpClient CreateClient() { }
+        public Augustus.APIs.Stripe.StripeCustomersBuilder Customers() { }
+        public Augustus.APIs.Stripe.StripeDisputesBuilder Disputes() { }
+        public Augustus.APIs.Stripe.StripeEventsBuilder Events() { }
+        public Augustus.APIs.Stripe.StripeInvoiceItemsBuilder InvoiceItems() { }
+        public Augustus.APIs.Stripe.StripeInvoicesBuilder Invoices() { }
+        public Augustus.APIs.Stripe.StripePaymentIntentsBuilder PaymentIntents() { }
+        public Augustus.APIs.Stripe.StripePaymentMethodsBuilder PaymentMethods() { }
+        public Augustus.APIs.Stripe.StripePayoutsBuilder Payouts() { }
+        public Augustus.APIs.Stripe.StripePricesBuilder Prices() { }
+        public Augustus.APIs.Stripe.StripeProductsBuilder Products() { }
+        public Augustus.APIs.Stripe.StripeRefundsBuilder Refunds() { }
+        public Augustus.APIs.Stripe.StripeSetupIntentsBuilder SetupIntents() { }
+        public System.Threading.Tasks.Task StartAsync(System.Threading.CancellationToken cancellationToken = default) { }
+        public System.Threading.Tasks.Task StopAsync(System.Threading.CancellationToken cancellationToken = default) { }
+        public Augustus.APIs.Stripe.StripeSubscriptionsBuilder Subscriptions() { }
+        public Augustus.APIs.Stripe.StripeTokensBuilder Tokens() { }
+        public Augustus.APIs.Stripe.StripeMock UseAllDefaults() { }
+    }
+    public sealed class StripePaymentIntentsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Cancel(string paymentIntentId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Confirm(string paymentIntentId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string paymentIntentId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+    }
+    public sealed class StripePaymentMethodsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Attach(string paymentMethodId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Detach(string paymentMethodId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string paymentMethodId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string paymentMethodId = "{id}") { }
+    }
+    public sealed class StripePayoutsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Cancel(string payoutId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string payoutId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string payoutId = "{id}") { }
+    }
+    public sealed class StripePricesBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string priceId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string priceId = "{id}") { }
+    }
+    public sealed class StripeProductsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Delete(string productId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string productId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string productId = "{id}") { }
+    }
+    public sealed class StripeRefundsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string refundId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string refundId = "{id}") { }
+    }
+    public sealed class StripeResourceConfigurer
+    {
+        public void UseDefault() { }
+        public void WithError(int statusCode, string errorJson) { }
+        public void WithJsonFile(string filePath) { }
+        public void WithResponse(object responseObject) { }
+        public void WithResponse(string jsonResponse) { }
+    }
+    public sealed class StripeRouteBuilder
+    {
+        public Augustus.APIs.Stripe.StripeBalanceBuilder Balance() { }
+        public Augustus.APIs.Stripe.StripeBalanceTransactionsBuilder BalanceTransactions() { }
+        public Augustus.APIs.Stripe.StripeChargesBuilder Charges() { }
+        public Augustus.APIs.Stripe.StripeCouponsBuilder Coupons() { }
+        public Augustus.APIs.Stripe.StripeCustomersBuilder Customers() { }
+        public Augustus.APIs.Stripe.StripeDisputesBuilder Disputes() { }
+        public Augustus.APIs.Stripe.StripeEventsBuilder Events() { }
+        public Augustus.APIs.Stripe.StripeInvoiceItemsBuilder InvoiceItems() { }
+        public Augustus.APIs.Stripe.StripeInvoicesBuilder Invoices() { }
+        public Augustus.APIs.Stripe.StripePaymentIntentsBuilder PaymentIntents() { }
+        public Augustus.APIs.Stripe.StripePaymentMethodsBuilder PaymentMethods() { }
+        public Augustus.APIs.Stripe.StripePayoutsBuilder Payouts() { }
+        public Augustus.APIs.Stripe.StripePricesBuilder Prices() { }
+        public Augustus.APIs.Stripe.StripeProductsBuilder Products() { }
+        public Augustus.APIs.Stripe.StripeRefundsBuilder Refunds() { }
+        public Augustus.APIs.Stripe.StripeSetupIntentsBuilder SetupIntents() { }
+        public Augustus.APIs.Stripe.StripeSubscriptionsBuilder Subscriptions() { }
+        public Augustus.APIs.Stripe.StripeTokensBuilder Tokens() { }
+    }
+    public sealed class StripeSetupIntentsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Cancel(string setupIntentId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Confirm(string setupIntentId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string setupIntentId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+    }
+    public sealed class StripeSubscriptionsBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Cancel(string subscriptionId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string subscriptionId = "{id}") { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer List() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Update(string subscriptionId = "{id}") { }
+    }
+    public sealed class StripeTokensBuilder
+    {
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
+        public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string tokenId = "{id}") { }
+    }
+}

@@ -6,7 +6,7 @@ using System.Text.Json;
 /// <summary>
 /// Configures response strategies for a Stripe API endpoint.
 /// </summary>
-public class StripeResourceConfigurer
+public sealed class StripeResourceConfigurer
 {
     private readonly APISimulator apiSimulator;
     private readonly string pattern;

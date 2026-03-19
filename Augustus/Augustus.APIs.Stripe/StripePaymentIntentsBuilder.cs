@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe payment intent API endpoints.
 /// </summary>
-public class StripePaymentIntentsBuilder
+public sealed class StripePaymentIntentsBuilder
 {
     private readonly APISimulator apiSimulator;
 

@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Augustus.AI</PackageId>
-    <Version>1.0.0</Version>
+    <Version>0.0.1</Version>
     <Authors>Augustus Contributors</Authors>
     <Description>OpenAI-powered extension for Augustus. Generates realistic API responses using AI and supports proxying to real APIs with caching.</Description>
     <PackageTags>testing;mocking;ai;openai;api;simulator;augustus</PackageTags>

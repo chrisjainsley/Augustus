@@ -9,7 +9,7 @@ using System.Text.Json;
 /// <summary>
 /// Response strategy that uses OpenAI to generate realistic API responses.
 /// </summary>
-public class AIResponseStrategy : IResponseStrategy, IDisposable
+public sealed class AIResponseStrategy : IResponseStrategy, IDisposable
 {
     private readonly AIOptions options;
     private readonly List<string> instructions;
