@@ -54,6 +54,16 @@ public sealed class RouteInstruction
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="RouteInstruction"/> class.
+    /// </summary>
+    /// <param name="pattern">The URL pattern to match. Supports {id} for path segments and {*} for wildcards.</param>
+    /// <param name="httpVerb">The HTTP method to match.</param>
+    public RouteInstruction(string pattern, HttpVerb httpVerb)
+        : this(pattern, httpVerb.ToMethodString())
+    {
+    }
+
+    /// <summary>
     /// Adds an instruction to this route.
     /// </summary>
     internal void AddInstruction(string instruction) => _instructions.Add(instruction);
@@ -141,6 +151,17 @@ public sealed class InstructionBuilder
         currentRoute = new RouteInstruction(pattern, httpMethod);
         routeInstructions.Add(currentRoute);
         return this;
+    }
+
+    /// <summary>
+    /// Configures instructions for requests matching the specified route pattern and HTTP method.
+    /// </summary>
+    /// <param name="pattern">The URL pattern to match (e.g., "/api/customers/{id}"). Supports {id} and {*} placeholders.</param>
+    /// <param name="httpVerb">The HTTP method to match.</param>
+    /// <returns>This <see cref="InstructionBuilder"/> for method chaining.</returns>
+    public InstructionBuilder ForRoute(string pattern, HttpVerb httpVerb)
+    {
+        return ForRoute(pattern, httpVerb.ToMethodString());
     }
 
     /// <summary>

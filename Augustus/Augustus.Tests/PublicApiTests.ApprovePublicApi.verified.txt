@@ -24,7 +24,9 @@ namespace Augustus
         public Augustus.RouteBuilder ForPatch(string pattern) { }
         public Augustus.RouteBuilder ForPost(string pattern) { }
         public Augustus.RouteBuilder ForPut(string pattern) { }
+        public Augustus.RouteBuilder ForRoute(string pattern, Augustus.HttpVerb httpVerb) { }
         public Augustus.RouteBuilder ForRoute(string pattern, string httpMethod = "*") { }
+        public bool RemoveRoute(string pattern, Augustus.HttpVerb httpVerb) { }
         public bool RemoveRoute(string pattern, string httpMethod = "*") { }
         public void SetCacheBasePath(string path) { }
         public void SetTestContext(string testName) { }
@@ -47,6 +49,19 @@ namespace Augustus
         public static System.Threading.Tasks.Task<byte[]> ReadBodyBytesAsync(this Microsoft.AspNetCore.Http.HttpRequest request, System.Threading.CancellationToken cancellationToken = default) { }
         public static System.Threading.Tasks.Task<string> ToCurlCommandAsync(this Microsoft.AspNetCore.Http.HttpRequest request) { }
     }
+    public enum HttpVerb
+    {
+        Any = 0,
+        Get = 1,
+        Post = 2,
+        Put = 3,
+        Delete = 4,
+        Patch = 5,
+    }
+    public static class HttpVerbExtensions
+    {
+        public static string ToMethodString(this Augustus.HttpVerb verb) { }
+    }
     public interface IResponseStrategy
     {
         System.Threading.Tasks.Task GenerateResponseAsync(Microsoft.AspNetCore.Http.HttpContext httpContext, System.Threading.CancellationToken cancellationToken = default);
@@ -59,6 +74,7 @@ namespace Augustus
         public Augustus.InstructionBuilder ForPatch(string pattern) { }
         public Augustus.InstructionBuilder ForPost(string pattern) { }
         public Augustus.InstructionBuilder ForPut(string pattern) { }
+        public Augustus.InstructionBuilder ForRoute(string pattern, Augustus.HttpVerb httpVerb) { }
         public Augustus.InstructionBuilder ForRoute(string pattern, string httpMethod = "*") { }
         [System.Obsolete("This method does not actually delay responses. It will be removed in a future maj" +
             "or version.")]
@@ -89,6 +105,7 @@ namespace Augustus
     }
     public sealed class RouteConfiguration
     {
+        public RouteConfiguration(string pattern, Augustus.HttpVerb httpVerb) { }
         public RouteConfiguration(string pattern, string httpMethod = "*") { }
         public string HttpMethod { get; }
         public string Pattern { get; }
@@ -97,6 +114,7 @@ namespace Augustus
     }
     public sealed class RouteInstruction
     {
+        public RouteInstruction(string pattern, Augustus.HttpVerb httpVerb) { }
         public RouteInstruction(string pattern, string httpMethod = "*") { }
         public string HttpMethod { get; }
         public System.Collections.Generic.IReadOnlyList<string> Instructions { get; }
@@ -120,6 +138,7 @@ namespace Augustus.Extensions
         public static Augustus.InstructionBuilder ForPatch(this Augustus.APISimulator simulator, string pattern) { }
         public static Augustus.InstructionBuilder ForPost(this Augustus.APISimulator simulator, string pattern) { }
         public static Augustus.InstructionBuilder ForPut(this Augustus.APISimulator simulator, string pattern) { }
+        public static Augustus.InstructionBuilder ForRoute(this Augustus.APISimulator simulator, string pattern, Augustus.HttpVerb httpVerb) { }
         public static Augustus.InstructionBuilder ForRoute(this Augustus.APISimulator simulator, string pattern, string httpMethod = "*") { }
         public static System.Threading.Tasks.Task<Augustus.APISimulator> StartSimulatorAsync(this Augustus.APISimulator simulator, System.Threading.CancellationToken cancellationToken = default) { }
         public static Augustus.APISimulator WithInstruction(this Augustus.APISimulator simulator, string instruction) { }

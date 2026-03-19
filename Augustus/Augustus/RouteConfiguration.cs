@@ -36,6 +36,16 @@ public sealed class RouteConfiguration
         compiledPattern = CompilePattern(pattern);
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RouteConfiguration"/> class.
+    /// </summary>
+    /// <param name="pattern">The URL pattern to match. Supports {id} for path segments and {*} for wildcards.</param>
+    /// <param name="httpVerb">The HTTP method to match.</param>
+    public RouteConfiguration(string pattern, HttpVerb httpVerb)
+        : this(pattern, httpVerb.ToMethodString())
+    {
+    }
+
     private static Regex CompilePattern(string pattern)
     {
         try
