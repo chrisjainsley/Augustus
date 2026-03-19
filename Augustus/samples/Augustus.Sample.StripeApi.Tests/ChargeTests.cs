@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Augustus.AI;
 using Augustus.Extensions;
 using static Augustus.Sample.StripeApi.Tests.TestConfiguration;
 
@@ -15,12 +16,16 @@ public class ChargeTests
 
         await using var simulator = this.CreateStripeSimulator(opt =>
         {
-            opt.OpenAIApiKey = apiKey;
-            opt.OpenAIModel = GetModel();
             opt.Port = 9050;
         })
         .WithInstruction("Return realistic Stripe API JSON responses.")
         .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\", a realistic \"id\" starting with \"ch_\", the amount and currency from the request, and \"status\": \"succeeded\".");
+
+        simulator.UseAI(new AIOptions
+        {
+            OpenAIApiKey = apiKey,
+            OpenAIModel = GetModel()
+        });
 
         await simulator.StartAsync();
         var client = simulator.CreateClient();
@@ -50,12 +55,16 @@ public class ChargeTests
 
         await using var simulator = this.CreateStripeSimulator(opt =>
         {
-            opt.OpenAIApiKey = apiKey;
-            opt.OpenAIModel = GetModel();
             opt.Port = 9051;
         })
         .WithInstruction("Return realistic Stripe API JSON responses.")
         .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\", a realistic \"id\" starting with \"ch_\", the amount and currency from the request, and \"status\": \"succeeded\".");
+
+        simulator.UseAI(new AIOptions
+        {
+            OpenAIApiKey = apiKey,
+            OpenAIModel = GetModel()
+        });
 
         await simulator.StartAsync();
         var client = simulator.CreateClient();

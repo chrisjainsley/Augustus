@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Augustus.AI;
 using Augustus.Extensions;
 using static Augustus.Sample.StripeApi.Tests.TestConfiguration;
 
@@ -15,8 +16,6 @@ public class CustomerTests
 
         await using var simulator = this.CreateStripeSimulator(opt =>
         {
-            opt.OpenAIApiKey = apiKey;
-            opt.OpenAIModel = GetModel();
             opt.Port = 9052;
         })
         .WithInstruction("Return realistic Stripe API JSON responses. Always return raw JSON only, no markdown.")
@@ -25,6 +24,12 @@ public class CustomerTests
         .ForPost("/v1/customers")
             .WithInstruction("Return a newly created customer object with \"object\": \"customer\", an \"id\" starting with \"cus_\", and the name/email from the request body.")
         .Build();
+
+        simulator.UseAI(new AIOptions
+        {
+            OpenAIApiKey = apiKey,
+            OpenAIModel = GetModel()
+        });
 
         await simulator.StartAsync();
         var client = simulator.CreateClient();
