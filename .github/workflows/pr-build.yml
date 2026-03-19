@@ -31,7 +31,12 @@ jobs:
         run: dotnet build Augustus/Augustus.sln --configuration Release --no-restore
 
       - name: Run Augustus tests
-        run: dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+        run: |
+          for fw in net8.0 net9.0 net10.0; do
+            echo "::group::Testing $fw"
+            dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework $fw --logger "trx;LogFileName=test-results-$fw.trx"
+            echo "::endgroup::"
+          done
 
       - name: Run Augustus.Reqnroll tests
         run: dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=reqnroll-test-results.trx"
@@ -41,5 +46,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: '**/test-results.trx'
+          path: '**/*.trx'
           if-no-files-found: ignore
