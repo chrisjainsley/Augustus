@@ -72,7 +72,7 @@ Evaluate every change. Do not skip files or skim.
 
 ## Step 4: Produce the report
 
-Organize findings into exactly three sections. Omit a section only if it has zero items.
+Organize findings into these three sections. Omit any section that has zero items.
 
 ### 🚨 Critical Issues
 Problems that **must** be fixed before opening a PR. These would cause a PR rejection: bugs, security issues, broken contracts, data loss risks.
@@ -105,6 +105,6 @@ End with one of:
 - Do NOT compliment the code. No "nice work", no "good approach", no softening.
 - Do NOT explain basic concepts. The audience is a senior engineer.
 - Be concise. One line per issue plus one line of reasoning. No essays.
-- High-signal feedback only. If an issue wouldn't make a senior reviewer comment on a real PR, skip it.
-- When in doubt, flag it. Better to over-flag than to let a bug through.
+- High-signal feedback only. Skip style nitpicks and cosmetic issues that wouldn't block a PR.
+- When in doubt about correctness or safety, flag it. Better to over-flag a potential bug than miss one.
 - If there are no uncommitted changes (no diffs, no untracked files), say so and stop.
