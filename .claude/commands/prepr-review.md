@@ -61,11 +61,6 @@ Evaluate every change. Do not skip files or skim.
 - Does the code match the style and patterns already in the repo?
 - New paradigms introduced without strong reason
 
-**React-specific** (when applicable)
-- Unnecessary re-renders (missing memoization, unstable references in deps arrays)
-- State management issues (derived state stored as state, prop drilling vs context)
-- Bloated components that should be split
-
 **Testing**
 - Critical logic added without test coverage
 - Untestable patterns (static dependencies, tight coupling, hidden side effects)

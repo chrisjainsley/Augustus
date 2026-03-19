@@ -94,13 +94,12 @@ If tests fail, fix them before completing.
 
 ## Step 7: Complete the merge
 
-Once the build passes and tests are green:
+Once the build passes and tests are green, complete the merge.
 
-```bash
-git commit --no-edit
-```
+- If the merge had conflicts (merge is still pending), run `git commit --no-edit` to finalize with the default merge message.
+- If the merge already completed (clean merge, no conflicts), there is nothing to commit — the merge commit was created automatically.
 
-This uses the default merge commit message. Report what was done:
+Report what was done:
 - How many files had conflicts
 - How many were trivial vs complex
 - What resolution strategies were used for complex conflicts
