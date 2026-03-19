@@ -8,7 +8,7 @@ namespace Augustus;
 /// For AI-powered response generation, install the Augustus.AI package and use
 /// <c>AIOptions</c> with the <c>UseAI</c> extension method.
 /// </remarks>
-public class APISimulatorOptions
+public sealed class APISimulatorOptions
 {
     /// <summary>
     /// Gets or sets a value indicating whether response caching is enabled.
@@ -32,6 +32,8 @@ public class APISimulatorOptions
     /// </value>
     public bool AutoRemoveStaleCache { get; set; } = true;
 
+    private bool _cacheOnly;
+
     /// <summary>
     /// Gets or sets a value indicating whether the simulator operates in cache-only mode.
     /// </summary>
@@ -44,7 +46,19 @@ public class APISimulatorOptions
     /// <see cref="AutoRemoveStaleCache"/> to <c>false</c>.
     /// Useful for CI environments where responses are pre-cached.
     /// </remarks>
-    public bool CacheOnly { get; set; } = false;
+    public bool CacheOnly
+    {
+        get => _cacheOnly;
+        set
+        {
+            _cacheOnly = value;
+            if (value)
+            {
+                EnableCaching = true;
+                AutoRemoveStaleCache = false;
+            }
+        }
+    }
 
     private string _cacheFolderPath = "./mocks";
     private bool _cacheFolderPathExplicitlySet;
@@ -111,28 +125,34 @@ public class APISimulatorOptions
         }
     }
 
+    private readonly List<string> _dynamicContentFields = new();
+
     /// <summary>
-    /// Gets or sets a list of JSON property names whose values should be normalized
+    /// Gets a list of JSON property names whose values should be normalized
     /// (replaced with a constant) when computing cache keys.
     /// </summary>
     /// <remarks>
     /// Use this to ignore dynamic content such as GUIDs, tool_call_ids, or timestamps
     /// so that logically identical requests produce the same cache key across test runs.
+    /// Add items via the <see cref="ICollection{T}.Add"/> method on the returned list.
     /// </remarks>
-    public List<string> DynamicContentFields { get; set; } = new();
+    public IList<string> DynamicContentFields => _dynamicContentFields;
 
     /// <summary>
     /// Validates that all required configuration is present and correct.
     /// </summary>
-    /// <remarks>
-    /// Enforces cache-only mode invariants when enabled.
-    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <see cref="CacheOnly"/> is <c>true</c> but <see cref="EnableCaching"/> is <c>false</c>
+    /// or <see cref="AutoRemoveStaleCache"/> is <c>true</c>, indicating an invalid configuration.
+    /// </exception>
     public void Validate()
     {
-        if (CacheOnly)
+        if (_cacheOnly)
         {
-            EnableCaching = true;
-            AutoRemoveStaleCache = false;
+            if (!EnableCaching)
+                throw new InvalidOperationException("CacheOnly requires EnableCaching to be true.");
+            if (AutoRemoveStaleCache)
+                throw new InvalidOperationException("CacheOnly requires AutoRemoveStaleCache to be false.");
         }
     }
 }

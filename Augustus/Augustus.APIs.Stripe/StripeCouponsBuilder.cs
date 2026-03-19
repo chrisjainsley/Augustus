@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe coupon API endpoints.
 /// </summary>
-public class StripeCouponsBuilder
+public sealed class StripeCouponsBuilder
 {
     private readonly APISimulator apiSimulator;
 

@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe balance transaction API endpoints.
 /// </summary>
-public class StripeBalanceTransactionsBuilder
+public sealed class StripeBalanceTransactionsBuilder
 {
     private readonly APISimulator apiSimulator;
 

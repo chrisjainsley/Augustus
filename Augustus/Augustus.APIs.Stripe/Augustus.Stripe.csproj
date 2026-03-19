@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Augustus.Stripe</PackageId>
-    <Version>1.0.0</Version>
+    <Version>0.0.1</Version>
     <Authors>Augustus Contributors</Authors>
     <Description>Stripe-specific extensions for Augustus. Provides fluent API for mocking Stripe endpoints with built-in realistic defaults.</Description>
     <PackageTags>testing;mocking;stripe;api;simulator;augustus</PackageTags>

@@ -1,0 +1,54 @@
+﻿[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/chrisjainsley/augustus")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Augustus.AI.Tests")]
+namespace Augustus.AI
+{
+    public sealed class AIOptions
+    {
+        public AIOptions() { }
+        public string AzureApiVersion { get; set; }
+        public string AzureDeploymentName { get; set; }
+        public string CacheFolderPath { get; set; }
+        public bool EnableCaching { get; set; }
+        public int InitialRetryDelayMs { get; set; }
+        public int MaxConcurrentRequests { get; set; }
+        public int MaxRetries { get; set; }
+        public int MaxRetryDelayMs { get; set; }
+        public string OpenAIApiKey { get; set; }
+        public string OpenAIEndpoint { get; set; }
+        public string OpenAIModel { get; set; }
+        public int ProxyTimeoutSeconds { get; set; }
+        public bool UseAzureOpenAI { get; set; }
+        public void Validate() { }
+    }
+    public sealed class AIResponseStrategy : Augustus.IResponseStrategy, System.IDisposable
+    {
+        public AIResponseStrategy(Augustus.AI.AIOptions options, params string[] instructions) { }
+        public void Dispose() { }
+        public System.Threading.Tasks.Task GenerateResponseAsync(Microsoft.AspNetCore.Http.HttpContext httpContext, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public static class AISimulatorExtensions
+    {
+        public static Augustus.APISimulator UseAI(this Augustus.APISimulator simulator, Augustus.AI.AIOptions options) { }
+        public static Augustus.APISimulator UseProxy(this Augustus.APISimulator simulator, Augustus.AI.AIOptions options, string upstreamUrl) { }
+    }
+    public static class AITestFrameworkExtensions
+    {
+        public static Augustus.APISimulator CreateAzureOpenAIProxy(this object testClass, System.Action<Augustus.AI.AIOptions>? configure = null, [System.Runtime.CompilerServices.CallerFilePath] string callerFilePath = "") { }
+        public static Augustus.APISimulator CreateAzureOpenAISimulator(this object testClass, System.Action<Augustus.AI.AIOptions>? configure = null, [System.Runtime.CompilerServices.CallerFilePath] string callerFilePath = "") { }
+        public static Augustus.APISimulator CreateOpenAIProxy(this object testClass, System.Action<Augustus.AI.AIOptions>? configure = null, [System.Runtime.CompilerServices.CallerFilePath] string callerFilePath = "") { }
+        public static Augustus.APISimulator CreateOpenAISimulator(this object testClass, System.Action<Augustus.AI.AIOptions>? configure = null, [System.Runtime.CompilerServices.CallerFilePath] string callerFilePath = "") { }
+    }
+    public sealed class RealApiProxyStrategy : Augustus.IResponseStrategy, System.IDisposable
+    {
+        public RealApiProxyStrategy(string baseUrl, Augustus.AI.AIOptions? options = null, System.Collections.Generic.Dictionary<string, string>? headers = null, System.Collections.Generic.IReadOnlyList<string>? dynamicContentFields = null) { }
+        public void Dispose() { }
+        public System.Threading.Tasks.Task GenerateResponseAsync(Microsoft.AspNetCore.Http.HttpContext httpContext, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public static class RouteBuilderExtensions
+    {
+        public static Augustus.RouteBuilder UseAI(this Augustus.RouteBuilder builder, Augustus.AI.AIOptions options, string instruction) { }
+        public static Augustus.RouteBuilder UseAI(this Augustus.RouteBuilder builder, Augustus.AI.AIOptions options, params string[] instructions) { }
+        public static Augustus.RouteBuilder UseRealApi(this Augustus.RouteBuilder builder, string baseUrl, Augustus.AI.AIOptions? options = null, System.Collections.Generic.Dictionary<string, string>? headers = null) { }
+        public static Augustus.RouteBuilder UseRealApi(this Augustus.RouteBuilder builder, string baseUrl, string apiKey, Augustus.AI.AIOptions? options = null) { }
+    }
+}

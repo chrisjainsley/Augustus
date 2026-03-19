@@ -3,7 +3,7 @@ namespace Augustus;
 /// <summary>
 /// A fluent builder for configuring API simulator routes.
 /// </summary>
-public class RouteBuilder
+public sealed class RouteBuilder
 {
     private readonly APISimulator apiSimulator;
     private readonly string pattern;
@@ -115,6 +115,7 @@ public class RouteBuilder
     /// </summary>
     /// <param name="jsonResponse">The JSON string to return.</param>
     /// <returns>This <see cref="RouteBuilder"/> for method chaining.</returns>
+    [Obsolete("Use WithResponse instead. This method will be removed in a future major version.")]
     public RouteBuilder WithJsonResponse(string jsonResponse)
     {
         return WithResponse(jsonResponse);
@@ -142,7 +143,7 @@ public class RouteBuilder
             var routeInstruction = new RouteInstruction(pattern, httpMethod);
             foreach (var instruction in instructions)
             {
-                routeInstruction.Instructions.Add(instruction);
+                routeInstruction.AddInstruction(instruction);
             }
             apiSimulator.InstructionsContainer.AddRouteInstruction(routeInstruction);
         }

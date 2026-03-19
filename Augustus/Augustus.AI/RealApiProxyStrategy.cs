@@ -13,7 +13,7 @@ using System.Text.Json;
 /// are applied by the default handlers (<see cref="ProxyDefaultHandler"/>, <see cref="AIDefaultHandler"/>)
 /// and do not automatically apply to per-route strategies.
 /// </remarks>
-public class RealApiProxyStrategy : IResponseStrategy, IDisposable
+public sealed class RealApiProxyStrategy : IResponseStrategy, IDisposable
 {
     private readonly string baseUrl;
     private readonly bool enableCaching;

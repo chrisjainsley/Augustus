@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe dispute API endpoints.
 /// </summary>
-public class StripeDisputesBuilder
+public sealed class StripeDisputesBuilder
 {
     private readonly APISimulator apiSimulator;
 

@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe invoice item API endpoints.
 /// </summary>
-public class StripeInvoiceItemsBuilder
+public sealed class StripeInvoiceItemsBuilder
 {
     private readonly APISimulator apiSimulator;
 

@@ -9,33 +9,35 @@ namespace Augustus;
 /// Route instructions allow you to provide different AI guidance for different API endpoints and HTTP methods.
 /// Patterns support placeholders like {id} for dynamic path segments.
 /// </remarks>
-public class RouteInstruction
+public sealed class RouteInstruction
 {
     /// <summary>
-    /// Gets or sets the URL pattern to match against incoming requests.
+    /// Gets the URL pattern to match against incoming requests.
     /// </summary>
     /// <value>
     /// A URL pattern that may include placeholders like {id} or {*} for wildcards.
     /// Example: "/api/customers/{id}"
     /// </value>
-    public string Pattern { get; set; } = string.Empty;
+    public string Pattern { get; }
 
     /// <summary>
-    /// Gets or sets the HTTP method to match.
+    /// Gets the HTTP method to match.
     /// </summary>
     /// <value>
     /// An HTTP method name (GET, POST, PUT, DELETE, PATCH) or "*" to match all methods.
     /// Default is "*". Case-insensitive.
     /// </value>
-    public string HttpMethod { get; set; } = "*"; // * means all methods
+    public string HttpMethod { get; } // * means all methods
 
     /// <summary>
-    /// Gets or sets the list of instructions that apply to this route.
+    /// Gets the list of instructions that apply to this route.
     /// </summary>
     /// <value>
     /// A list of instruction strings that guide AI response generation for matching requests.
     /// </value>
-    public List<string> Instructions { get; set; } = new();
+    public IReadOnlyList<string> Instructions => _instructions.AsReadOnly();
+
+    private readonly List<string> _instructions = new();
 
     private Regex? _compiledPattern;
 
@@ -46,10 +48,26 @@ public class RouteInstruction
     /// <param name="httpMethod">The HTTP method to match, or "*" for all methods. Default is "*".</param>
     public RouteInstruction(string pattern, string httpMethod = "*")
     {
-        Pattern = pattern;
+        Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
+        ArgumentNullException.ThrowIfNull(httpMethod, nameof(httpMethod));
         HttpMethod = httpMethod.ToUpperInvariant();
         CompilePattern();
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RouteInstruction"/> class.
+    /// </summary>
+    /// <param name="pattern">The URL pattern to match. Supports {id} for path segments and {*} for wildcards.</param>
+    /// <param name="httpVerb">The HTTP method to match.</param>
+    public RouteInstruction(string pattern, HttpVerb httpVerb)
+        : this(pattern, httpVerb.ToMethodString())
+    {
+    }
+
+    /// <summary>
+    /// Adds an instruction to this route.
+    /// </summary>
+    internal void AddInstruction(string instruction) => _instructions.Add(instruction);
 
     private void CompilePattern()
     {
@@ -108,7 +126,7 @@ public class RouteInstruction
 ///     .Build();
 /// </code>
 /// </example>
-public class InstructionBuilder
+public sealed class InstructionBuilder
 {
     private readonly APISimulator simulator;
     private readonly List<RouteInstruction> routeInstructions = new();
@@ -134,6 +152,17 @@ public class InstructionBuilder
         currentRoute = new RouteInstruction(pattern, httpMethod);
         routeInstructions.Add(currentRoute);
         return this;
+    }
+
+    /// <summary>
+    /// Configures instructions for requests matching the specified route pattern and HTTP method.
+    /// </summary>
+    /// <param name="pattern">The URL pattern to match (e.g., "/api/customers/{id}"). Supports {id} and {*} placeholders.</param>
+    /// <param name="httpVerb">The HTTP method to match.</param>
+    /// <returns>This <see cref="InstructionBuilder"/> for method chaining.</returns>
+    public InstructionBuilder ForRoute(string pattern, HttpVerb httpVerb)
+    {
+        return ForRoute(pattern, httpVerb.ToMethodString());
     }
 
     /// <summary>
@@ -199,7 +228,7 @@ public class InstructionBuilder
     {
         if (currentRoute != null)
         {
-            currentRoute.Instructions.Add(instruction);
+            currentRoute.AddInstruction(instruction);
         }
         else
         {
@@ -257,9 +286,10 @@ public class InstructionBuilder
     /// <param name="milliseconds">The delay in milliseconds.</param>
     /// <returns>This <see cref="InstructionBuilder"/> for method chaining.</returns>
     /// <remarks>
-    /// Note: This currently only adds an instruction about delays.
-    /// Actual delay implementation is not yet functional.
+    /// This method only adds an instruction about delays and does not actually delay the response.
+    /// It will be removed in a future major version.
     /// </remarks>
+    [Obsolete("This method does not actually delay responses. It will be removed in a future major version.")]
     public InstructionBuilder WithDelay(int milliseconds)
     {
         return WithInstruction($"Simulate a {milliseconds}ms delay in the response");
@@ -271,7 +301,6 @@ public class InstructionBuilder
     /// <returns>The <see cref="APISimulator"/> that was being configured.</returns>
     /// <remarks>
     /// This method registers all configured route instructions with the simulator.
-    /// You can also use implicit conversion instead of explicitly calling Build().
     /// </remarks>
     public APISimulator Build()
     {
@@ -283,16 +312,4 @@ public class InstructionBuilder
         return simulator;
     }
 
-    /// <summary>
-    /// Implicitly converts the builder to an <see cref="APISimulator"/> by calling <see cref="Build"/>.
-    /// </summary>
-    /// <param name="builder">The builder to convert.</param>
-    /// <remarks>
-    /// This allows you to use the builder directly in contexts expecting an APISimulator
-    /// without explicitly calling Build().
-    /// </remarks>
-    public static implicit operator APISimulator(InstructionBuilder builder)
-    {
-        return builder.Build();
-    }
 }

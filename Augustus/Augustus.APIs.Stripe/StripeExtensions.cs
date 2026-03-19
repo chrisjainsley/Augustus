@@ -45,7 +45,7 @@ public static class StripeExtensions
 /// <summary>
 /// Wrapper around APISimulator that provides Stripe-specific fluent API at creation time.
 /// </summary>
-public class StripeMock
+public sealed class StripeMock
 {
     private readonly APISimulator apiSimulator;
 
@@ -285,7 +285,7 @@ public class StripeMock
 /// <summary>
 /// Provides access to Stripe route builders from an existing APISimulator.
 /// </summary>
-public class StripeRouteBuilder
+public sealed class StripeRouteBuilder
 {
     private readonly APISimulator apiSimulator;
 

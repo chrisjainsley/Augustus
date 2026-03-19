@@ -3,7 +3,7 @@ namespace Augustus;
 /// <summary>
 /// Route management extensions for the API simulator - supports RouteBuilder-based route configuration.
 /// </summary>
-public partial class APISimulator
+public sealed partial class APISimulator
 {
     private readonly List<RouteConfiguration> routes = new();
     private readonly object routesLock = new();
@@ -83,6 +83,17 @@ public partial class APISimulator
     }
 
     /// <summary>
+    /// Configures a route for the specified HTTP method.
+    /// </summary>
+    /// <param name="pattern">The URL pattern to match.</param>
+    /// <param name="httpVerb">The HTTP method to match.</param>
+    /// <returns>A <see cref="RouteBuilder"/> for configuring the route.</returns>
+    public RouteBuilder ForRoute(string pattern, HttpVerb httpVerb)
+    {
+        return new RouteBuilder(this, pattern, httpVerb.ToMethodString());
+    }
+
+    /// <summary>
     /// Adds a route configuration to the server (internal use by RouteBuilder).
     /// </summary>
     internal void AddRouteInternal(RouteConfiguration route)
@@ -99,6 +110,17 @@ public partial class APISimulator
     /// <param name="pattern">The URL pattern of the route to remove.</param>
     /// <param name="httpMethod">The HTTP method of the route to remove (or "*" for all methods).</param>
     /// <returns>True if the route was found and removed; otherwise, false.</returns>
+    /// <summary>
+    /// Removes a route from the server.
+    /// </summary>
+    /// <param name="pattern">The URL pattern of the route to remove.</param>
+    /// <param name="httpVerb">The HTTP method of the route to remove.</param>
+    /// <returns>True if the route was found and removed; otherwise, false.</returns>
+    public bool RemoveRoute(string pattern, HttpVerb httpVerb)
+    {
+        return RemoveRoute(pattern, httpVerb.ToMethodString());
+    }
+
     public bool RemoveRoute(string pattern, string httpMethod = "*")
     {
         lock (routesLock)

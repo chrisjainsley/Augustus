@@ -147,7 +147,7 @@ public class StripeTests
 
         // Add route-specific instruction
         var routeInstruction = new RouteInstruction("/api/test/{id}", "GET");
-        routeInstruction.Instructions.Add("Route-specific instruction");
+        routeInstruction.AddInstruction("Route-specific instruction");
         simulator.InstructionsContainer.AddRouteInstruction(routeInstruction);
 
         // Test getting instructions for specific route

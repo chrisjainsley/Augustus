@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 /// // DisposeAsync will be called automatically
 /// </code>
 /// </example>
-public partial class APISimulator : IAsyncDisposable
+public sealed partial class APISimulator : IAsyncDisposable
 {
     private readonly string apiName;
     private readonly APISimulatorOptions options;

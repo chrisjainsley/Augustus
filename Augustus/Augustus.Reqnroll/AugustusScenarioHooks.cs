@@ -15,7 +15,7 @@ using global::Reqnroll;
 /// separate simulator instances per collection to avoid cache path conflicts.
 /// </remarks>
 [Binding]
-public class AugustusScenarioHooks
+public sealed class AugustusScenarioHooks
 {
     private readonly ScenarioContext _scenarioContext;
     private readonly FeatureContext _featureContext;
