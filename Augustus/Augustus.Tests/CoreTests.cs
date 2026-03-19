@@ -9,7 +9,7 @@ public class CoreTests
     public async Task APISimulator_WithStaticResponse_ShouldReturnConfiguredJson()
     {
         // Arrange
-        var simulator = this.CreateAPISimulator()
+        var simulator = this.CreateAPISimulator(o => o.Port = 0)
             .ForGet("/api/test")
             .WithResponse(new { message = "Hello World" })
             .Add();
@@ -36,7 +36,7 @@ public class CoreTests
     public async Task APISimulator_DynamicRouteAddition_ShouldWorkAfterStart()
     {
         // Arrange
-        var simulator = this.CreateAPISimulator();
+        var simulator = this.CreateAPISimulator(o => o.Port = 0);
         await simulator.StartAsync();
 
         try
@@ -64,7 +64,7 @@ public class CoreTests
     public void APISimulator_RemoveRoute_ShouldRemoveConfiguredRoute()
     {
         // Arrange
-        var simulator = this.CreateAPISimulator()
+        var simulator = this.CreateAPISimulator(o => o.Port = 0)
             .ForGet("/api/test")
             .WithResponse(new { message = "test" })
             .Add();
@@ -80,7 +80,7 @@ public class CoreTests
     public async Task APISimulator_ClearRoutes_ShouldRemoveAllRoutes()
     {
         // Arrange
-        var simulator = this.CreateAPISimulator()
+        var simulator = this.CreateAPISimulator(o => o.Port = 0)
             .ForGet("/api/test1")
             .WithResponse(new { message = "test1" })
             .Add()
@@ -120,7 +120,7 @@ public class CoreTests
 
         try
         {
-            var simulator = this.CreateAPISimulator()
+            var simulator = this.CreateAPISimulator(o => o.Port = 0)
                 .ForGet("/api/file-test")
                 .WithJsonFile(tempFile)
                 .Add();

@@ -10,7 +10,7 @@ public class StripeIntegrationTests
     public async Task StripeMock_WithDefaultResponse_ShouldReturnRealisticStripeCustomer()
     {
         // Arrange
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.Customers().Get().UseDefault();
 
         await simulator.StartAsync();
@@ -36,7 +36,7 @@ public class StripeIntegrationTests
     public async Task StripeMock_MultipleEndpoints_ShouldAllWork()
     {
         // Arrange
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.Customers().Get().UseDefault();
         simulator.Customers().List().UseDefault();
         simulator.Charges().Get().UseDefault();
@@ -73,7 +73,7 @@ public class StripeIntegrationTests
     public async Task StripeMock_DynamicRouteAddition_AfterStart()
     {
         // Arrange
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         await simulator.StartAsync();
 
         try
@@ -98,7 +98,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_NewResources_PaymentMethods()
     {
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.PaymentMethods().Get().UseDefault();
         simulator.PaymentMethods().List().UseDefault();
 
@@ -123,7 +123,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_NewResources_Refunds()
     {
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.Refunds().Get().UseDefault();
         simulator.Refunds().Create().UseDefault();
 
@@ -150,7 +150,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_NewResources_Invoices()
     {
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.Invoices().Get().UseDefault();
         simulator.Invoices().Finalize().UseDefault();
         simulator.Invoices().Pay().UseDefault();
@@ -182,7 +182,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_NewResources_Products()
     {
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.Products().Get().UseDefault();
         simulator.Products().List().UseDefault();
 
@@ -207,7 +207,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_NewResources_Balance()
     {
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.Balance().Get().UseDefault();
 
         await simulator.StartAsync();
@@ -228,7 +228,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_UseAllDefaults_ShouldRegisterAllRoutes()
     {
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.UseAllDefaults();
 
         await simulator.StartAsync();
@@ -273,7 +273,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_WithError_ShouldReturnErrorResponse()
     {
-        var simulator = this.CreateStripeMock();
+        var simulator = this.CreateStripeMock(o => o.Port = 0);
         simulator.Customers().Get("cus_invalid").WithError(404,
             StripeErrors.InvalidRequestError("No such customer: 'cus_invalid'", param: "id"));
 
@@ -298,7 +298,7 @@ public class StripeIntegrationTests
     [Fact]
     public async Task StripeMock_UseAllDefaults_IsChainable()
     {
-        var simulator = this.CreateStripeMock()
+        var simulator = this.CreateStripeMock(o => o.Port = 0)
             .UseAllDefaults();
 
         simulator.Should().NotBeNull();
