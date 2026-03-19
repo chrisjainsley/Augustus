@@ -17,8 +17,10 @@ internal static class CacheKeyComputer
         sha.AppendData(Encoding.UTF8.GetBytes(queryString ?? string.Empty));
         sha.AppendData(Separator);
 
-        var bodyToHash = dynamicContentFields != null && dynamicContentFields.Any()
-            ? CacheKeyBodyNormalizer.NormalizeForCacheKey(body, dynamicContentFields)
+        var materializedFields = dynamicContentFields as IReadOnlyCollection<string>
+            ?? (dynamicContentFields != null ? dynamicContentFields.ToArray() : null);
+        var bodyToHash = materializedFields is { Count: > 0 }
+            ? CacheKeyBodyNormalizer.NormalizeForCacheKey(body, materializedFields)
             : body;
         sha.AppendData(bodyToHash);
         if (instructions is { Count: > 0 })

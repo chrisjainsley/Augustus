@@ -141,9 +141,18 @@ public sealed class APISimulatorOptions
     /// <summary>
     /// Validates that all required configuration is present and correct.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <see cref="CacheOnly"/> is <c>true</c> but <see cref="EnableCaching"/> is <c>false</c>
+    /// or <see cref="AutoRemoveStaleCache"/> is <c>true</c>, indicating an invalid configuration.
+    /// </exception>
     public void Validate()
     {
-        // Currently no validation rules beyond what setters enforce.
-        // Cache-only invariants are enforced by the CacheOnly property setter.
+        if (_cacheOnly)
+        {
+            if (!EnableCaching)
+                throw new InvalidOperationException("CacheOnly requires EnableCaching to be true.");
+            if (AutoRemoveStaleCache)
+                throw new InvalidOperationException("CacheOnly requires AutoRemoveStaleCache to be false.");
+        }
     }
 }

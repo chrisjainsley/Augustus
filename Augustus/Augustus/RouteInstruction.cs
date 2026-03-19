@@ -35,7 +35,7 @@ public sealed class RouteInstruction
     /// <value>
     /// A list of instruction strings that guide AI response generation for matching requests.
     /// </value>
-    public IReadOnlyList<string> Instructions => _instructions;
+    public IReadOnlyList<string> Instructions => _instructions.AsReadOnly();
 
     private readonly List<string> _instructions = new();
 
@@ -49,6 +49,7 @@ public sealed class RouteInstruction
     public RouteInstruction(string pattern, string httpMethod = "*")
     {
         Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
+        ArgumentNullException.ThrowIfNull(httpMethod, nameof(httpMethod));
         HttpMethod = httpMethod.ToUpperInvariant();
         CompilePattern();
     }
@@ -300,7 +301,6 @@ public sealed class InstructionBuilder
     /// <returns>The <see cref="APISimulator"/> that was being configured.</returns>
     /// <remarks>
     /// This method registers all configured route instructions with the simulator.
-    /// You can also use implicit conversion instead of explicitly calling Build().
     /// </remarks>
     public APISimulator Build()
     {
