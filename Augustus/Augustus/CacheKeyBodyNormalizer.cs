@@ -18,8 +18,8 @@ internal static class CacheKeyBodyNormalizer
             if (node is null)
                 return body;
 
-            NormalizeNode(node, propertyNames);
-            return JsonSerializer.SerializeToUtf8Bytes(node);
+            var changed = NormalizeNode(node, propertyNames);
+            return changed ? JsonSerializer.SerializeToUtf8Bytes(node) : body;
         }
         catch (JsonException)
         {
@@ -27,26 +27,26 @@ internal static class CacheKeyBodyNormalizer
         }
     }
 
-    private static void NormalizeNode(JsonNode node, IReadOnlyCollection<string> propertyNames)
+    private static bool NormalizeNode(JsonNode node, IReadOnlyCollection<string> propertyNames)
     {
+        var changed = false;
         switch (node)
         {
             case JsonObject obj:
                 foreach (var name in propertyNames)
                 {
-                    if (obj.ContainsKey(name))
+                    if (name is not null && obj.ContainsKey(name))
                     {
                         obj[name] = NormalizedPlaceholder;
+                        changed = true;
                     }
                 }
 
-                // Safe to iterate directly — the mutation loop above only replaces
-                // values of matched keys; this loop only recurses into children.
                 foreach (var kvp in obj)
                 {
                     if (kvp.Value is JsonObject or JsonArray)
                     {
-                        NormalizeNode(kvp.Value, propertyNames);
+                        changed |= NormalizeNode(kvp.Value, propertyNames);
                     }
                 }
                 break;
@@ -56,10 +56,11 @@ internal static class CacheKeyBodyNormalizer
                 {
                     if (item is JsonObject or JsonArray)
                     {
-                        NormalizeNode(item, propertyNames);
+                        changed |= NormalizeNode(item, propertyNames);
                     }
                 }
                 break;
         }
+        return changed;
     }
 }

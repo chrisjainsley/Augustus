@@ -7,6 +7,12 @@ using System.Text.Json;
 /// <summary>
 /// Response strategy that proxies requests to a real API and caches the responses.
 /// </summary>
+/// <remarks>
+/// Per-route dynamic content fields are supplied via the constructor (typically from
+/// <see cref="RouteBuilder.WithDynamicFields"/>). Global <see cref="APISimulatorOptions.DynamicContentFields"/>
+/// are applied by the default handlers (<see cref="ProxyDefaultHandler"/>, <see cref="AIDefaultHandler"/>)
+/// and do not automatically apply to per-route strategies.
+/// </remarks>
 public class RealApiProxyStrategy : IResponseStrategy, IDisposable
 {
     private readonly string baseUrl;
@@ -14,7 +20,7 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
     private readonly CacheManager? cacheManager;
     private readonly HttpClient httpClient;
     private readonly Dictionary<string, string> defaultHeaders;
-    private readonly List<string>? dynamicContentFields;
+    private readonly IReadOnlyList<string>? dynamicContentFields;
 
     public RealApiProxyStrategy(string baseUrl, AIOptions? options = null, Dictionary<string, string>? headers = null, IReadOnlyList<string>? dynamicContentFields = null)
     {
@@ -24,9 +30,7 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
         this.baseUrl = baseUrl.TrimEnd('/');
         this.enableCaching = options?.EnableCaching ?? true;
         this.defaultHeaders = headers ?? new Dictionary<string, string>();
-        this.dynamicContentFields = dynamicContentFields is { Count: > 0 }
-            ? dynamicContentFields.ToList()
-            : null;
+        this.dynamicContentFields = dynamicContentFields;
 
         httpClient = new HttpClient();
 

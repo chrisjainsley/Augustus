@@ -70,7 +70,7 @@ public class CacheKeyBodyNormalizerTests
     }
 
     [Fact]
-    public void NormalizeForCacheKey_DifferentGuids_ProduceIdenticalOutput()
+    public void NormalizeForCacheKey_DifferentDynamicValues_ProduceIdenticalOutput()
     {
         var body1 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_abc123\",\"model\":\"gpt-4\"}");
         var body2 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_xyz789\",\"model\":\"gpt-4\"}");

@@ -126,7 +126,7 @@ public class CacheKeyTests
     }
 
     [Fact]
-    public void CacheKeyComputer_WithNormalization_DifferentGuids_ProduceSameHash()
+    public void CacheKeyComputer_WithNormalization_DifferentDynamicValues_ProduceSameHash()
     {
         var body1 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_abc123\",\"model\":\"gpt-4\"}");
         var body2 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_xyz789\",\"model\":\"gpt-4\"}");
@@ -139,7 +139,7 @@ public class CacheKeyTests
     }
 
     [Fact]
-    public void CacheKeyComputer_WithoutNormalization_DifferentGuids_ProduceDifferentHashes()
+    public void CacheKeyComputer_WithoutNormalization_DifferentDynamicValues_ProduceDifferentHashes()
     {
         var body1 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_abc123\",\"model\":\"gpt-4\"}");
         var body2 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_xyz789\",\"model\":\"gpt-4\"}");

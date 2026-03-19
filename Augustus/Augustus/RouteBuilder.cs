@@ -93,13 +93,18 @@ public class RouteBuilder
 
     /// <summary>
     /// Specifies JSON property names whose values should be normalized when computing cache keys.
-    /// Call this before <c>UseRealApi</c> so the strategy captures these fields at construction time.
+    /// Can be called before or after <c>UseRealApi</c>; fields are read at request time.
     /// </summary>
     /// <param name="propertyNames">The property names to normalize.</param>
     /// <returns>This <see cref="RouteBuilder"/> for method chaining.</returns>
     public RouteBuilder WithDynamicFields(params string[] propertyNames)
     {
-        dynamicContentFields.AddRange(propertyNames);
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        foreach (var name in propertyNames)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                dynamicContentFields.Add(name);
+        }
         return this;
     }
 
