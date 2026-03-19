@@ -7,7 +7,48 @@ on:
 
 jobs:
   build-and-test:
-    name: Build and Test
+    name: Test (${{ matrix.framework }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net6.0, net7.0, net8.0, net9.0, net10.0]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Augustus/Augustus.Tests/Augustus.Tests.csproj
+
+      - name: Build
+        run: dotnet build Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-restore --framework ${{ matrix.framework }}
+
+      - name: Run tests
+        run: dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework ${{ matrix.framework }} --logger "trx;LogFileName=test-results-${{ matrix.framework }}.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.framework }}
+          path: '**/*.trx'
+          if-no-files-found: ignore
+
+  reqnroll-tests:
+    name: Reqnroll Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -20,31 +61,22 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
-            8.0.x
             9.0.x
             10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore Augustus/Augustus.sln
+        run: dotnet restore Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj
 
       - name: Build
-        run: dotnet build Augustus/Augustus.sln --configuration Release --no-restore
+        run: dotnet build Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-restore
 
-      - name: Run Augustus tests
-        run: |
-          for fw in net8.0 net9.0 net10.0; do
-            echo "::group::Testing $fw"
-            dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework $fw --logger "trx;LogFileName=test-results-$fw.trx"
-            echo "::endgroup::"
-          done
-
-      - name: Run Augustus.Reqnroll tests
+      - name: Run tests
         run: dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=reqnroll-test-results.trx"
 
       - name: Publish test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: reqnroll-test-results
           path: '**/*.trx'
           if-no-files-found: ignore
