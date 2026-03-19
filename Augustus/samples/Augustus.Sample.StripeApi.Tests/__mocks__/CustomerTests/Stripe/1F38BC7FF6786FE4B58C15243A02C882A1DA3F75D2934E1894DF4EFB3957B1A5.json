@@ -1,0 +1,14 @@
+{
+  "RequestHash": "1F38BC7FF6786FE4B58C15243A02C882A1DA3F75D2934E1894DF4EFB3957B1A5",
+  "Response": "{\n  \u0022object\u0022: \u0022customer\u0022,\n  \u0022id\u0022: \u0022cus_test123\u0022,\n  \u0022name\u0022: \u0022John Doe\u0022,\n  \u0022email\u0022: \u0022john.doe@example.com\u0022\n}",
+  "OriginalRequest": "curl -X GET -H \u0022Host: localhost:9052\u0022 \u0022http://localhost:9052/v1/customers/cus_test123\u0022",
+  "Instructions": [
+    "You are a Stripe API simulator. You only respond to curl commands.",
+    "Only output the response body. Always output the full body you would expect from the API.",
+    "Generate realistic, properly formatted responses that match the API\u0027s expected structure and data types.",
+    "Use appropriate HTTP status codes in your responses when applicable.",
+    "Return realistic Stripe API JSON responses. Always return raw JSON only, no markdown.",
+    "Return a customer object with \u0022object\u0022: \u0022customer\u0022, the \u0022id\u0022 from the URL path, \u0022name\u0022, and \u0022email\u0022 fields."
+  ],
+  "Timestamp": "2026-03-18T20:42:18.7641281Z"
+}

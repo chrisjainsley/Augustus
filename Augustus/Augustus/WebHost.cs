@@ -112,6 +112,8 @@ internal class WebHost : IAsyncDisposable
         if (disposed)
             return;
 
+        disposed = true;
+
         try
         {
             await StopAsync().ConfigureAwait(false);
@@ -124,7 +126,6 @@ internal class WebHost : IAsyncDisposable
 
         (requestHandler as IDisposable)?.Dispose();
         startStopLock.Dispose();
-        disposed = true;
         GC.SuppressFinalize(this);
     }
 }

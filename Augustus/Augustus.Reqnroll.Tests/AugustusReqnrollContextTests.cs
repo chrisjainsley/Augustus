@@ -66,7 +66,6 @@ public class AugustusReqnrollContextTests : IDisposable
     {
         return new APISimulator(apiName, new APISimulatorOptions
         {
-            OpenAIApiKey = "test-key",
             EnableCaching = false
         });
     }

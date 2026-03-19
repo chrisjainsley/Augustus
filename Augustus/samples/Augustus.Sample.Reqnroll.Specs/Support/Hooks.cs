@@ -1,3 +1,4 @@
+using Augustus.AI;
 using Augustus.Extensions;
 using Augustus.Reqnroll;
 using Reqnroll;
@@ -19,12 +20,15 @@ public class Hooks
 
         _simulator = new Hooks().CreateStripeSimulator(opt =>
         {
-            opt.OpenAIApiKey = apiKey;
-            opt.OpenAIModel = TestConfiguration.GetModel();
             opt.Port = 9060;
-        })
-        .WithInstruction("Return realistic Stripe API JSON responses.")
-        .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\", a realistic \"id\" starting with \"ch_\", the amount and currency from the request, and \"status\": \"succeeded\".");
+        });
+        _simulator.UseAI(new AIOptions
+        {
+            OpenAIApiKey = apiKey,
+            OpenAIModel = TestConfiguration.GetModel()
+        });
+        _simulator.AddInstruction("Return realistic Stripe API JSON responses.");
+        _simulator.AddInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\", a realistic \"id\" starting with \"ch_\", the amount and currency from the request, and \"status\": \"succeeded\".");
 
         AugustusReqnrollContext.Register(_simulator);
 
