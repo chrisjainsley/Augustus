@@ -4,7 +4,7 @@ Your purpose is to catch every issue that would come up in a real PR review — 
 
 ## Step 1: Gather all uncommitted changes
 
-Run this command to see everything that differs from the current branch's base — staged, unstaged, AND untracked files:
+Run these commands to see all uncommitted changes — staged, unstaged, AND untracked files:
 
 ```bash
 git status
