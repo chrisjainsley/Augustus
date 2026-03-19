@@ -36,7 +36,7 @@ internal static partial class StripeDefaults
             unit_amount_decimal = $"{unitAmount}"
         };
 
-        return JsonSerializer.Serialize(price, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(price, SerializerOptions);
     }
 
     private static string GeneratePriceList()

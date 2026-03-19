@@ -121,7 +121,7 @@ internal static partial class StripeDefaults
             transfer_group = (string?)null
         };
 
-        return JsonSerializer.Serialize(charge, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(charge, SerializerOptions);
     }
 
     private static string GenerateChargeList()

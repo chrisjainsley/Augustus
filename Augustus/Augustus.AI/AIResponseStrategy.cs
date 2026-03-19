@@ -24,6 +24,9 @@ public class AIResponseStrategy : IResponseStrategy, IDisposable
 
         options.Validate();
 
+        if (options.UseAzureOpenAI)
+            throw new NotSupportedException("AIResponseStrategy does not support Azure OpenAI. Use the UseAI() extension method with AIDefaultHandler for Azure support.");
+
         openAiClient = new OpenAIClient(options.OpenAIApiKey);
         requestHandler = new OpenAIRequestHandler(openAiClient, options);
 
@@ -85,13 +88,9 @@ public class AIResponseStrategy : IResponseStrategy, IDisposable
                 {
                     await cacheManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions);
                 }
-                catch (IOException ex)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    Console.WriteLine($"Warning: Failed to cache response (IO error): {ex.Message}");
-                }
-                catch (UnauthorizedAccessException ex)
-                {
-                    Console.WriteLine($"Warning: Failed to cache response (Unauthorized): {ex.Message}");
+                    Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
                 }
             }
 

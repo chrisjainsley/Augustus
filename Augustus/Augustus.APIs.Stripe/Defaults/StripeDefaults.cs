@@ -7,8 +7,7 @@ using System.Text.Json;
 /// </summary>
 internal static partial class StripeDefaults
 {
-    private static readonly Random random = new Random();
-    private static readonly object randomLock = new object();
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
 
     public static string GetDefaultResponse(string resourceType)
     {
@@ -79,7 +78,7 @@ internal static partial class StripeDefaults
             url = url
         };
 
-        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(list, SerializerOptions);
     }
 
     private static string GenerateDeleted(string objectType)
@@ -91,7 +90,7 @@ internal static partial class StripeDefaults
             "invoiceitem" => "ii",
             "product" => "prod",
             "coupon" => "coupon",
-            _ => objectType.Length >= 3 ? objectType.Substring(0, 3) : objectType
+            _ => objectType.Length >= 3 ? objectType[..3] : objectType
         };
 
         var deleted = new
@@ -101,19 +100,11 @@ internal static partial class StripeDefaults
             deleted = true
         };
 
-        return JsonSerializer.Serialize(deleted, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(deleted, SerializerOptions);
     }
 
-    /// <summary>
-    /// Thread-safe wrapper for Random.Next to prevent race conditions in multi-threaded scenarios.
-    /// </summary>
     internal static int GetRandomInt(int minValue, int maxValue)
-    {
-        lock (randomLock)
-        {
-            return random.Next(minValue, maxValue);
-        }
-    }
+        => Random.Shared.Next(minValue, maxValue);
 
     internal static string GenerateRandomId(int length = 24)
     {

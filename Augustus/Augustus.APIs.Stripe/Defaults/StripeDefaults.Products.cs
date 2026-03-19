@@ -28,7 +28,7 @@ internal static partial class StripeDefaults
             url = (string?)null
         };
 
-        return JsonSerializer.Serialize(product, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(product, SerializerOptions);
     }
 
     private static string GenerateProductList()

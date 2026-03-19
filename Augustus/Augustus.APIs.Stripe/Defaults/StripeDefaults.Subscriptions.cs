@@ -133,7 +133,7 @@ internal static partial class StripeDefaults
             trial_start = (long?)null
         };
 
-        return JsonSerializer.Serialize(sub, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(sub, SerializerOptions);
     }
 
     private static string GenerateSubscriptionList()

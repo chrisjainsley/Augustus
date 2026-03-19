@@ -61,7 +61,7 @@ internal static partial class StripeDefaults
             transfer_group = (string?)null
         };
 
-        return JsonSerializer.Serialize(pi, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(pi, SerializerOptions);
     }
 
     private static string GeneratePaymentIntentList()

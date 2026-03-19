@@ -42,7 +42,7 @@ internal static partial class StripeDefaults
             usage = "off_session"
         };
 
-        return JsonSerializer.Serialize(si, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(si, SerializerOptions);
     }
 
     private static string GenerateSetupIntentList()

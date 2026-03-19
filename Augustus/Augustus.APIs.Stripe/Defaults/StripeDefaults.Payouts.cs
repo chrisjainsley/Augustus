@@ -34,7 +34,7 @@ internal static partial class StripeDefaults
             type = "bank_account"
         };
 
-        return JsonSerializer.Serialize(payout, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(payout, SerializerOptions);
     }
 
     private static string GeneratePayoutList()

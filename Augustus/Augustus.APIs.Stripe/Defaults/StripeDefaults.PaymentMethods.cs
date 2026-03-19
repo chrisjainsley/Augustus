@@ -59,7 +59,7 @@ internal static partial class StripeDefaults
             type = "card"
         };
 
-        return JsonSerializer.Serialize(pm, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(pm, SerializerOptions);
     }
 
     private static string GeneratePaymentMethodList()

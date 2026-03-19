@@ -31,7 +31,7 @@ internal static partial class StripeDefaults
             type = "customer.created"
         };
 
-        return JsonSerializer.Serialize(evt, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(evt, SerializerOptions);
     }
 
     private static string GenerateEventList()

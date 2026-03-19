@@ -25,7 +25,7 @@ internal static partial class StripeDefaults
             valid = true
         };
 
-        return JsonSerializer.Serialize(coupon, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(coupon, SerializerOptions);
     }
 
     private static string GenerateCouponList()

@@ -37,7 +37,7 @@ internal static partial class StripeDefaults
             test_clock = (string?)null
         };
 
-        return JsonSerializer.Serialize(customer, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(customer, SerializerOptions);
     }
 
     private static string GenerateCustomerList()

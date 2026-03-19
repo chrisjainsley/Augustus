@@ -37,7 +37,7 @@ internal static partial class StripeDefaults
             type = "charge"
         };
 
-        return JsonSerializer.Serialize(bt, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(bt, SerializerOptions);
     }
 
     private static string GenerateBalanceTransactionList()

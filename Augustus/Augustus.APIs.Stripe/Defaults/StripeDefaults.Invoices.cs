@@ -85,7 +85,7 @@ internal static partial class StripeDefaults
             webhooks_delivered_at = (long?)null
         };
 
-        return JsonSerializer.Serialize(invoice, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(invoice, SerializerOptions);
     }
 
     private static string GenerateInvoiceList()

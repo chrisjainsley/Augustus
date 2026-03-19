@@ -24,7 +24,7 @@ internal static partial class StripeDefaults
             transfer_reversal = (string?)null
         };
 
-        return JsonSerializer.Serialize(refund, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(refund, SerializerOptions);
     }
 
     private static string GenerateRefundList()

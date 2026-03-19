@@ -61,7 +61,7 @@ internal static partial class StripeDefaults
             status = status
         };
 
-        return JsonSerializer.Serialize(dispute, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(dispute, SerializerOptions);
     }
 
     private static string GenerateDisputeList()

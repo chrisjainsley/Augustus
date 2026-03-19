@@ -47,7 +47,7 @@ internal static partial class StripeDefaults
             unit_amount_decimal = $"{amount}"
         };
 
-        return JsonSerializer.Serialize(invoiceItem, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(invoiceItem, SerializerOptions);
     }
 
     private static string GenerateInvoiceItemList()

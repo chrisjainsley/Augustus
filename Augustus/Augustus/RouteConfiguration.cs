@@ -40,13 +40,14 @@ public class RouteConfiguration
     {
         try
         {
-            // Escape the pattern first so metacharacters are treated as literals,
-            // then substitute our supported placeholders with regex tokens.
-            // Note: Regex.Escape escapes '{' but not '}', so our tokens become \{id} and \{*}
-            var escaped = Regex.Escape(pattern);
-            var regexPattern = escaped
-                .Replace(@"\{id}", @"[^/]+")
-                .Replace(@"\{*}", ".*");
+            // Replace placeholders before escaping so metacharacters in the rest
+            // of the pattern are treated as literals (same approach as RouteInstruction)
+            var regexPattern = Regex.Escape(
+                pattern
+                    .Replace("{id}", "\x00ID\x00")
+                    .Replace("{*}", "\x00WILD\x00"))
+                .Replace("\x00ID\x00", @"[^/]+")
+                .Replace("\x00WILD\x00", ".*");
 
             return new Regex($"^{regexPattern}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         }

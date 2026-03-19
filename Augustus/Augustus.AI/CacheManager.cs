@@ -75,11 +75,7 @@ internal class CacheManager
                 {
                     File.Delete(file);
                 }
-                catch (IOException ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Warning: Could not delete cache file {file}: {ex.Message}");
-                }
-                catch (UnauthorizedAccessException ex)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     System.Diagnostics.Debug.WriteLine($"Warning: Could not delete cache file {file}: {ex.Message}");
                 }

@@ -40,8 +40,11 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
             var queryString = httpContext.Request.QueryString.Value ?? "";
             var method = httpContext.Request.Method;
 
-            // Generate cache key
-            var cacheKey = GenerateCacheKey(method, path, queryString);
+            // Read body for cache key and proxying
+            var bodyBytes = await httpContext.Request.ReadBodyBytesAsync(cancellationToken);
+
+            // Generate cache key (includes body for correct POST/PUT/PATCH caching)
+            var cacheKey = CacheKeyComputer.ComputeCacheKey(method, path, queryString, bodyBytes);
 
             // Try cache first
             if (cacheManager != null)
@@ -60,9 +63,10 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
             using (var request = new HttpRequestMessage(new HttpMethod(method), realUrl))
             {
                 // Copy headers (skip pseudo-headers and Host)
-                foreach (var header in httpContext.Request.Headers
-                    .Where(h => !h.Key.StartsWith(":") && !h.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)))
+                foreach (var header in httpContext.Request.Headers)
                 {
+                    if (header.Key.StartsWith(":") || header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase))
+                        continue;
                     request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
                 }
 
@@ -72,26 +76,15 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
                     request.Headers.TryAddWithoutValidation(header.Key, header.Value);
                 }
 
-                // Copy body for POST/PUT/PATCH
-                if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) ||
-                    method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
-                    method.Equals("PATCH", StringComparison.OrdinalIgnoreCase))
+                // Copy body for POST/PUT/PATCH (using already-read bodyBytes)
+                if (bodyBytes.Length > 0 &&
+                    (method.Equals("POST", StringComparison.OrdinalIgnoreCase) ||
+                     method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
+                     method.Equals("PATCH", StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (httpContext.Request.Body.CanSeek)
-                    {
-                        httpContext.Request.Body.Position = 0;
-                    }
-
-                    string bodyContent;
-                    using (var reader = new StreamReader(httpContext.Request.Body))
-                    {
-                        bodyContent = await reader.ReadToEndAsync();
-                    }
-                    if (!string.IsNullOrEmpty(bodyContent))
-                    {
-                        request.Content = new StringContent(bodyContent, System.Text.Encoding.UTF8,
-                            httpContext.Request.ContentType ?? "application/json");
-                    }
+                    request.Content = new ByteArrayContent(bodyBytes);
+                    request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                        httpContext.Request.ContentType ?? "application/json");
                 }
 
                 // Make the request
@@ -110,13 +103,9 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
                                 $"{method} {realUrl}",
                                 new List<string> { "Real API response" });
                         }
-                        catch (IOException ex)
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                         {
-                            Console.WriteLine($"Warning: Failed to cache response (IO error): {ex.Message}");
-                        }
-                        catch (UnauthorizedAccessException ex)
-                        {
-                            Console.WriteLine($"Warning: Failed to cache response (Unauthorized): {ex.Message}");
+                            Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
                         }
                     }
 
@@ -142,13 +131,6 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
             System.Diagnostics.Debug.WriteLine($"Proxy request cancelled: {ex}");
             await WriteErrorResponse(httpContext, "Request cancelled", 499, cancellationToken);
         }
-    }
-
-    private string GenerateCacheKey(string method, string path, string queryString)
-    {
-        var combined = $"{method}|{path}|{queryString}";
-        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combined));
-        return Convert.ToHexString(hash);
     }
 
     private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken)

@@ -37,6 +37,6 @@ internal static partial class StripeDefaults
             }
         };
 
-        return JsonSerializer.Serialize(balance, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(balance, SerializerOptions);
     }
 }

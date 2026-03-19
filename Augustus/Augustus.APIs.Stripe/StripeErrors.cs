@@ -7,6 +7,8 @@ using System.Text.Json;
 /// </summary>
 public static class StripeErrors
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
+
     public static string InvalidRequestError(string message, string? param = null)
     {
         return GenerateErrorJson("invalid_request_error", message, param: param);
@@ -59,6 +61,6 @@ public static class StripeErrors
             ["error"] = errorObj
         };
 
-        return JsonSerializer.Serialize(envelope, new JsonSerializerOptions { WriteIndented = false });
+        return JsonSerializer.Serialize(envelope, SerializerOptions);
     }
 }
