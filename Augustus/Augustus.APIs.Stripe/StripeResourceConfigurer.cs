@@ -64,4 +64,17 @@ public class StripeResourceConfigurer
             .WithJsonFile(filePath)
             .Add();
     }
+
+    /// <summary>
+    /// Uses a Stripe error response with the specified status code.
+    /// </summary>
+    /// <param name="statusCode">The HTTP status code to return.</param>
+    /// <param name="errorJson">The Stripe error JSON envelope (use <see cref="StripeErrors"/> to generate).</param>
+    public void WithError(int statusCode, string errorJson)
+    {
+        apiSimulator.ForRoute(pattern, httpMethod)
+            .WithStatusCode(statusCode)
+            .WithResponse(errorJson)
+            .Add();
+    }
 }
