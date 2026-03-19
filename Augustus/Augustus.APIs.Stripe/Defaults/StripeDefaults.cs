@@ -91,7 +91,7 @@ internal static partial class StripeDefaults
             "invoiceitem" => "ii",
             "product" => "prod",
             "coupon" => "coupon",
-            _ => objectType.Substring(0, 3)
+            _ => objectType.Length >= 3 ? objectType.Substring(0, 3) : objectType
         };
 
         var deleted = new

@@ -55,6 +55,10 @@ internal class CacheManager
         {
             return null;
         }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     public void ClearCache()
@@ -71,7 +75,11 @@ internal class CacheManager
                 {
                     File.Delete(file);
                 }
-                catch (Exception ex)
+                catch (IOException ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Warning: Could not delete cache file {file}: {ex.Message}");
+                }
+                catch (UnauthorizedAccessException ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"Warning: Could not delete cache file {file}: {ex.Message}");
                 }

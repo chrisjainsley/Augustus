@@ -59,13 +59,11 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
             var realUrl = $"{baseUrl}{path}{queryString}";
             using (var request = new HttpRequestMessage(new HttpMethod(method), realUrl))
             {
-                // Copy headers
-                foreach (var header in httpContext.Request.Headers)
+                // Copy headers (skip pseudo-headers and Host)
+                foreach (var header in httpContext.Request.Headers
+                    .Where(h => !h.Key.StartsWith(":") && !h.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (!header.Key.StartsWith(":") && !header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase))
-                    {
-                        request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
-                    }
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
                 }
 
                 // Add default headers
@@ -84,7 +82,11 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
                         httpContext.Request.Body.Position = 0;
                     }
 
-                    var bodyContent = await new StreamReader(httpContext.Request.Body).ReadToEndAsync();
+                    string bodyContent;
+                    using (var reader = new StreamReader(httpContext.Request.Body))
+                    {
+                        bodyContent = await reader.ReadToEndAsync();
+                    }
                     if (!string.IsNullOrEmpty(bodyContent))
                     {
                         request.Content = new StringContent(bodyContent, System.Text.Encoding.UTF8,
@@ -108,9 +110,13 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
                                 $"{method} {realUrl}",
                                 new List<string> { "Real API response" });
                         }
-                        catch (Exception ex)
+                        catch (IOException ex)
                         {
-                            Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
+                            Console.WriteLine($"Warning: Failed to cache response (IO error): {ex.Message}");
+                        }
+                        catch (UnauthorizedAccessException ex)
+                        {
+                            Console.WriteLine($"Warning: Failed to cache response (Unauthorized): {ex.Message}");
                         }
                     }
 
@@ -121,10 +127,20 @@ public class RealApiProxyStrategy : IResponseStrategy, IDisposable
                 }
             }
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Proxy error: {ex}");
+            System.Diagnostics.Debug.WriteLine($"Proxy HTTP error: {ex}");
             await WriteErrorResponse(httpContext, "Failed to proxy request to real API", 502, cancellationToken);
+        }
+        catch (TaskCanceledException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Proxy request timeout: {ex}");
+            await WriteErrorResponse(httpContext, "Request timeout while proxying to real API", 504, cancellationToken);
+        }
+        catch (OperationCanceledException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Proxy request cancelled: {ex}");
+            await WriteErrorResponse(httpContext, "Request cancelled", 499, cancellationToken);
         }
     }
 

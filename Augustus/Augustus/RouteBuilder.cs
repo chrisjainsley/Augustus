@@ -9,6 +9,7 @@ public class RouteBuilder
     private readonly string pattern;
     private readonly string httpMethod;
     private IResponseStrategy? responseStrategy;
+    private Func<int, IResponseStrategy>? strategyFactory;
     private int statusCode = 200;
     private readonly List<string> instructions = new();
 
@@ -26,7 +27,8 @@ public class RouteBuilder
     /// <returns>This <see cref="RouteBuilder"/> for method chaining.</returns>
     public RouteBuilder WithResponse(string jsonResponse)
     {
-        responseStrategy = new StaticResponseStrategy(jsonResponse, statusCode);
+        strategyFactory = code => new StaticResponseStrategy(jsonResponse, code);
+        responseStrategy = strategyFactory(statusCode);
         return this;
     }
 
@@ -37,7 +39,8 @@ public class RouteBuilder
     /// <returns>This <see cref="RouteBuilder"/> for method chaining.</returns>
     public RouteBuilder WithResponse(object responseObject)
     {
-        responseStrategy = new StaticResponseStrategy(responseObject, statusCode);
+        strategyFactory = code => new StaticResponseStrategy(responseObject, code);
+        responseStrategy = strategyFactory(statusCode);
         return this;
     }
 
@@ -48,7 +51,8 @@ public class RouteBuilder
     /// <returns>This <see cref="RouteBuilder"/> for method chaining.</returns>
     public RouteBuilder WithJsonFile(string filePath)
     {
-        responseStrategy = new FileResponseStrategy(filePath, statusCode);
+        strategyFactory = code => new FileResponseStrategy(filePath, code);
+        responseStrategy = strategyFactory(statusCode);
         return this;
     }
 
@@ -61,16 +65,9 @@ public class RouteBuilder
     {
         this.statusCode = statusCode;
 
-        // If a strategy is already set, recreate it with the new status code
-        if (responseStrategy is StaticResponseStrategy staticStrategy)
+        if (strategyFactory != null)
         {
-            // We need to store the JSON to recreate the strategy
-            // For now, just update the statusCode field
-            // The strategy will be created with the right status code when Add() is called
-        }
-        else if (responseStrategy is FileResponseStrategy fileStrategy)
-        {
-            // Similar situation for file strategy
+            responseStrategy = strategyFactory(statusCode);
         }
 
         return this;
@@ -83,6 +80,7 @@ public class RouteBuilder
     /// <returns>This <see cref="RouteBuilder"/> for method chaining.</returns>
     public RouteBuilder WithStrategy(IResponseStrategy strategy)
     {
+        strategyFactory = null;
         responseStrategy = strategy ?? throw new ArgumentNullException(nameof(strategy));
         return this;
     }
@@ -141,56 +139,56 @@ public class RouteBuilder
     /// <summary>
     /// Registers this route's instructions and configuration, then starts a new route for GET requests.
     /// </summary>
-    /// <param name="pattern">The URL pattern for the new GET route.</param>
+    /// <param name="newPattern">The URL pattern for the new GET route.</param>
     /// <returns>A new <see cref="RouteBuilder"/> for the GET route.</returns>
-    public RouteBuilder ForGet(string pattern)
+    public RouteBuilder ForGet(string newPattern)
     {
         Add();
-        return new RouteBuilder(apiSimulator, pattern, "GET");
+        return new RouteBuilder(apiSimulator, newPattern, "GET");
     }
 
     /// <summary>
     /// Registers this route's instructions and configuration, then starts a new route for POST requests.
     /// </summary>
-    /// <param name="pattern">The URL pattern for the new POST route.</param>
+    /// <param name="newPattern">The URL pattern for the new POST route.</param>
     /// <returns>A new <see cref="RouteBuilder"/> for the POST route.</returns>
-    public RouteBuilder ForPost(string pattern)
+    public RouteBuilder ForPost(string newPattern)
     {
         Add();
-        return new RouteBuilder(apiSimulator, pattern, "POST");
+        return new RouteBuilder(apiSimulator, newPattern, "POST");
     }
 
     /// <summary>
     /// Registers this route's instructions and configuration, then starts a new route for PUT requests.
     /// </summary>
-    /// <param name="pattern">The URL pattern for the new PUT route.</param>
+    /// <param name="newPattern">The URL pattern for the new PUT route.</param>
     /// <returns>A new <see cref="RouteBuilder"/> for the PUT route.</returns>
-    public RouteBuilder ForPut(string pattern)
+    public RouteBuilder ForPut(string newPattern)
     {
         Add();
-        return new RouteBuilder(apiSimulator, pattern, "PUT");
+        return new RouteBuilder(apiSimulator, newPattern, "PUT");
     }
 
     /// <summary>
     /// Registers this route's instructions and configuration, then starts a new route for DELETE requests.
     /// </summary>
-    /// <param name="pattern">The URL pattern for the new DELETE route.</param>
+    /// <param name="newPattern">The URL pattern for the new DELETE route.</param>
     /// <returns>A new <see cref="RouteBuilder"/> for the DELETE route.</returns>
-    public RouteBuilder ForDelete(string pattern)
+    public RouteBuilder ForDelete(string newPattern)
     {
         Add();
-        return new RouteBuilder(apiSimulator, pattern, "DELETE");
+        return new RouteBuilder(apiSimulator, newPattern, "DELETE");
     }
 
     /// <summary>
     /// Registers this route's instructions and configuration, then starts a new route for PATCH requests.
     /// </summary>
-    /// <param name="pattern">The URL pattern for the new PATCH route.</param>
+    /// <param name="newPattern">The URL pattern for the new PATCH route.</param>
     /// <returns>A new <see cref="RouteBuilder"/> for the PATCH route.</returns>
-    public RouteBuilder ForPatch(string pattern)
+    public RouteBuilder ForPatch(string newPattern)
     {
         Add();
-        return new RouteBuilder(apiSimulator, pattern, "PATCH");
+        return new RouteBuilder(apiSimulator, newPattern, "PATCH");
     }
 
     /// <summary>

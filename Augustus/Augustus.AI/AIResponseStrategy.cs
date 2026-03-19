@@ -85,9 +85,13 @@ public class AIResponseStrategy : IResponseStrategy, IDisposable
                 {
                     await cacheManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions);
                 }
-                catch (Exception ex)
+                catch (IOException ex)
                 {
-                    Console.WriteLine($"Warning: Failed to cache response: {ex.Message}");
+                    Console.WriteLine($"Warning: Failed to cache response (IO error): {ex.Message}");
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    Console.WriteLine($"Warning: Failed to cache response (Unauthorized): {ex.Message}");
                 }
             }
 

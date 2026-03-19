@@ -58,7 +58,8 @@ public class StripeIntegrationTests
             var charge = await client.GetStringAsync("/v1/charges/ch_123");
             charge.Should().Contain("\"object\":\"charge\"");
 
-            var piResponse = await client.PostAsync("/v1/payment_intents", new StringContent("{}"));
+            using var piContent = new StringContent("{}");
+            var piResponse = await client.PostAsync("/v1/payment_intents", piContent);
             var pi = await piResponse.Content.ReadAsStringAsync();
             pi.Should().Contain("\"object\":\"payment_intent\"");
         }
@@ -135,7 +136,8 @@ public class StripeIntegrationTests
             refund.Should().Contain("\"object\":\"refund\"");
             refund.Should().Contain("re_");
 
-            var createResponse = await client.PostAsync("/v1/refunds", new StringContent("{}"));
+            using var refundContent = new StringContent("{}");
+            var createResponse = await client.PostAsync("/v1/refunds", refundContent);
             var created = await createResponse.Content.ReadAsStringAsync();
             created.Should().Contain("\"object\":\"refund\"");
         }
@@ -161,11 +163,13 @@ public class StripeIntegrationTests
             var invoice = await client.GetStringAsync("/v1/invoices/in_123");
             invoice.Should().Contain("\"object\":\"invoice\"");
 
-            var finalizeResponse = await client.PostAsync("/v1/invoices/in_123/finalize", new StringContent("{}"));
+            using var finalizeContent = new StringContent("{}");
+            var finalizeResponse = await client.PostAsync("/v1/invoices/in_123/finalize", finalizeContent);
             var finalized = await finalizeResponse.Content.ReadAsStringAsync();
             finalized.Should().Contain("\"status\":\"open\"");
 
-            var payResponse = await client.PostAsync("/v1/invoices/in_123/pay", new StringContent("{}"));
+            using var payContent = new StringContent("{}");
+            var payResponse = await client.PostAsync("/v1/invoices/in_123/pay", payContent);
             var paid = await payResponse.Content.ReadAsStringAsync();
             paid.Should().Contain("\"status\":\"paid\"");
         }

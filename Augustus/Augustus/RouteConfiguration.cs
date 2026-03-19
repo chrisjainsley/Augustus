@@ -48,7 +48,7 @@ public class RouteConfiguration
 
             return new Regex($"^{regexPattern}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         }
-        catch
+        catch (ArgumentException)
         {
             // If pattern compilation fails, treat as literal match
             return new Regex($"^{Regex.Escape(pattern)}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
