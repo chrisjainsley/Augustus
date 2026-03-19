@@ -12,6 +12,7 @@ public class RouteBuilder
     private Func<int, IResponseStrategy>? strategyFactory;
     private int statusCode = 200;
     private readonly List<string> instructions = new();
+    private readonly List<string> dynamicContentFields = new();
 
     internal RouteBuilder(APISimulator apiSimulator, string pattern, string httpMethod)
     {
@@ -89,6 +90,25 @@ public class RouteBuilder
         instructions.Add(instruction);
         return this;
     }
+
+    /// <summary>
+    /// Specifies JSON property names whose values should be normalized when computing cache keys.
+    /// Can be called before or after <c>UseRealApi</c>; fields are read at request time.
+    /// </summary>
+    /// <param name="propertyNames">The property names to normalize.</param>
+    /// <returns>This <see cref="RouteBuilder"/> for method chaining.</returns>
+    public RouteBuilder WithDynamicFields(params string[] propertyNames)
+    {
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        foreach (var name in propertyNames)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                dynamicContentFields.Add(name);
+        }
+        return this;
+    }
+
+    internal IReadOnlyList<string> DynamicContentFieldsList => dynamicContentFields;
 
     /// <summary>
     /// Configures this route to return a static JSON response (alias for WithResponse).

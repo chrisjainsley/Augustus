@@ -50,7 +50,7 @@ public static class RouteBuilderExtensions
         if (builder == null)
             throw new ArgumentNullException(nameof(builder));
 
-        var strategy = new RealApiProxyStrategy(baseUrl, options, headers);
+        var strategy = new RealApiProxyStrategy(baseUrl, options, headers, builder.DynamicContentFieldsList);
         return builder.WithStrategy(strategy);
     }
 
