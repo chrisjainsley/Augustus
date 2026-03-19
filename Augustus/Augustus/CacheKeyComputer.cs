@@ -7,7 +7,7 @@ internal static class CacheKeyComputer
 {
     private static readonly byte[] Separator = Encoding.UTF8.GetBytes("|");
 
-    public static string ComputeCacheKey(string method, string path, string? queryString, byte[] body, List<string>? instructions = null, IReadOnlyCollection<string>? dynamicContentFields = null)
+    public static string ComputeCacheKey(string method, string path, string? queryString, byte[] body, List<string>? instructions = null, IEnumerable<string>? dynamicContentFields = null)
     {
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         sha.AppendData(Encoding.UTF8.GetBytes(method));
@@ -17,7 +17,7 @@ internal static class CacheKeyComputer
         sha.AppendData(Encoding.UTF8.GetBytes(queryString ?? string.Empty));
         sha.AppendData(Separator);
 
-        var bodyToHash = dynamicContentFields is { Count: > 0 }
+        var bodyToHash = dynamicContentFields != null && dynamicContentFields.Any()
             ? CacheKeyBodyNormalizer.NormalizeForCacheKey(body, dynamicContentFields)
             : body;
         sha.AppendData(bodyToHash);

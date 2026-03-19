@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe payment method API endpoints.
 /// </summary>
-public class StripePaymentMethodsBuilder
+public sealed class StripePaymentMethodsBuilder
 {
     private readonly APISimulator apiSimulator;
 

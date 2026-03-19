@@ -7,9 +7,9 @@ internal static class CacheKeyBodyNormalizer
 {
     private const string NormalizedPlaceholder = "__NORMALIZED__";
 
-    public static byte[] NormalizeForCacheKey(byte[] body, IReadOnlyCollection<string> propertyNames)
+    public static byte[] NormalizeForCacheKey(byte[] body, IEnumerable<string> propertyNames)
     {
-        if (propertyNames.Count == 0 || body.Length == 0)
+        if (!propertyNames.Any() || body.Length == 0)
             return body;
 
         try
@@ -27,7 +27,7 @@ internal static class CacheKeyBodyNormalizer
         }
     }
 
-    private static bool NormalizeNode(JsonNode node, IReadOnlyCollection<string> propertyNames)
+    private static bool NormalizeNode(JsonNode node, IEnumerable<string> propertyNames)
     {
         var changed = false;
         switch (node)

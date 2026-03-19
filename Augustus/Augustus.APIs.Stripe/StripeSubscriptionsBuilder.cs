@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe subscription API endpoints.
 /// </summary>
-public class StripeSubscriptionsBuilder
+public sealed class StripeSubscriptionsBuilder
 {
     private readonly APISimulator apiSimulator;
 

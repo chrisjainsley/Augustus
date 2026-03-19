@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe price API endpoints.
 /// </summary>
-public class StripePricesBuilder
+public sealed class StripePricesBuilder
 {
     private readonly APISimulator apiSimulator;
 

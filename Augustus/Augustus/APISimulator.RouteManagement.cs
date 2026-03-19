@@ -3,7 +3,7 @@ namespace Augustus;
 /// <summary>
 /// Route management extensions for the API simulator - supports RouteBuilder-based route configuration.
 /// </summary>
-public partial class APISimulator
+public sealed partial class APISimulator
 {
     private readonly List<RouteConfiguration> routes = new();
     private readonly object routesLock = new();

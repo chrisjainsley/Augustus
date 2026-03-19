@@ -5,7 +5,7 @@ using Augustus;
 /// <summary>
 /// Builder for configuring Stripe refund API endpoints.
 /// </summary>
-public class StripeRefundsBuilder
+public sealed class StripeRefundsBuilder
 {
     private readonly APISimulator apiSimulator;
 

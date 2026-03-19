@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 /// <summary>
 /// Represents a route configuration for a mock server endpoint.
 /// </summary>
-public class RouteConfiguration
+public sealed class RouteConfiguration
 {
     /// <summary>
     /// Gets the URL pattern to match against incoming requests.
@@ -18,9 +18,9 @@ public class RouteConfiguration
     public string HttpMethod { get; }
 
     /// <summary>
-    /// Gets or sets the response strategy for this route.
+    /// Gets or initializes the response strategy for this route.
     /// </summary>
-    public IResponseStrategy? ResponseStrategy { get; set; }
+    public IResponseStrategy? ResponseStrategy { get; init; }
 
     private readonly Regex compiledPattern;
 
