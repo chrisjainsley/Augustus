@@ -60,7 +60,8 @@ internal class AIDefaultHandler : IRequestHandler
                 httpContext.Request.Path.Value ?? "/",
                 httpContext.Request.QueryString.Value,
                 bodyBytes,
-                instructions);
+                instructions,
+                options.DynamicContentFields);
 
             if (options.EnableCaching)
             {

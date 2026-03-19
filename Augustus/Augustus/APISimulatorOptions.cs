@@ -112,6 +112,16 @@ public class APISimulatorOptions
     }
 
     /// <summary>
+    /// Gets or sets a list of JSON property names whose values should be normalized
+    /// (replaced with a constant) when computing cache keys.
+    /// </summary>
+    /// <remarks>
+    /// Use this to ignore dynamic content such as GUIDs, tool_call_ids, or timestamps
+    /// so that logically identical requests produce the same cache key across test runs.
+    /// </remarks>
+    public List<string> DynamicContentFields { get; set; } = new();
+
+    /// <summary>
     /// Validates that all required configuration is present and correct.
     /// </summary>
     /// <remarks>
