@@ -79,10 +79,10 @@ jobs:
 
       - name: Pack NuGet packages
         run: |
-          dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
-          dotnet pack Augustus/Augustus.AI/Augustus.AI.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
-          dotnet pack Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
-          dotnet pack Augustus/Augustus.APIs.Stripe/Augustus.Stripe.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.AI/Augustus.AI.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.APIs.Stripe/Augustus.Stripe.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Verify package versions
         run: |
