@@ -23,65 +23,96 @@ Add the NuGet API key to your GitHub repository:
 3. Paste your NuGet.org API key as the value
 4. Save
 
-## Release Workflow
+### 3. `release-approved` Label
 
-### Step 1: Prepare the Release
-
-Ensure all changes are committed to the `master` branch:
+The approval workflow requires a label. Create it once:
 
 ```bash
-git checkout master
-git pull origin master
+gh label create "release-approved" --color "0E8A16" --description "Approves a draft release for publishing"
 ```
 
-### Step 2: Create a GitHub Release
+## Automated Release Workflow
 
-The automated pipeline is triggered when you **create a GitHub release** (not just a tag).
+Releases are managed by the **Create Release** agent workflow
+(`.github/workflows/create-release.md`). It automates version selection,
+release notes, releasability checks, and draft creation.
 
-#### Using GitHub Web UI:
+### Triggering a Release
 
-1. Go to https://github.com/chrisjainsley/augustus/releases
-2. Click "Draft a new release"
-3. Click "Choose a tag"
-4. Enter the version tag in format: `v{major}.{minor}.{patch}[-suffix]`
-   - Examples: `v0.2.0`, `v1.0.0`, `v0.1.0-beta`, `v1.0.0-rc.1`
-5. Set release title (e.g., "Augustus 0.2.0")
-6. Add release notes/changelog
-7. Mark as "Pre-release" if applicable (for alpha, beta, rc versions)
-8. Click "Publish release"
+1. Go to **Actions → Create Release → Run workflow**
+2. Optionally enable **dry run** to preview the release without creating
+   anything
+3. Click **Run workflow**
 
-#### Using GitHub CLI:
+### What the Workflow Does
 
-```bash
-# For stable releases
-gh release create v0.2.0 -t "Augustus 0.2.0" -n "Release notes here"
+The workflow runs the following steps automatically:
 
-# For prerelease versions
-gh release create v0.1.0-alpha -t "Augustus 0.1.0 Alpha" -n "Early preview" --prerelease
-```
+1. **Releasability checks** — builds the solution, runs all tests (including
+   public API approval tests), and reviews changed source files for critical
+   issues (security vulnerabilities, null reference risks, unhandled
+   exceptions, breaking API changes, race conditions, resource leaks). Build
+   or test failures and critical code review findings **block** the release.
+   Warnings (TODO/FIXME markers, vulnerable dependencies, medium/low code
+   review findings) are noted in the review issue but do not block.
 
-### Step 3: Automated Publishing
+2. **Change analysis** — identifies all commits and PRs since the last release
+   and categorises them as breaking changes, new features, bug fixes, or other.
 
-Once you publish the release:
+3. **Version selection** — applies semantic versioning rules to determine the
+   correct version increment (MAJOR, MINOR, or PATCH).
 
-1. GitHub Actions automatically triggers the `Publish NuGet Package` workflow
-2. The workflow:
-   - Extracts the version from the tag (removes 'v' prefix)
-   - Updates `Augustus/Augustus/Augustus.csproj` with the new version
-   - Builds both packages for all target frameworks (net6.0, net7.0, net8.0, net9.0, net10.0)
-   - Creates NuGet packages (`.nupkg` and `.snupkg` symbol packages) for Augustus.AI and Augustus.AI.Reqnroll
-   - Publishes both packages to NuGet.org
-   - Attaches packages to the GitHub release
+4. **Release notes** — generates structured markdown release notes.
 
-3. Monitor progress at: https://github.com/chrisjainsley/augustus/actions
+5. **Stale draft cleanup** — deletes any existing draft releases to prevent
+   accumulation.
 
-### Step 4: Verify Publication
+6. **Draft release creation** — creates a new draft GitHub release with the
+   selected version, tag, and release notes.
 
-After the workflow completes:
+7. **Review issue** — opens a `[Release Review]` issue summarising the proposed
+   release, releasability results, change summary, full release notes, and
+   approval instructions.
 
-1. Check GitHub Actions logs for any errors
-2. Visit https://www.nuget.org/packages/Augustus.AI to verify the package
-3. Search for the new version number to confirm it's published
+### Concurrency & Cleanup
+
+- **Concurrency control**: If a newer Create Release run starts while an older
+  one is still running, the older run is automatically cancelled.
+- **Stale draft cleanup**: Before creating a new draft release, the workflow
+  deletes any existing draft releases so they don't pile up.
+
+### If the Release Is Blocked
+
+If releasability checks fail, the workflow creates a
+`[Release Review] Release Blocked — <reason>` issue listing all failures and
+stops. No draft release is created. Fix the issues and re-run the workflow.
+
+## Approval Flow
+
+Once the workflow creates a draft release and review issue:
+
+### Option A — Approve via Label (Recommended)
+
+1. Review the draft release and the `[Release Review]` issue
+2. Add the **`release-approved`** label to the review issue
+3. The `approve-release.yml` workflow automatically:
+   - Publishes the draft release
+   - Comments on and closes the review issue
+4. Publishing triggers the `Publish NuGet Package` workflow, which builds,
+   packs, and publishes both `Augustus.AI` and `Augustus.AI.Reqnroll` to
+   NuGet.org
+
+### Option B — Publish Manually
+
+1. Go to **Releases** and open the draft release
+2. Edit release notes if needed
+3. Click **Publish release**
+4. Manually close the review issue
+
+### Cancelling a Release
+
+1. Delete the draft release from the Releases page
+2. Close the review issue
 
 ## Version Numbering
 
@@ -89,11 +120,9 @@ Augustus follows Semantic Versioning 2.0.0:
 
 - **Major.Minor.Patch** for stable releases
   - Example: `v1.0.0`, `v1.2.3`
-  - Use when API is stable and ready for production
 
-- **0.Major.Minor** for pre-release versions
+- **0.Minor.Patch** for pre-1.0 versions
   - Example: `v0.1.0`, `v0.2.0`
-  - Use for versions before 1.0.0 release
 
 - **Prerelease Suffixes** for pre-release versions
   - `-alpha`: Early preview, may have breaking changes
@@ -101,34 +130,13 @@ Augustus follows Semantic Versioning 2.0.0:
   - `-rc.N`: Release candidate (rc.1, rc.2, etc.)
   - Example: `v0.1.0-alpha`, `v1.0.0-beta`, `v1.0.0-rc.1`
 
-## Examples
+## Verifying a Release
 
-### Releasing version 0.2.0
+After the release is published:
 
-```bash
-git checkout master
-git pull origin master
-
-# Using GitHub CLI
-gh release create v0.2.0 \
-  -t "Augustus 0.2.0" \
-  -n "## Features
-- Added GPT-5 model support
-- Improved caching performance
-
-## Bug Fixes
-- Fixed stream seeking issue in non-seekable streams"
-```
-
-### Releasing an alpha version
-
-```bash
-# Using GitHub CLI
-gh release create v0.1.0-alpha \
-  -t "Augustus 0.1.0 Alpha" \
-  -n "Early preview of Augustus" \
-  --prerelease
-```
+1. Check the `Publish NuGet Package` workflow in GitHub Actions
+2. Visit https://www.nuget.org/packages/Augustus.AI to verify the package
+3. NuGet.org may take a few minutes to index new packages
 
 ## Troubleshooting
 
@@ -136,39 +144,62 @@ gh release create v0.1.0-alpha \
 
 - **Check API key**: Verify `NUGET_API_KEY` secret is configured correctly
 - **Check version format**: Ensure version matches SemVer format
-- **Check for duplicates**: NuGet skips duplicate versions (use `--skip-duplicate` flag)
+- **Check for duplicates**: NuGet skips duplicate versions
 - **Wait for indexing**: NuGet.org may take a few minutes to index new packages
 
-### Workflow failed
+### Create Release workflow failed
+
+- **Releasability blocked**: Check the `[Release Review] Release Blocked` issue
+  for details on what failed (build errors, test failures, critical code review
+  findings)
+- **Agent timeout**: The workflow has a 30-minute timeout. If analysis is
+  taking too long, check for issues with the repository or GitHub API
+- Check GitHub Actions logs for detailed error information
+
+### Publish NuGet workflow failed
 
 - Check GitHub Actions logs: https://github.com/chrisjainsley/augustus/actions
 - Common issues:
   - Missing or invalid API key
-  - Malformed version tag (must start with 'v')
+  - Malformed version tag (must start with `v`)
   - Build failures (check build logs)
-  - Missing GitHub token (should be automatic)
 
 ### Rolling back a release
 
 If a version is published incorrectly:
 
 1. Delete the GitHub release
-2. Delete the version from NuGet.org (if possible - contact support)
-3. Re-publish with a patched version number (e.g., v0.2.1)
+2. Delete the version from NuGet.org (if possible — contact support)
+3. Re-publish with a patched version number (e.g., `v0.2.1`)
 
 ## Frequently Asked Questions
 
 **Q: Can I release from any branch?**
-A: The workflow triggers on release creation. Always ensure `master` is up-to-date before creating a release, as the workflow checks out the tag commit.
+A: The workflow triggers on `workflow_dispatch` from the Actions tab. Always
+ensure `master` is up-to-date before triggering, as the workflow checks out
+the default branch.
 
 **Q: What if I need to release a hotfix?**
-A: Create a bugfix branch, fix the issue, commit, and merge to `master`. Then create a release tag (e.g., v0.1.1).
+A: Create a bugfix branch, fix the issue, merge to `master`. Then trigger the
+Create Release workflow from the Actions tab.
 
 **Q: Do I need to manually update the version in the csproj file?**
-A: No! The workflow automatically extracts the version from your release tag and updates the csproj file.
+A: No. The publish workflow automatically extracts the version from the release
+tag and updates the csproj file.
 
-**Q: Can I create multiple releases at once?**
-A: Yes, but each release will be processed by the workflow sequentially. There's no conflict between parallel releases.
+**Q: What happens if I trigger multiple releases at once?**
+A: The workflow has concurrency control — newer runs cancel older in-progress
+runs. Stale draft releases are automatically cleaned up before creating a new
+one.
 
-**Q: How do I update version history on NuGet.org?**
-A: You can edit release notes on NuGet.org, but the actual version is locked. For changes, create a new patch release (e.g., v0.2.1).
+**Q: How does the code review work?**
+A: The agent reviews all `.cs` files changed since the last release for critical
+issues (security vulnerabilities, null references, empty catch blocks, breaking
+API changes, race conditions, resource leaks). Only critical findings block the
+release — medium and low findings are included as warnings in the review issue.
+
+**Q: What if the `release-approved` label doesn't exist?**
+A: Create it with:
+```bash
+gh label create "release-approved" --color "0E8A16" --description "Approves a draft release for publishing"
+```

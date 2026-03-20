@@ -1,9 +1,10 @@
 ---
 name: Create Release
 description: >
-  Analyzes changes since the last release, selects the best semantic version
-  increment, generates release notes, creates a draft GitHub release, and
-  opens a review issue for human approval before the release is published.
+  Runs releasability checks (build, test, code review), analyzes changes since
+  the last release, selects the best semantic version increment, generates
+  release notes, creates a draft GitHub release (cleaning up stale drafts),
+  and opens a review issue for human approval before the release is published.
 
 on:
   workflow_dispatch:
@@ -19,10 +20,21 @@ permissions:
   issues: read
   pull-requests: read
 
+network:
+  allowed:
+    - defaults
+    - dotnet
+
 tools:
   github:
     mode: remote
     toolsets: [default]
+  bash: true
+
+concurrency:
+  cancel-in-progress: true
+
+timeout-minutes: 30
 
 safe-outputs:
   create-issue:
@@ -32,9 +44,10 @@ safe-outputs:
   jobs:
     create_draft_release:
       description: >
-        Creates a draft GitHub release with the specified version tag, title,
-        and release notes. The release is created as a draft so a human can
-        review and publish it. Returns the URL of the releases page.
+        Deletes any existing stale draft releases, then creates a new draft
+        GitHub release with the specified version tag, title, and release
+        notes. The release is created as a draft so a human can review and
+        publish it. Returns the URL of the releases page.
       runs-on: ubuntu-latest
       permissions:
         contents: write
@@ -56,7 +69,7 @@ safe-outputs:
           required: false
           type: string
       steps:
-        - name: Create draft release
+        - name: Clean up stale drafts and create draft release
           env:
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             DRY_RUN: ${{ inputs.dry_run }}
@@ -66,6 +79,19 @@ safe-outputs:
             PRERELEASE=$(jq -r '.items[] | select(.type == "create_draft_release") | .prerelease // "false"' "$GH_AW_AGENT_OUTPUT")
             jq -r '.items[] | select(.type == "create_draft_release") | .release_notes' "$GH_AW_AGENT_OUTPUT" > /tmp/release-notes.md
 
+            # --- Delete stale draft releases ---
+            echo "Checking for stale draft releases..."
+            DRAFTS=$(gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName')
+            if [ -n "$DRAFTS" ]; then
+              while IFS= read -r DRAFT_TAG; do
+                echo "Deleting stale draft release: $DRAFT_TAG"
+                gh release delete "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+              done <<< "$DRAFTS"
+            else
+              echo "No stale draft releases found."
+            fi
+
+            # --- Create the new draft release ---
             FLAGS="--draft"
             if [ "$PRERELEASE" = "true" ]; then
               FLAGS="$FLAGS --prerelease"
@@ -95,14 +121,86 @@ safe-outputs:
 
 You are a release management assistant for the **Augustus** .NET library
 (`Augustus.AI` and `Augustus.AI.Reqnroll` on NuGet). Both packages are published
-from the same release with the same version number. Your task is to analyse changes since the last
-release, determine the right semantic version increment, write release notes,
-create a draft GitHub release for human review, and open a review issue.
+from the same release with the same version number. Your task is to run
+releasability checks, analyse changes since the last release, determine the
+right semantic version increment, write release notes, create a draft GitHub
+release for human review, and open a review issue.
 
 > **Dry-run mode**: If this workflow was triggered with `dry_run = true`, complete
-> Steps 1–4 as normal (analysis and release notes), then **skip Steps 5 and 6**
-> — use `noop` instead and summarise what would have been created in your
-> response. Do not create a real release or issue in dry-run mode.
+> Steps 0–4 as normal (checks, analysis, and release notes), then **skip
+> Steps 5 and 6** — use `noop` instead and summarise what would have been
+> created in your response (including any releasability findings). Do not
+> create a real release or issue in dry-run mode.
+
+## Step 0 — Releasability Check
+
+Before analysing changes, verify the project is in a releasable state. Run the
+checks below in order. **Blocker** failures stop the release; **warning**
+findings are noted in the review issue but do not block.
+
+### Blocker checks (fail = stop)
+
+If **any** blocker check fails, do **not** proceed to Steps 1–6. Instead,
+create a single issue titled
+`[Release Review] Release Blocked — <short reason>` listing every failure and
+critical code-review finding, then stop.
+
+#### 0-A. Build check
+
+```bash
+dotnet restore Augustus/Augustus.sln
+dotnet build Augustus/Augustus.sln --configuration Release
+```
+
+Both commands must exit `0`. Any build error is a blocker.
+
+#### 0-B. Test check
+
+```bash
+dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --verbosity normal
+dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --verbosity normal
+```
+
+All tests must pass. Pay special attention to **public API approval tests** —
+failures there indicate unapproved API surface changes that must be resolved
+before releasing.
+
+#### 0-C. Code review
+
+Review all source files changed since the last release tag for **critical**
+issues only. Use the GitHub tools to identify changed files (`git diff` between
+the last release tag and `HEAD`), then review each changed `.cs` file for:
+
+- Security vulnerabilities (injection, exposed secrets, unsafe deserialization)
+- Null reference risks in critical paths
+- Unhandled exceptions or empty catch blocks
+- Breaking API changes without documentation
+- Race conditions or threading issues
+- Resource leaks (undisposed `IDisposable`)
+
+**Only critical findings block the release.** Medium and low findings should be
+collected and included as warnings in the review issue (Step 6).
+
+### Warning checks (do not block)
+
+#### 0-D. TODO / FIXME / HACK markers
+
+Scan files changed since the last release for `TODO`, `FIXME`, and `HACK`
+comments. List them in the review issue so the maintainer is aware.
+
+#### 0-E. Vulnerable dependencies
+
+Run the following (best-effort — failure here does not block):
+
+```bash
+dotnet list Augustus/Augustus.sln package --vulnerable 2>/dev/null || true
+```
+
+If vulnerable packages are found, include them as a warning in the review issue.
+
+---
+
+If all blocker checks pass, proceed to Step 1.
 
 ## Step 1 — Find the Last Release
 
@@ -208,6 +306,10 @@ sections):
 
 ## Step 5 — Create a Draft Release
 
+> **Note**: The `create_draft_release` job automatically deletes any existing
+> stale draft releases before creating the new one, so there is no need to
+> clean them up manually.
+
 Call the `create_draft_release` tool with the following values:
 
 - `tag_name` — new version tag prefixed with `v` (e.g. `v0.3.0`)
@@ -223,7 +325,12 @@ goes live. The issue body must include:
 
 1. **Proposed version** and the reason for the increment type (MAJOR / MINOR /
    PATCH), with a brief explanation.
-2. **Change summary table**:
+2. **Releasability results** — summarise the outcome of Step 0:
+   - Confirm that build, tests, and code review passed.
+   - If there are **warnings** from Step 0 (medium/low code review findings,
+     TODO/FIXME/HACK markers, vulnerable dependencies), list them in a
+     collapsible `<details>` section titled "Releasability Warnings".
+3. **Change summary table**:
 
    | Category | Count |
    |---|---|
@@ -232,13 +339,18 @@ goes live. The issue body must include:
    | 🐛 Bug Fixes | N |
    | 🔧 Other | N |
 
-3. **Full release notes** (copy from Step 4).
-4. **Next steps** for the reviewer:
-   - Go to **[Releases → Drafts](https://github.com/chrisjainsley/Augustus/releases)**
-     and open the draft release named `<release_name>`.
-   - Edit the release notes if needed.
-   - Click **"Publish release"** when satisfied — this automatically triggers
-     NuGet packaging and publishing to NuGet.org via the existing CI workflow.
+4. **Full release notes** (copy from Step 4).
+5. **Next steps** for the reviewer:
+   - **Approve via label**: Add the `release-approved` label to this issue to
+     automatically publish the draft release. This triggers the
+     `approve-release.yml` workflow which publishes the draft and closes this
+     issue.
+   - **Or publish manually**: Go to
+     **[Releases → Drafts](https://github.com/chrisjainsley/Augustus/releases)**
+     and open the draft release named `<release_name>`. Edit the release notes
+     if needed, then click **"Publish release"**.
+   - Publishing (by either method) automatically triggers NuGet packaging and
+     publishing to NuGet.org via the existing CI workflow.
    - To cancel, delete the draft release and close this issue.
 
 Use the issue title: `[Release Review] Augustus <version> - Release Ready for Review`

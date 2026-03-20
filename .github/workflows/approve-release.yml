@@ -1,0 +1,78 @@
+name: Approve Release
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  publish-draft:
+    if: >
+      github.event.label.name == 'release-approved'
+      && startsWith(github.event.issue.title, '[Release Review]')
+      && contains(github.event.issue.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from issue title
+        id: version
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          # Title format: [Release Review] Augustus 0.3.0 - Release Ready for Review
+          VERSION=$(echo "$ISSUE_TITLE" | grep -oP 'Augustus\s+\K[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.\-]*')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not extract version from issue title: $ISSUE_TITLE"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Extracted version: $VERSION (tag: $TAG)"
+
+      - name: Verify draft release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          RELEASE_JSON=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName 2>/dev/null || true)
+          if [ -z "$RELEASE_JSON" ]; then
+            echo "::error::No release found for tag $TAG"
+            exit 1
+          fi
+
+          IS_DRAFT=$(echo "$RELEASE_JSON" | jq -r '.isDraft')
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "::error::Release $TAG is not a draft — it may have already been published."
+            exit 1
+          fi
+
+          echo "Confirmed draft release exists for $TAG"
+
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          echo "Release $TAG published successfully."
+
+      - name: Comment on and close the review issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "Release **$TAG** has been published. NuGet packaging will begin automatically via the \`Publish NuGet Package\` workflow.
+
+          - [View release](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG)
+          - [Monitor NuGet publish](https://github.com/$GITHUB_REPOSITORY/actions/workflows/publish-nuget.yml)"
+
+          gh issue close "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --reason completed
