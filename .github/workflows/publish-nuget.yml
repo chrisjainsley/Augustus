@@ -131,5 +131,5 @@ jobs:
           echo "✅ Successfully published all Augustus packages version ${{ steps.version.outputs.VERSION }} to NuGet.org"
           echo "📦 Augustus: https://www.nuget.org/packages/Augustus/${{ steps.version.outputs.VERSION }}"
           echo "📦 Augustus.AI: https://www.nuget.org/packages/Augustus.AI/${{ steps.version.outputs.VERSION }}"
-          echo "📦 Augustus.AI.Reqnroll: https://www.nuget.org/packages/Augustus.AI.Reqnroll/${{ steps.version.outputs.VERSION }}"
+          echo "📦 Augustus.Reqnroll: https://www.nuget.org/packages/Augustus.Reqnroll/${{ steps.version.outputs.VERSION }}"
           echo "📦 Augustus.Stripe: https://www.nuget.org/packages/Augustus.Stripe/${{ steps.version.outputs.VERSION }}"
