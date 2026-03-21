@@ -103,4 +103,42 @@ public class CacheKeyBodyNormalizerTests
 
         result.Should().BeSameAs(body);
     }
+
+    [Fact]
+    public void NormalizeForCacheKey_ProducesDeterministicOutput_NoPlatformDifferences()
+    {
+        // This test ensures the normalized output is deterministic and platform-independent.
+        // It should produce identical byte sequences on Windows and Linux.
+        var body = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_123\",\"model\":\"gpt-4\",\"temperature\":0.7,\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}");
+        var fields = new[] { "tool_call_id" };
+
+        var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, fields);
+        var json = Encoding.UTF8.GetString(result);
+
+        // Verify the output is compact (no indentation/whitespace that could differ by platform)
+        json.Should().NotContain("\r\n");
+        json.Should().NotContain("  "); // No indentation spaces
+
+        // Verify normalization occurred
+        json.Should().Contain("\"tool_call_id\":\"__NORMALIZED__\"");
+
+        // Verify the exact byte sequence is stable
+        var expectedJson = "{\"tool_call_id\":\"__NORMALIZED__\",\"model\":\"gpt-4\",\"temperature\":0.7,\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}";
+        json.Should().Be(expectedJson);
+    }
+
+    [Fact]
+    public void NormalizeForCacheKey_ComplexNestedStructure_ProducesDeterministicCacheKey()
+    {
+        // Ensure that complex nested structures produce the same cache key regardless of platform
+        var body1 = Encoding.UTF8.GetBytes("{\"messages\":[{\"role\":\"user\",\"content\":\"test\",\"tool_call_id\":\"call_a\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"search\",\"id\":\"id_123\"}}]}");
+        var body2 = Encoding.UTF8.GetBytes("{\"messages\":[{\"role\":\"user\",\"content\":\"test\",\"tool_call_id\":\"call_b\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"search\",\"id\":\"id_456\"}}]}");
+        var fields = new List<string> { "tool_call_id", "id" };
+
+        var hash1 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body1, dynamicContentFields: fields);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body2, dynamicContentFields: fields);
+
+        // Both should produce identical cache keys after normalization
+        hash1.Should().Be(hash2);
+    }
 }
