@@ -45,6 +45,12 @@ internal static class CacheKeyBodyNormalizer
             if (canonical is null)
                 return body;
 
+            // Normalize \r\n → \n in all JSON string values so cache keys are identical
+            // regardless of the platform that generated the request body. This is necessary
+            // because StringBuilder.AppendLine(), TextWriter.WriteLine(), and similar APIs
+            // use Environment.NewLine which is \r\n on Windows and \n on Linux.
+            NormalizeNewlines(canonical);
+
             if (propertyNames.Count > 0)
                 NormalizeNode(canonical, propertyNames);
 
@@ -154,6 +160,37 @@ internal static class CacheKeyBodyNormalizer
                 break;
         }
         return changed;
+    }
+
+    /// <summary>
+    /// Replaces <c>\r\n</c> with <c>\n</c> in every JSON string value so that cache keys
+    /// are identical regardless of the OS that produced the request body.
+    /// </summary>
+    private static void NormalizeNewlines(JsonNode node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var key in obj.Select(kvp => kvp.Key).ToList())
+                {
+                    var child = obj[key];
+                    if (child is JsonValue val && val.TryGetValue<string>(out var s) && s.Contains('\r'))
+                        obj[key] = s.ReplaceLineEndings("\n");
+                    else if (child is JsonObject or JsonArray)
+                        NormalizeNewlines(child);
+                }
+                break;
+            case JsonArray arr:
+                for (var i = 0; i < arr.Count; i++)
+                {
+                    var child = arr[i];
+                    if (child is JsonValue val && val.TryGetValue<string>(out var s) && s.Contains('\r'))
+                        arr[i] = s.ReplaceLineEndings("\n");
+                    else if (child is JsonObject or JsonArray)
+                        NormalizeNewlines(child!);
+                }
+                break;
+        }
     }
 
     private static bool LooksLikeJson(byte[] body)
