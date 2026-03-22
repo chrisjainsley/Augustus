@@ -136,9 +136,11 @@ public class CacheKeyBodyNormalizerTests
     [Fact]
     public void NormalizeForCacheKey_SpecialCharacters_HandledConsistentlyAcrossPlatforms()
     {
-        // Exercises characters affected by JSON escaping differences: non-ASCII, emoji,
+        // Exercises characters affected by JSON escaping differences: non-ASCII,
         // and HTML-sensitive characters (<, >, &). UnsafeRelaxedJsonEscaping should pass
         // these through verbatim rather than escaping to \uXXXX sequences.
+        // Note: Emoji (surrogate pairs) are still escaped to \uXXXX by the encoder,
+        // but the escaping is consistent across platforms which is what matters.
         var body = Encoding.UTF8.GetBytes("{\"id\":\"123\",\"content\":\"<div>Héllo & wörld</div> 🚀\"}");
         var fields = new[] { "id" };
 
@@ -148,18 +150,22 @@ public class CacheKeyBodyNormalizerTests
         // Verify normalization occurred on the target field
         json.Should().Contain("\"id\":\"__NORMALIZED__\"");
 
-        // Verify special characters are passed through verbatim (not escaped to \uXXXX)
+        // Verify HTML-sensitive and non-ASCII characters are passed through verbatim
         json.Should().Contain("<div>");
         json.Should().Contain("</div>");
         json.Should().Contain("&");
         json.Should().Contain("Héllo");
         json.Should().Contain("wörld");
-        json.Should().Contain("\U0001f680"); // rocket emoji
 
-        // Verify no \uXXXX escaping of these characters
+        // Verify no \uXXXX escaping of HTML-sensitive or non-ASCII characters
         json.Should().NotContain("\\u003C"); // <
         json.Should().NotContain("\\u003E"); // >
         json.Should().NotContain("\\u0026"); // &
+        json.Should().NotContain("\\u00E9"); // é
+        json.Should().NotContain("\\u00F6"); // ö
+
+        // Emoji (surrogate pairs) are escaped but consistently across platforms
+        json.Should().Contain("\\uD83D\\uDE80"); // 🚀 as surrogate pair
 
         // Verify successive calls produce identical output
         var result2 = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, fields);
