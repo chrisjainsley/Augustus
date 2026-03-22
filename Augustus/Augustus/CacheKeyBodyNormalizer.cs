@@ -9,7 +9,11 @@ internal static class CacheKeyBodyNormalizer
 
     // Use consistent JSON serialization options to ensure platform-independent cache key generation.
     // WriteIndented=false ensures no line-ending differences between Windows (\r\n) and Linux (\n).
-    // Encoder=Unsafe avoids platform-specific unicode escaping differences.
+    // UnsafeRelaxedJsonEscaping passes through non-ASCII characters, HTML-sensitive characters
+    // (<, >, &, ', +), and other symbols verbatim instead of escaping them to \uXXXX sequences.
+    // This avoids platform-specific unicode escaping differences at the cost of producing JSON
+    // that is not safe for direct embedding in HTML. This is acceptable here because the output
+    // is only used for cache key computation, never rendered in a browser.
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = false,
