@@ -49,7 +49,18 @@ internal static class CacheKeyBodyNormalizer
             // regardless of the platform that generated the request body. This is necessary
             // because StringBuilder.AppendLine(), TextWriter.WriteLine(), and similar APIs
             // use Environment.NewLine which is \r\n on Windows and \n on Linux.
-            NormalizeNewlines(canonical);
+            // For root-level JsonValue strings (unlikely in practice), create a replacement node
+            // since JsonValue has no portable in-place mutation before net9.
+            if (canonical is JsonValue rootVal
+                && rootVal.TryGetValue<string>(out var rootStr)
+                && rootStr.Contains('\r'))
+            {
+                canonical = JsonValue.Create(rootStr.ReplaceLineEndings("\n"));
+            }
+            else
+            {
+                NormalizeNewlines(canonical);
+            }
 
             if (propertyNames.Count > 0)
                 NormalizeNode(canonical, propertyNames);
@@ -189,10 +200,6 @@ internal static class CacheKeyBodyNormalizer
                     else if (child is JsonObject or JsonArray)
                         NormalizeNewlines(child!);
                 }
-                break;
-            case JsonValue val:
-                if (val.TryGetValue<string>(out var s) && s.Contains('\r'))
-                    val.SetValue(s.ReplaceLineEndings("\n"));
                 break;
         }
     }

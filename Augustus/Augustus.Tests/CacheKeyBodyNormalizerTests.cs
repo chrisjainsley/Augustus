@@ -188,6 +188,18 @@ public class CacheKeyBodyNormalizerTests
     }
 
     [Fact]
+    public void NormalizeForCacheKey_RootLevelString_CrLfIsNormalized()
+    {
+        // A bare JSON string (rare, but valid JSON) should also have newlines normalized
+        var body = Encoding.UTF8.GetBytes("\"hello\\r\\nworld\"");
+        var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, Array.Empty<string>());
+        var json = Encoding.UTF8.GetString(result);
+
+        json.Should().NotContain("\\r");
+        json.Should().Contain("\\nworld");
+    }
+
+    [Fact]
     public void NormalizeForCacheKey_EmptyBody_ReturnsUnchanged()
     {
         var body = Array.Empty<byte>();
