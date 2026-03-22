@@ -1,6 +1,6 @@
 {
   "RequestHash": "4665C47CA87BC6BE53457658FBDB321FD4A91D23F2FBEEF439A68C9B88AB9F36",
-  "Response": "{\n  \u0022id\u0022: \u0022ch_1IY5D9K4zFqgRzN2N4PbvH9P\u0022,\n  \u0022object\u0022: \u0022charge\u0022,\n  \u0022amount\u0022: 2000,\n  \u0022currency\u0022: \u0022usd\u0022,\n  \u0022status\u0022: \u0022succeeded\u0022,\n  \u0022created\u0022: 1632406800,\n  \u0022payment_method\u0022: \u0022tok_visa\u0022,\n  \u0022description\u0022: \u0022Charge for test@example.com\u0022,\n  \u0022receipt_email\u0022: \u0022test@example.com\u0022,\n  \u0022livemode\u0022: false,\n  \u0022updated\u0022: 1632406800,\n  \u0022customer\u0022: null,\n  \u0022failure_message\u0022: null,\n  \u0022amount_refunded\u0022: 0,\n  \u0022balance_transaction\u0022: \u0022txn_1IY5D9K4zFqgRzN124xy47P\u0022,\n  \u0022failure_code\u0022: null\n}",
+  "Response": "{\n  \u0022id\u0022: \u0022ch_1FJg5p2eZvKYlo2CLgI1D1tJ\u0022,\n  \u0022object\u0022: \u0022charge\u0022,\n  \u0022amount\u0022: 2000,\n  \u0022currency\u0022: \u0022usd\u0022,\n  \u0022status\u0022: \u0022succeeded\u0022\n}",
   "OriginalRequest": "curl -X POST -H \u0022Host: localhost:9050\u0022 -H \u0022Content-Type: application/x-www-form-urlencoded\u0022 -H \u0022Content-Length: 40\u0022 -d \u0027amount=2000\u0026currency=usd\u0026source=tok_visa\u0027 \u0022http://localhost:9050/v1/charges\u0022",
   "Instructions": [
     "You are a Stripe API simulator. You only respond to curl commands.",
@@ -10,5 +10,5 @@
     "Return realistic Stripe API JSON responses.",
     "For POST /v1/charges, return a charge object with \u0022object\u0022: \u0022charge\u0022, a realistic \u0022id\u0022 starting with \u0022ch_\u0022, the amount and currency from the request, and \u0022status\u0022: \u0022succeeded\u0022."
   ],
-  "Timestamp": "2026-03-19T20:56:55.5752903Z"
+  "Timestamp": "2026-03-22T18:05:47.5900314Z"
 }

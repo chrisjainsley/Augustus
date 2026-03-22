@@ -93,6 +93,45 @@ jobs:
           path: '**/*.trx'
           if-no-files-found: ignore
 
+  stripe-sample:
+    name: Stripe sample (cache-only, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    env:
+      AUGUSTUS_STRIPE_SAMPLE_CI_CACHE_ONLY: "1"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Augustus/samples/Augustus.Sample.StripeApi.Tests/Augustus.Sample.StripeApi.Tests.csproj
+
+      - name: Build
+        run: dotnet build Augustus/samples/Augustus.Sample.StripeApi.Tests/Augustus.Sample.StripeApi.Tests.csproj --configuration Release --no-restore
+
+      - name: Run Stripe sample tests
+        run: dotnet test Augustus/samples/Augustus.Sample.StripeApi.Tests/Augustus.Sample.StripeApi.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=stripe-sample-${{ matrix.os }}.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stripe-sample-${{ matrix.os }}
+          path: '**/*.trx'
+          if-no-files-found: ignore
+
   reqnroll-tests:
     name: Reqnroll Tests
     runs-on: ubuntu-latest
