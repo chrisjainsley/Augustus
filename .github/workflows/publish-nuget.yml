@@ -21,6 +21,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
             9.0.x
             10.0.x
 
@@ -36,26 +39,50 @@ jobs:
       - name: Restore dependencies
         run: |
           dotnet restore Augustus/Augustus/Augustus.csproj
+          dotnet restore Augustus/Augustus.AI/Augustus.AI.csproj
           dotnet restore Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj
+          dotnet restore Augustus/Augustus.APIs.Stripe/Augustus.Stripe.csproj
           dotnet restore Augustus/Augustus.Tests/Augustus.Tests.csproj
+          dotnet restore Augustus/Augustus.AI.Tests/Augustus.AI.Tests.csproj
           dotnet restore Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj
+          dotnet restore Augustus/Augustus.APIs.Stripe.Tests/Augustus.Stripe.Tests.csproj
 
       - name: Build
         run: |
           dotnet build Augustus/Augustus/Augustus.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet build Augustus/Augustus.AI/Augustus.AI.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
           dotnet build Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet build Augustus/Augustus.APIs.Stripe/Augustus.Stripe.csproj --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
           dotnet build Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-restore
+          dotnet build Augustus/Augustus.AI.Tests/Augustus.AI.Tests.csproj --configuration Release --no-restore
           dotnet build Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-restore
+          dotnet build Augustus/Augustus.APIs.Stripe.Tests/Augustus.Stripe.Tests.csproj --configuration Release --no-restore
 
       - name: Run tests
         run: |
-          dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net10.0
+          for fw in net6.0 net7.0 net8.0 net9.0 net10.0; do
+            echo "::group::Augustus.Tests ($fw)"
+            dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework $fw
+            echo "::endgroup::"
+          done
+          for fw in net8.0 net9.0 net10.0; do
+            echo "::group::Augustus.AI.Tests ($fw)"
+            dotnet test Augustus/Augustus.AI.Tests/Augustus.AI.Tests.csproj --configuration Release --no-build --verbosity normal --framework $fw
+            echo "::endgroup::"
+          done
           dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --no-build --verbosity normal
+          for fw in net8.0 net9.0; do
+            echo "::group::Augustus.Stripe.Tests ($fw)"
+            dotnet test Augustus/Augustus.APIs.Stripe.Tests/Augustus.Stripe.Tests.csproj --configuration Release --no-build --verbosity normal --framework $fw
+            echo "::endgroup::"
+          done
 
       - name: Pack NuGet packages
         run: |
-          dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
-          dotnet pack Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-build --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus/Augustus.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.AI/Augustus.AI.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.Reqnroll/Augustus.Reqnroll.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
+          dotnet pack Augustus/Augustus.APIs.Stripe/Augustus.Stripe.csproj --configuration Release --no-build --no-restore --output ./nupkg /p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Verify package versions
         run: |
@@ -101,6 +128,8 @@ jobs:
 
       - name: Publish release notes
         run: |
-          echo "✅ Successfully published Augustus.AI and Augustus.AI.Reqnroll version ${{ steps.version.outputs.VERSION }} to NuGet.org"
+          echo "✅ Successfully published all Augustus packages version ${{ steps.version.outputs.VERSION }} to NuGet.org"
+          echo "📦 Augustus: https://www.nuget.org/packages/Augustus/${{ steps.version.outputs.VERSION }}"
           echo "📦 Augustus.AI: https://www.nuget.org/packages/Augustus.AI/${{ steps.version.outputs.VERSION }}"
-          echo "📦 Augustus.AI.Reqnroll: https://www.nuget.org/packages/Augustus.AI.Reqnroll/${{ steps.version.outputs.VERSION }}"
+          echo "📦 Augustus.Reqnroll: https://www.nuget.org/packages/Augustus.Reqnroll/${{ steps.version.outputs.VERSION }}"
+          echo "📦 Augustus.Stripe: https://www.nuget.org/packages/Augustus.Stripe/${{ steps.version.outputs.VERSION }}"
