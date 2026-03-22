@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -7,13 +8,9 @@ internal static class CacheKeyBodyNormalizer
 {
     private const string NormalizedPlaceholder = "__NORMALIZED__";
 
-    // Use consistent JSON serialization options to ensure platform-independent cache key generation.
-    // WriteIndented=false ensures no line-ending differences between Windows (\r\n) and Linux (\n).
-    // Encoder=Unsafe avoids platform-specific unicode escaping differences.
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
-        WriteIndented = false,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     public static byte[] NormalizeForCacheKey(byte[] body, IReadOnlyCollection<string> propertyNames)
@@ -27,8 +24,8 @@ internal static class CacheKeyBodyNormalizer
             if (node is null)
                 return body;
 
-            var changed = NormalizeNode(node, propertyNames);
-            return changed ? JsonSerializer.SerializeToUtf8Bytes(node, SerializerOptions) : body;
+            NormalizeNode(node, propertyNames);
+            return JsonSerializer.SerializeToUtf8Bytes(node, SerializerOptions);
         }
         catch (JsonException)
         {

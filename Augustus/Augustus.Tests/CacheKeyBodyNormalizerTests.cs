@@ -16,6 +16,16 @@ public class CacheKeyBodyNormalizerTests
     }
 
     [Fact]
+    public void NormalizeForCacheKey_NoMatchingFields_StillReSerializesForCanonicalBytes()
+    {
+        var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
+        var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, new[] { "tool_call_id" });
+
+        ReferenceEquals(result, body).Should().BeFalse();
+        Encoding.UTF8.GetString(result).Should().Contain("\"model\":\"gpt-4\"");
+    }
+
+    [Fact]
     public void NormalizeForCacheKey_TopLevelProperty_IsNormalized()
     {
         var body = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_abc123\",\"model\":\"gpt-4\"}");
