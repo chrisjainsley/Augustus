@@ -32,6 +32,7 @@ tools:
   bash: true
 
 concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 timeout-minutes: 30
@@ -79,16 +80,18 @@ safe-outputs:
             PRERELEASE=$(jq -r '.items[] | select(.type == "create_draft_release") | .prerelease // "false"' "$GH_AW_AGENT_OUTPUT")
             jq -r '.items[] | select(.type == "create_draft_release") | .release_notes' "$GH_AW_AGENT_OUTPUT" > /tmp/release-notes.md
 
-            # --- Delete stale draft releases ---
-            echo "Checking for stale draft releases..."
-            DRAFTS=$(gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName')
-            if [ -n "$DRAFTS" ]; then
-              while IFS= read -r DRAFT_TAG; do
-                echo "Deleting stale draft release: $DRAFT_TAG"
-                gh release delete "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
-              done <<< "$DRAFTS"
+            # --- Delete existing draft release for this tag (if any) ---
+            echo "Checking for existing draft release for tag: $TAG"
+            EXISTING_DRAFT=$(gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | awk -v tag="$TAG" '$0 == tag { print; exit }')
+            if [ -n "$EXISTING_DRAFT" ]; then
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "[DRY RUN] Would delete existing draft release for tag: $EXISTING_DRAFT"
+              else
+                echo "Deleting existing draft release for tag: $EXISTING_DRAFT"
+                gh release delete "$EXISTING_DRAFT" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+              fi
             else
-              echo "No stale draft releases found."
+              echo "No existing draft release found for tag: $TAG"
             fi
 
             # --- Create the new draft release ---
@@ -307,8 +310,8 @@ sections):
 ## Step 5 — Create a Draft Release
 
 > **Note**: The `create_draft_release` job automatically deletes any existing
-> stale draft releases before creating the new one, so there is no need to
-> clean them up manually.
+> draft release for the same tag before creating the new one, so there is no
+> need to clean it up manually.
 
 Call the `create_draft_release` tool with the following values:
 

@@ -16,6 +16,23 @@ jobs:
       && contains(github.event.issue.labels.*.name, 'release')
     runs-on: ubuntu-latest
     steps:
+      - name: Authorize release approver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          PERMISSION=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$ACTOR/permission" -q .permission 2>/dev/null || echo "none")
+          case "$PERMISSION" in
+            admin|maintain|write)
+              echo "Actor $ACTOR authorized to publish releases (permission: $PERMISSION)."
+              ;;
+            *)
+              echo "::error::Actor $ACTOR is not authorized to publish releases (permission: $PERMISSION)."
+              echo "Only collaborators with write, maintain, or admin access may approve releases."
+              exit 1
+              ;;
+          esac
+
       - name: Extract version from issue title
         id: version
         env:
@@ -33,6 +50,7 @@ jobs:
           echo "Extracted version: $VERSION (tag: $TAG)"
 
       - name: Verify draft release exists
+        id: verify
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
@@ -45,13 +63,15 @@ jobs:
 
           IS_DRAFT=$(echo "$RELEASE_JSON" | jq -r '.isDraft')
           if [ "$IS_DRAFT" != "true" ]; then
-            echo "::error::Release $TAG is not a draft — it may have already been published."
-            exit 1
+            echo "Release $TAG is not a draft — it has already been published. Treating as no-op."
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Confirmed draft release exists for $TAG"
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "Confirmed draft release exists for $TAG"
-
       - name: Publish the draft release
+        if: steps.verify.outputs.already_published != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
@@ -63,15 +83,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
+          ALREADY_PUBLISHED: ${{ steps.verify.outputs.already_published }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" \
-            --repo "$GITHUB_REPOSITORY" \
-            --body "Release **$TAG** has been published. NuGet packaging will begin automatically via the \`Publish NuGet Package\` workflow.
+          if [ "$ALREADY_PUBLISHED" = "true" ]; then
+            gh issue comment "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "Release **$TAG** was already published. No action needed."
+          else
+            gh issue comment "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "Release **$TAG** has been published. NuGet packaging will begin automatically via the \`Publish NuGet Package\` workflow.
 
           - [View release](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG)
           - [Monitor NuGet publish](https://github.com/$GITHUB_REPOSITORY/actions/workflows/publish-nuget.yml)"
+          fi
 
           gh issue close "$ISSUE_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
