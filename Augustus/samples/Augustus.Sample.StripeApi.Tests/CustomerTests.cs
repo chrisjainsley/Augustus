@@ -27,6 +27,7 @@ public class CustomerTests
         var client = simulator.CreateClient();
 
         var getResponse = await client.GetAsync("/v1/customers/cus_test123");
+        getResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
         var getJson = await getResponse.Content.ReadAsStringAsync();
         var getDoc = JsonDocument.Parse(getJson);
         getDoc.RootElement.GetProperty("object").GetString().Should().Be("customer");

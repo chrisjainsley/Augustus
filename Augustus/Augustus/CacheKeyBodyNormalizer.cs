@@ -32,6 +32,9 @@ internal static class CacheKeyBodyNormalizer
         if (body.Length == 0)
             return body;
 
+        if (!LooksLikeJson(body))
+            return body;
+
         try
         {
             var node = JsonNode.Parse(body);
@@ -79,6 +82,8 @@ internal static class CacheKeyBodyNormalizer
                 foreach (var item in arr)
                     a.Add(DetachCopy(item));
                 return a;
+            case JsonValue value when value.TryGetValue<JsonElement>(out var element):
+                return JsonValue.Create(element.Clone());
             default:
                 return JsonNode.Parse(node.ToJsonString())!;
         }
@@ -149,5 +154,33 @@ internal static class CacheKeyBodyNormalizer
                 break;
         }
         return changed;
+    }
+
+    private static bool LooksLikeJson(byte[] body)
+    {
+        foreach (var b in body)
+        {
+            switch (b)
+            {
+                case (byte)' ':
+                case (byte)'\t':
+                case (byte)'\r':
+                case (byte)'\n':
+                    continue;
+                case (byte)'{':
+                case (byte)'[':
+                case (byte)'"':
+                case >= (byte)'0' and <= (byte)'9':
+                case (byte)'-':
+                case (byte)'t':
+                case (byte)'f':
+                case (byte)'n':
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        return false;
     }
 }
