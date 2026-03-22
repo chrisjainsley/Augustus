@@ -400,5 +400,8 @@ FodyWeavers.xsd
 # Claude Code local settings
 .claude/settings.local.json
 
+# Claude Code worktree checkouts (local copies; not part of the repo)
+.claude/worktrees/
+
 # Reqnroll auto-generated feature code-behind files
 *.feature.cs
