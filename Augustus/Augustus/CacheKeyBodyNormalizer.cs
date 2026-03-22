@@ -171,13 +171,13 @@ internal static class CacheKeyBodyNormalizer
         switch (node)
         {
             case JsonObject obj:
-                foreach (var key in obj.Select(kvp => kvp.Key).ToList())
+                foreach (var kvp in obj.ToList())
                 {
-                    var child = obj[key];
+                    var child = kvp.Value;
                     if (child is JsonValue val && val.TryGetValue<string>(out var s) && s.Contains('\r'))
-                        obj[key] = s.ReplaceLineEndings("\n");
+                        obj[kvp.Key] = s.ReplaceLineEndings("\n");
                     else if (child is JsonObject or JsonArray)
-                        NormalizeNewlines(child);
+                        NormalizeNewlines(child!);
                 }
                 break;
             case JsonArray arr:
@@ -189,6 +189,10 @@ internal static class CacheKeyBodyNormalizer
                     else if (child is JsonObject or JsonArray)
                         NormalizeNewlines(child!);
                 }
+                break;
+            case JsonValue val:
+                if (val.TryGetValue<string>(out var s) && s.Contains('\r'))
+                    val.SetValue(s.ReplaceLineEndings("\n"));
                 break;
         }
     }
