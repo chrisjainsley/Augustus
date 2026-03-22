@@ -69,10 +69,10 @@ public class CacheManagementTests
         {
             await AssertCacheOnlyChargeHitAsync(
                 localPort: 9054,
-                amount: "3000",
-                currency: "gbp",
+                amount: "1000",
+                currency: "usd",
                 source: "tok_visa",
-                committedHash: "4995720C5B6986DE418E4F17DE3689CEB561326199A57DBC72443CCE6CC83993");
+                committedHash: "6170F0873A1DF314EB4583DDFA2541D1549CBF24DCAF9C4888A0E7F2400AF91A");
             return;
         }
 

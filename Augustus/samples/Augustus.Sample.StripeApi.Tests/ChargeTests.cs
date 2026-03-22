@@ -59,9 +59,9 @@ public class ChargeTests
         {
             var content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["amount"] = "5000",
-                ["currency"] = "eur",
-                ["source"] = "tok_mastercard"
+                ["amount"] = "2000",
+                ["currency"] = "usd",
+                ["source"] = "tok_visa"
             });
             var resp = await client.PostAsync("/v1/charges", content);
             return await resp.Content.ReadAsStringAsync();
@@ -77,7 +77,7 @@ public class ChargeTests
 
         if (IsStripeSampleCiCacheOnly())
         {
-            AssertCommittedMockExists("624ECE6A3C53A1E7A689457725DE12115681376216444D7052557E7C2FA53159");
+            AssertCommittedMockExists("4665C47CA87BC6BE53457658FBDB321FD4A91D23F2FBEEF439A68C9B88AB9F36");
         }
         else
         {

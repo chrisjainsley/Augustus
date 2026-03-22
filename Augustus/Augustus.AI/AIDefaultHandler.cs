@@ -64,6 +64,7 @@ internal class AIDefaultHandler : IRequestHandler
                 httpContext.Request.Path.Value ?? "/",
                 httpContext.Request.QueryString.Value,
                 bodyBytes,
+                out var materializedBody,
                 instructions,
                 options.DynamicContentFields);
 
@@ -87,13 +88,10 @@ internal class AIDefaultHandler : IRequestHandler
                     "Run tests locally with an OpenAI API key to generate and cache this response.";
                 if (aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount > 0)
                 {
-                    var materialized = CacheKeyBodyNormalizer.PrepareBodyForCacheKey(
-                        bodyBytes,
-                        options.DynamicContentFields as IReadOnlyCollection<string> ?? options.DynamicContentFields.ToArray());
-                    var n = Math.Min(aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount, materialized.Length);
+                    var n = Math.Min(aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount, materializedBody.Length);
                     if (n > 0)
                     {
-                        var digest = SHA256.HashData(materialized.AsSpan(0, n));
+                        var digest = SHA256.HashData(materializedBody.AsSpan(0, n));
                         message += $" Materialized body prefix SHA-256 (first {n} bytes): {Convert.ToHexString(digest)}.";
                     }
                 }

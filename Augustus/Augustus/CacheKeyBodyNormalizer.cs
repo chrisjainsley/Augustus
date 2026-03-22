@@ -97,20 +97,20 @@ internal static class CacheKeyBodyNormalizer
                 return null;
             case JsonObject obj:
                 var sorted = new JsonObject();
-                foreach (var key in obj.Select(static kvp => kvp.Key).OrderBy(static k => k, StringComparer.Ordinal))
+                foreach (var kvp in obj.OrderBy(static kvp => kvp.Key, StringComparer.Ordinal))
                 {
-                    sorted[key] = SortKeysRecursive(DetachCopy(obj[key]));
+                    sorted[kvp.Key] = SortKeysRecursive(kvp.Value);
                 }
                 return sorted;
             case JsonArray arr:
                 var newArr = new JsonArray();
                 foreach (var item in arr)
                 {
-                    newArr.Add(SortKeysRecursive(DetachCopy(item)));
+                    newArr.Add(SortKeysRecursive(item));
                 }
                 return newArr;
             default:
-                return node;
+                return DetachCopy(node);
         }
     }
 

@@ -49,7 +49,13 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
         try
         {
             var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
-            var cacheKey = CacheKeyComputer.ComputeCacheKey(context.Request.Method, context.Request.Path.Value ?? "/", context.Request.QueryString.Value, bodyBytes, dynamicContentFields: options.DynamicContentFields);
+            var cacheKey = CacheKeyComputer.ComputeCacheKey(
+                context.Request.Method,
+                context.Request.Path.Value ?? "/",
+                context.Request.QueryString.Value,
+                bodyBytes,
+                out var materializedBody,
+                dynamicContentFields: options.DynamicContentFields);
 
             if (options.EnableCaching)
             {
@@ -75,13 +81,10 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                 var digestInputLen = aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount;
                 if (digestInputLen > 0)
                 {
-                    var materialized = CacheKeyBodyNormalizer.PrepareBodyForCacheKey(
-                        bodyBytes,
-                        options.DynamicContentFields as IReadOnlyCollection<string> ?? options.DynamicContentFields.ToArray());
-                    var n = Math.Min(digestInputLen, materialized.Length);
+                    var n = Math.Min(digestInputLen, materializedBody.Length);
                     if (n > 0)
                     {
-                        var digest = SHA256.HashData(materialized.AsSpan(0, n));
+                        var digest = SHA256.HashData(materializedBody.AsSpan(0, n));
                         payload["materializedBodyPrefixSha256"] = Convert.ToHexString(digest);
                     }
                 }
