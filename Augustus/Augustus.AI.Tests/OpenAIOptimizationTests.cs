@@ -1,5 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
+using Augustus;
+using Augustus.AI;
+using Augustus.Extensions;
 using FluentAssertions;
 
 namespace Augustus.AI.Tests;
@@ -45,5 +49,45 @@ public class OpenAIOptimizationTests
         var high = new AIOptions { OpenAIApiKey = "same-key", MaxConcurrentRequests = 10 };
 
         OpenAICallCoordinator.BuildInstanceKey(low).Should().NotBe(OpenAICallCoordinator.BuildInstanceKey(high));
+    }
+
+    [Fact]
+    public async Task RouteLevel_UseAI_CacheOnly_CacheMiss_Returns503_WithoutApiKey()
+    {
+        var cacheDir = Path.Combine(Path.GetTempPath(), $"aug_route_co_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cacheDir);
+        try
+        {
+            var simulator = this.CreateAPISimulator("TestAPI", options =>
+            {
+                options.CacheOnly = true;
+                options.CacheFolderPath = cacheDir;
+                options.Port = 0;
+            });
+            simulator
+                .ForPost("/route/items")
+                .UseAI(new AIOptions(), "Return minimal JSON")
+                .Add();
+
+            await using (simulator)
+            {
+                await simulator.StartAsync();
+                using var client = simulator.CreateClient();
+                using var response = await client.PostAsync(
+                    "/route/items",
+                    new StringContent("{}", Encoding.UTF8, "application/json"));
+                response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+            }
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(cacheDir, true);
+            }
+            catch
+            {
+            }
+        }
     }
 }

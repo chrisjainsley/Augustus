@@ -5,21 +5,28 @@ using Azure.AI.OpenAI;
 using Microsoft.AspNetCore.Http;
 using OpenAI;
 using OpenAI.Chat;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 /// <summary>
 /// Response strategy that uses OpenAI (or Azure OpenAI) to generate realistic API responses for a matched route.
 /// Uses the same cache key algorithm and on-disk cache as <see cref="AIDefaultHandler"/>.
 /// </summary>
-public sealed class AIResponseStrategy : IResponseStrategy, IDisposable
+/// <remarks>
+/// When the owning simulator has <see cref="APISimulatorOptions.CacheOnly"/> set, no API key is required and cache misses
+/// return HTTP 503 without calling OpenAI. For standalone construction with a detached simulator, prefer
+/// <see cref="DisposeAsync"/> (or <c>await using</c>) so the simulator is torn down asynchronously; <see cref="Dispose"/>
+/// performs the same cleanup but may block briefly.
+/// </remarks>
+public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncDisposable
 {
     private readonly APISimulator simulator;
     private readonly bool ownsDetachedSimulator;
     private readonly AIOptions options;
     private readonly List<string> instructions;
     private readonly IReadOnlyCollection<string> mergedDynamicFields;
-    private readonly OpenAIClient openAiClient;
-    private readonly OpenAIRequestHandler requestHandler;
+    private readonly OpenAIClient? openAiClient;
+    private readonly OpenAIRequestHandler? requestHandler;
 
     /// <summary>
     /// Standalone constructor using <see cref="AIOptions.CacheFolderPath"/> for disk cache (no shared <see cref="APISimulator"/>).
@@ -57,20 +64,23 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable
         this.instructions = new List<string>(instructions ?? Array.Empty<string>());
         this.mergedDynamicFields = mergedDynamicFields ?? Array.Empty<string>();
 
-        options.Validate();
-
-        if (options.UseAzureOpenAI)
+        if (!simulator.Options.CacheOnly)
         {
-            openAiClient = new AzureOpenAIClient(
-                new Uri(options.OpenAIEndpoint),
-                new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
-        }
-        else
-        {
-            openAiClient = new OpenAIClient(options.OpenAIApiKey);
-        }
+            options.Validate();
 
-        requestHandler = new OpenAIRequestHandler(openAiClient, options);
+            if (options.UseAzureOpenAI)
+            {
+                openAiClient = new AzureOpenAIClient(
+                    new Uri(options.OpenAIEndpoint),
+                    new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
+            }
+            else
+            {
+                openAiClient = new OpenAIClient(options.OpenAIApiKey);
+            }
+
+            requestHandler = new OpenAIRequestHandler(openAiClient, options);
+        }
     }
 
     private static APISimulator CreateDetachedSimulator(AIOptions aiOptions)
@@ -101,7 +111,7 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable
                 path,
                 httpContext.Request.QueryString.Value,
                 bodyBytes,
-                out _,
+                out var materializedBody,
                 instructions,
                 mergedDynamicFields);
 
@@ -121,6 +131,45 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable
                     await httpContext.Response.WriteAsync(cachedResponse, cancellationToken).ConfigureAwait(false);
                     return;
                 }
+            }
+
+            if (simOptions.CacheOnly)
+            {
+                var message =
+                    $"Cache-only mode: no cached response found for request hash '{requestHash}'. " +
+                    "Run tests locally with an OpenAI API key to generate and cache this response.";
+                if (options.CacheMissMaterializedBodyPrefixSha256ByteCount > 0)
+                {
+                    var n = Math.Min(options.CacheMissMaterializedBodyPrefixSha256ByteCount, materializedBody.Length);
+                    if (n > 0)
+                    {
+                        var digest = SHA256.HashData(materializedBody.AsSpan(0, n));
+                        message += $" Materialized body prefix SHA-256 (first {n} bytes): {Convert.ToHexString(digest)}.";
+                    }
+                }
+
+                await WriteErrorResponse(httpContext, message, 503, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (requestHandler is null)
+            {
+                await WriteErrorResponse(
+                    httpContext,
+                    "OpenAI client is not initialized. Provide an API key or enable cache-only mode.",
+                    500,
+                    cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (instructions.Count == 0)
+            {
+                await WriteErrorResponse(
+                    httpContext,
+                    "No instructions provided. Please add instructions using WithInstruction() or the UseAI overload.",
+                    500,
+                    cancellationToken).ConfigureAwait(false);
+                return;
             }
 
             List<ChatMessage> messages = new();
@@ -200,10 +249,22 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        requestHandler.Dispose();
+        requestHandler?.Dispose();
         if (ownsDetachedSimulator)
         {
-            simulator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            simulator.DisposeAsync().AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
+        }
+    }
+
+    /// <summary>
+    /// Asynchronously releases resources, including the detached simulator when this strategy owns it.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        requestHandler?.Dispose();
+        if (ownsDetachedSimulator)
+        {
+            await simulator.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

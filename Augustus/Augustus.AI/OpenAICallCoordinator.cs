@@ -14,11 +14,17 @@ internal sealed class OpenAICallCoordinator
     private static readonly ConcurrentDictionary<string, OpenAICallCoordinator> Instances = new(StringComparer.Ordinal);
 
     private readonly SemaphoreSlim _semaphore;
-    private readonly ConcurrentDictionary<string, Lazy<Task<ClientResult<ChatCompletion>>>> _inFlight = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, DedupeEntry> _inFlight = new(StringComparer.Ordinal);
 
     private OpenAICallCoordinator(int maxConcurrentRequests)
     {
         _semaphore = new SemaphoreSlim(maxConcurrentRequests, maxConcurrentRequests);
+    }
+
+    private sealed class DedupeEntry
+    {
+        public readonly object Gate = new();
+        public Task<ClientResult<ChatCompletion>>? SharedTask;
     }
 
     /// <summary>
@@ -72,23 +78,26 @@ internal sealed class OpenAICallCoordinator
             }
         }
 
-        var lazy = _inFlight.GetOrAdd(
-            dedupeKey,
-            _ => new Lazy<Task<ClientResult<ChatCompletion>>>(
-                () => RunDedupedOnceAsync(dedupeKey, operation),
-                LazyThreadSafetyMode.ExecutionAndPublication));
+        var entry = _inFlight.GetOrAdd(dedupeKey, _ => new DedupeEntry());
+        Task<ClientResult<ChatCompletion>> sharedTask;
+        lock (entry.Gate)
+        {
+            entry.SharedTask ??= RunDedupedOnceAsync(dedupeKey, operation, cancellationToken);
+            sharedTask = entry.SharedTask;
+        }
 
-        return await lazy.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return await sharedTask.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<ClientResult<ChatCompletion>> RunDedupedOnceAsync(
         string dedupeKey,
-        Func<CancellationToken, Task<ClientResult<ChatCompletion>>> operation)
+        Func<CancellationToken, Task<ClientResult<ChatCompletion>>> operation,
+        CancellationToken cancellationToken)
     {
-        await _semaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await operation(CancellationToken.None).ConfigureAwait(false);
+            return await operation(cancellationToken).ConfigureAwait(false);
         }
         finally
         {

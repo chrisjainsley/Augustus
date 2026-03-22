@@ -21,10 +21,11 @@ namespace Augustus.AI
         public bool UseAzureOpenAI { get; set; }
         public void Validate() { }
     }
-    public sealed class AIResponseStrategy : Augustus.IResponseStrategy, System.IDisposable
+    public sealed class AIResponseStrategy : Augustus.IResponseStrategy, System.IAsyncDisposable, System.IDisposable
     {
         public AIResponseStrategy(Augustus.AI.AIOptions options, params string[] instructions) { }
         public void Dispose() { }
+        public System.Threading.Tasks.ValueTask DisposeAsync() { }
         public System.Threading.Tasks.Task GenerateResponseAsync(Microsoft.AspNetCore.Http.HttpContext httpContext, System.Threading.CancellationToken cancellationToken = default) { }
     }
     public static class AISimulatorExtensions
