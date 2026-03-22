@@ -64,8 +64,8 @@ The workflow runs the following steps automatically:
 
 4. **Release notes** — generates structured markdown release notes.
 
-5. **Stale draft cleanup** — deletes any existing draft releases to prevent
-   accumulation.
+5. **Draft cleanup** — deletes any existing draft release for the same tag to
+   prevent accumulation from repeated runs.
 
 6. **Draft release creation** — creates a new draft GitHub release with the
    selected version, tag, and release notes.
@@ -78,8 +78,8 @@ The workflow runs the following steps automatically:
 
 - **Concurrency control**: If a newer Create Release run starts while an older
   one is still running, the older run is automatically cancelled.
-- **Stale draft cleanup**: Before creating a new draft release, the workflow
-  deletes any existing draft releases so they don't pile up.
+- **Draft cleanup**: Before creating a new draft release, the workflow deletes
+  any existing draft release for the same tag so repeated runs don't pile up.
 
 ### If the Release Is Blocked
 

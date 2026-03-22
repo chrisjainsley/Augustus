@@ -45,10 +45,10 @@ safe-outputs:
   jobs:
     create_draft_release:
       description: >
-        Deletes any existing stale draft releases, then creates a new draft
-        GitHub release with the specified version tag, title, and release
-        notes. The release is created as a draft so a human can review and
-        publish it. Returns the URL of the releases page.
+        Deletes any existing draft release for the same tag (if present), then
+        creates a new draft GitHub release with the specified version tag,
+        title, and release notes. The release is created as a draft so a human
+        can review and publish it. Returns the URL of the releases page.
       runs-on: ubuntu-latest
       permissions:
         contents: write
