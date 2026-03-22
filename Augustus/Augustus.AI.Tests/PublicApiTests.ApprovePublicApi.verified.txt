@@ -1,4 +1,4 @@
-﻿[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/chrisjainsley/augustus")]
+[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/chrisjainsley/augustus")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Augustus.AI.Tests")]
 namespace Augustus.AI
 {
@@ -8,6 +8,7 @@ namespace Augustus.AI
         public string AzureApiVersion { get; set; }
         public string AzureDeploymentName { get; set; }
         public string CacheFolderPath { get; set; }
+        public int CacheMissMaterializedBodyPrefixSha256ByteCount { get; set; }
         public bool EnableCaching { get; set; }
         public int InitialRetryDelayMs { get; set; }
         public int MaxConcurrentRequests { get; set; }

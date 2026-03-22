@@ -149,4 +149,40 @@ public class CacheKeyTests
 
         hash1.Should().NotBe(hash2);
     }
+
+    [Fact]
+    public void CacheKeyComputer_JSON_PermutedPropertyOrder_ProducesSameHash()
+    {
+        var body1 = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\",\"messages\":[]}");
+        var body2 = Encoding.UTF8.GetBytes("{\"messages\":[],\"model\":\"gpt-4\"}");
+
+        var hash1 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", "?api-version=2024-06-01", body1);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", "?api-version=2024-06-01", body2);
+
+        hash1.Should().Be(hash2);
+    }
+
+    [Fact]
+    public void CacheKeyComputer_WithDynamicFields_PermutedKeyOrder_ProducesSameHash()
+    {
+        var body1 = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\",\"tool_call_id\":\"call_a\"}");
+        var body2 = Encoding.UTF8.GetBytes("{\"tool_call_id\":\"call_b\",\"model\":\"gpt-4\"}");
+        var fields = new List<string> { "tool_call_id" };
+
+        var hash1 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body1, dynamicContentFields: fields);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, body2, dynamicContentFields: fields);
+
+        hash1.Should().Be(hash2);
+    }
+
+    [Fact]
+    public void CacheKeyComputer_NonJsonBody_UnchangedHashVsRawBytes()
+    {
+        var body = Encoding.UTF8.GetBytes("amount=2000&currency=usd&source=tok_visa");
+        var hash = CacheKeyComputer.ComputeCacheKey("POST", "/v1/charges", null, body);
+
+        // Form bodies are not JSON; hashing must match raw bytes (no false parse).
+        var hashAgain = CacheKeyComputer.ComputeCacheKey("POST", "/v1/charges", null, body);
+        hashAgain.Should().Be(hash);
+    }
 }

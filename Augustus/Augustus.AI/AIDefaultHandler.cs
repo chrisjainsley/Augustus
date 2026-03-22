@@ -1,7 +1,9 @@
+using Augustus;
 using Azure.AI.OpenAI;
 using OpenAI;
 using OpenAI.Chat;
 using Microsoft.AspNetCore.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace Augustus.AI;
@@ -16,11 +18,13 @@ internal class AIDefaultHandler : IRequestHandler
     private readonly OpenAIRequestHandler? requestHandler;
     private readonly bool cacheOnly;
     private readonly APISimulator simulator;
+    private readonly AIOptions aiOptions;
     private readonly BackgroundCacheWriter _cacheWriter = new();
 
     public AIDefaultHandler(APISimulator simulator, AIOptions aiOptions)
     {
         this.simulator = simulator ?? throw new ArgumentNullException(nameof(simulator));
+        this.aiOptions = aiOptions ?? throw new ArgumentNullException(nameof(aiOptions));
         this.cacheOnly = simulator.Options.CacheOnly;
 
         if (!cacheOnly)
@@ -78,10 +82,23 @@ internal class AIDefaultHandler : IRequestHandler
 
             if (cacheOnly)
             {
-                await WriteErrorResponse(httpContext,
+                var message =
                     $"Cache-only mode: no cached response found for request hash '{requestHash}'. " +
-                    "Run tests locally with an OpenAI API key to generate and cache this response.",
-                    503, cancellationToken);
+                    "Run tests locally with an OpenAI API key to generate and cache this response.";
+                if (aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount > 0)
+                {
+                    var materialized = CacheKeyBodyNormalizer.PrepareBodyForCacheKey(
+                        bodyBytes,
+                        options.DynamicContentFields as IReadOnlyCollection<string> ?? options.DynamicContentFields.ToArray());
+                    var n = Math.Min(aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount, materialized.Length);
+                    if (n > 0)
+                    {
+                        var digest = SHA256.HashData(materialized.AsSpan(0, n));
+                        message += $" Materialized body prefix SHA-256 (first {n} bytes): {Convert.ToHexString(digest)}.";
+                    }
+                }
+
+                await WriteErrorResponse(httpContext, message, 503, cancellationToken);
                 return;
             }
 

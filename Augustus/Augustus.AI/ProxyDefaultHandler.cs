@@ -1,4 +1,7 @@
+using Augustus;
 using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace Augustus.AI;
@@ -63,12 +66,27 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
             {
                 context.Response.StatusCode = 503;
                 context.Response.ContentType = "application/json";
-                var error = JsonSerializer.Serialize(new
+                var payload = new Dictionary<string, object?>
                 {
-                    error = "Cache miss in CacheOnly mode. No cached response found for this request.",
-                    status = 503,
-                    requestHash = cacheKey
-                });
+                    ["error"] = "Cache miss in CacheOnly mode. No cached response found for this request.",
+                    ["status"] = 503,
+                    ["requestHash"] = cacheKey
+                };
+                var digestInputLen = aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount;
+                if (digestInputLen > 0)
+                {
+                    var materialized = CacheKeyBodyNormalizer.PrepareBodyForCacheKey(
+                        bodyBytes,
+                        options.DynamicContentFields as IReadOnlyCollection<string> ?? options.DynamicContentFields.ToArray());
+                    var n = Math.Min(digestInputLen, materialized.Length);
+                    if (n > 0)
+                    {
+                        var digest = SHA256.HashData(materialized.AsSpan(0, n));
+                        payload["materializedBodyPrefixSha256"] = Convert.ToHexString(digest);
+                    }
+                }
+
+                var error = JsonSerializer.Serialize(payload);
                 await context.Response.WriteAsync(error, cancellationToken).ConfigureAwait(false);
                 return;
             }

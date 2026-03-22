@@ -57,6 +57,42 @@ jobs:
           path: '**/*.trx'
           if-no-files-found: ignore
 
+  cross-platform-cache-key-tests:
+    name: Cross-platform cache key tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Augustus/Augustus.Tests/Augustus.Tests.csproj
+
+      - name: Build
+        run: dotnet build Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-restore --framework net8.0
+
+      - name: Run cache key tests
+        run: dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --no-build --verbosity normal --framework net8.0 --filter "FullyQualifiedName~CacheKey" --logger "trx;LogFileName=cache-key-tests-${{ matrix.os }}.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-key-tests-${{ matrix.os }}
+          path: '**/*.trx'
+          if-no-files-found: ignore
+
   reqnroll-tests:
     name: Reqnroll Tests
     runs-on: ubuntu-latest

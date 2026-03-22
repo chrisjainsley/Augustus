@@ -7,12 +7,26 @@ namespace Augustus.Tests;
 public class CacheKeyBodyNormalizerTests
 {
     [Fact]
-    public void NormalizeForCacheKey_NoProperties_ReturnsBodyUnchanged()
+    public void NormalizeForCacheKey_NoProperties_JSON_IsCanonicalized()
     {
         var body = Encoding.UTF8.GetBytes("{\"id\":\"abc\",\"value\":42}");
         var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, Array.Empty<string>());
 
-        result.Should().BeSameAs(body);
+        // JSON bodies are re-serialized (sorted keys, stable escaping) even with no dynamic fields.
+        result.Should().NotBeSameAs(body);
+        Encoding.UTF8.GetString(result).Should().Be("{\"id\":\"abc\",\"value\":42}");
+    }
+
+    [Fact]
+    public void NormalizeForCacheKey_PermutedKeyOrder_ProducesIdenticalCanonicalJson()
+    {
+        var body1 = Encoding.UTF8.GetBytes("{\"a\":1,\"b\":2}");
+        var body2 = Encoding.UTF8.GetBytes("{\"b\":2,\"a\":1}");
+        var r1 = CacheKeyBodyNormalizer.NormalizeForCacheKey(body1, Array.Empty<string>());
+        var r2 = CacheKeyBodyNormalizer.NormalizeForCacheKey(body2, Array.Empty<string>());
+
+        Encoding.UTF8.GetString(r1).Should().Be(Encoding.UTF8.GetString(r2));
+        Encoding.UTF8.GetString(r1).Should().Be("{\"a\":1,\"b\":2}");
     }
 
     [Fact]
