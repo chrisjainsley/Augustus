@@ -21,6 +21,24 @@ public static class AugustusReqnrollContext
     internal static IReadOnlyList<APISimulator> Simulators => _simulators;
 
     /// <summary>
+    /// Returns a simulator registered via <see cref="Register"/> (defaults to the first registration).
+    /// Use this from step bindings when you do not rely on <see cref="AugustusScenarioHooks"/> placing the simulator in <c>ScenarioContext</c>.
+    /// </summary>
+    public static APISimulator GetRegisteredSimulator(int index = 0)
+    {
+        if (_simulators.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No APISimulator has been registered. Call AugustusReqnrollContext.Register(simulator) from a [BeforeTestRun] hook.");
+        }
+
+        if ((uint)index >= (uint)_simulators.Count)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        return _simulators[index];
+    }
+
+    /// <summary>
     /// Gets the resolved project root directory.
     /// </summary>
     internal static string? ProjectRoot => _projectRoot;

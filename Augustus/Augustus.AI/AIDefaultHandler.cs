@@ -119,12 +119,11 @@ internal class AIDefaultHandler : IRequestHandler
             }
             messages.Add(ChatMessage.CreateUserMessage(curlRequest));
 
-            var chatOptions = new ChatCompletionOptions
-            {
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            };
+            var chatOptions = AIResponseFormatting.CreateJsonObjectChatOptions();
 
-            var chatResults = await requestHandler.CompleteChatWithRetryAsync(messages, chatOptions, cancellationToken).ConfigureAwait(false);
+            var chatResults = await requestHandler
+                .CompleteChatWithRetryAsync(requestHash, messages, chatOptions, cancellationToken)
+                .ConfigureAwait(false);
 
             if (chatResults?.Value?.Content == null || chatResults.Value.Content.Count == 0)
             {
@@ -139,7 +138,7 @@ internal class AIDefaultHandler : IRequestHandler
                 return;
             }
 
-            var responseContent = StripMarkdown(firstContent.Text);
+            var responseContent = AIResponseFormatting.StripMarkdownFences(firstContent.Text);
 
             responseContent = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
                 responseContent, httpContext.Request.Path.Value ?? "/");
@@ -160,23 +159,6 @@ internal class AIDefaultHandler : IRequestHandler
 
     public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
         => _cacheWriter.DrainAsync(cancellationToken);
-
-    private static string StripMarkdown(string text)
-    {
-        var trimmed = text.Trim();
-        const string jsonFence = "```json";
-        const string fence = "```";
-
-        if (trimmed.StartsWith(jsonFence, StringComparison.OrdinalIgnoreCase))
-            trimmed = trimmed[jsonFence.Length..];
-        else if (trimmed.StartsWith(fence))
-            trimmed = trimmed[fence.Length..];
-
-        if (trimmed.EndsWith(fence))
-            trimmed = trimmed[..^fence.Length];
-
-        return trimmed.Trim();
-    }
 
     private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken = default)
     {

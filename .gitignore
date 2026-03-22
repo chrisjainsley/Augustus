@@ -408,3 +408,6 @@ FodyWeavers.xsd
 
 # Reqnroll auto-generated feature code-behind files
 *.feature.cs
+
+# Local Augustus simulator disk cache for Reqnroll sample (machine-specific; regenerates on run)
+Augustus/samples/Augustus.Sample.Reqnroll.Specs/Support/__mocks__/

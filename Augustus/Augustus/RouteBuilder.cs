@@ -22,6 +22,11 @@ public sealed class RouteBuilder
     }
 
     /// <summary>
+    /// The simulator this route builder is configuring (for cross-cutting options like cache paths and dynamic fields).
+    /// </summary>
+    internal APISimulator Simulator => apiSimulator;
+
+    /// <summary>
     /// Configures this route to return a static JSON response.
     /// </summary>
     /// <param name="jsonResponse">The JSON string to return.</param>

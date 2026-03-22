@@ -94,8 +94,12 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                 return;
             }
 
-            using var upstreamRequest = BuildUpstreamRequest(context.Request, bodyBytes);
-            using var upstreamResponse = await httpClient!.SendAsync(upstreamRequest, cancellationToken).ConfigureAwait(false);
+            using var upstreamResponse = await HttpUpstreamRetry.SendWithRetriesAsync(
+                    () => BuildUpstreamRequest(context.Request, bodyBytes),
+                    httpClient!,
+                    aiOptions,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             var responseBody = await upstreamResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 

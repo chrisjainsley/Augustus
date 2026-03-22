@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Augustus.Reqnroll;
 using FluentAssertions;
 using Reqnroll;
 
@@ -7,12 +8,9 @@ namespace Augustus.Sample.Reqnroll.Specs.Features.Charges;
 [Binding]
 public class CreateChargeSteps
 {
-    private readonly ScenarioContext _ctx;
     private HttpResponseMessage? _response;
 
-    public CreateChargeSteps(ScenarioContext ctx) => _ctx = ctx;
-
-    private APISimulator Simulator => _ctx.Get<APISimulator>(nameof(APISimulator));
+    private static APISimulator Simulator => AugustusReqnrollContext.GetRegisteredSimulator(0);
 
     [Given("the Stripe API simulator is running")]
     public void GivenSimulatorRunning() { /* started in BeforeTestRun */ }

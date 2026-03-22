@@ -5,37 +5,33 @@ using System.ClientModel;
 namespace Augustus.AI;
 
 /// <summary>
-/// Handles OpenAI API requests with retry logic, exponential backoff, and request queuing.
+/// Handles OpenAI API requests with shared process-wide throttling, optional deduplication by cache key,
+/// retry logic with <c>Retry-After</c> awareness, exponential backoff, and jitter.
 /// </summary>
 internal class OpenAIRequestHandler : IDisposable
 {
     private readonly OpenAIClient openAiClient;
     private readonly AIOptions options;
-    private readonly SemaphoreSlim requestSemaphore;
+    private readonly OpenAICallCoordinator coordinator;
 
     public OpenAIRequestHandler(OpenAIClient openAiClient, AIOptions options)
     {
         this.openAiClient = openAiClient ?? throw new ArgumentNullException(nameof(openAiClient));
         this.options = options ?? throw new ArgumentNullException(nameof(options));
-
-        requestSemaphore = new SemaphoreSlim(options.MaxConcurrentRequests, options.MaxConcurrentRequests);
+        coordinator = OpenAICallCoordinator.GetOrCreate(options);
     }
 
-    public async Task<ClientResult<ChatCompletion>> CompleteChatWithRetryAsync(
+    /// <param name="dedupeKey">When non-empty, concurrent calls with the same key share one OpenAI execution (typically the cache request hash).</param>
+    public Task<ClientResult<ChatCompletion>> CompleteChatWithRetryAsync(
+        string dedupeKey,
         IEnumerable<ChatMessage> messages,
         ChatCompletionOptions? chatOptions = null,
         CancellationToken cancellationToken = default)
     {
-        await requestSemaphore.WaitAsync(cancellationToken);
-
-        try
-        {
-            return await ExecuteWithRetryAsync(messages, chatOptions, cancellationToken);
-        }
-        finally
-        {
-            requestSemaphore.Release();
-        }
+        return coordinator.ExecuteAsync(
+            string.IsNullOrEmpty(dedupeKey) ? null : dedupeKey,
+            ct => ExecuteWithRetryAsync(messages, chatOptions, ct),
+            cancellationToken);
     }
 
     private async Task<ClientResult<ChatCompletion>> ExecuteWithRetryAsync(
@@ -43,13 +39,12 @@ internal class OpenAIRequestHandler : IDisposable
         ChatCompletionOptions? chatOptions,
         CancellationToken cancellationToken)
     {
-        // For Azure OpenAI, use the deployment name; otherwise use the model name
         var modelOrDeployment = options.UseAzureOpenAI
             ? options.AzureDeploymentName
             : options.OpenAIModel;
         var chatClient = openAiClient.GetChatClient(modelOrDeployment);
-        int attemptCount = 0;
-        int delayMilliseconds = options.InitialRetryDelayMs;
+        var attemptCount = 0;
+        var delayMilliseconds = options.InitialRetryDelayMs;
 
         while (true)
         {
@@ -57,24 +52,28 @@ internal class OpenAIRequestHandler : IDisposable
 
             try
             {
-                return await chatClient.CompleteChatAsync(messages, chatOptions, cancellationToken: cancellationToken);
+                return await chatClient.CompleteChatAsync(messages, chatOptions, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (ClientResultException ex) when (ShouldRetry(ex, attemptCount))
             {
+                delayMilliseconds = OpenAIRetryDelays.ComputeNextDelayMs(options, delayMilliseconds, ex);
                 LogRetryAttempt(attemptCount, ex, delayMilliseconds);
-                await Task.Delay(delayMilliseconds, cancellationToken);
+                await Task.Delay(delayMilliseconds, cancellationToken).ConfigureAwait(false);
                 delayMilliseconds = Math.Min(delayMilliseconds * 2, options.MaxRetryDelayMs);
             }
             catch (TaskCanceledException) when (attemptCount <= options.MaxRetries)
             {
+                delayMilliseconds = OpenAIRetryDelays.ComputeNextDelayMs(options, delayMilliseconds, clientException: null);
                 LogRetryAttempt(attemptCount, new Exception("Request timeout"), delayMilliseconds);
-                await Task.Delay(delayMilliseconds, cancellationToken);
+                await Task.Delay(delayMilliseconds, cancellationToken).ConfigureAwait(false);
                 delayMilliseconds = Math.Min(delayMilliseconds * 2, options.MaxRetryDelayMs);
             }
             catch (HttpRequestException ex) when (ShouldRetryHttpException(ex, attemptCount))
             {
+                delayMilliseconds = OpenAIRetryDelays.ComputeNextDelayMs(options, delayMilliseconds, clientException: null);
                 LogRetryAttempt(attemptCount, ex, delayMilliseconds);
-                await Task.Delay(delayMilliseconds, cancellationToken);
+                await Task.Delay(delayMilliseconds, cancellationToken).ConfigureAwait(false);
                 delayMilliseconds = Math.Min(delayMilliseconds * 2, options.MaxRetryDelayMs);
             }
         }
@@ -85,7 +84,6 @@ internal class OpenAIRequestHandler : IDisposable
         if (attemptCount >= options.MaxRetries)
             return false;
 
-        // HTTP 429 (rate limit) or 500-504 (server errors)
         return exception.Status == 429 || (exception.Status >= 500 && exception.Status <= 504);
     }
 
@@ -100,10 +98,9 @@ internal class OpenAIRequestHandler : IDisposable
     }
 
     /// <summary>
-    /// Disposes the OpenAI request handler and its resources.
+    /// Disposes the OpenAI request handler. Shared coordination resources are not disposed per handler.
     /// </summary>
     public void Dispose()
     {
-        requestSemaphore?.Dispose();
     }
 }

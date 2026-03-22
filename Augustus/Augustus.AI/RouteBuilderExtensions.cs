@@ -21,7 +21,8 @@ public static class RouteBuilderExtensions
         if (options == null)
             throw new ArgumentNullException(nameof(options));
 
-        var strategy = new AIResponseStrategy(options, instructions);
+        var mergedDynamicFields = DynamicContentFieldsMerger.Merge(builder.Simulator.Options.DynamicContentFields, builder.DynamicContentFieldsList);
+        var strategy = new AIResponseStrategy(builder.Simulator, options, instructions, mergedDynamicFields);
         return builder.WithStrategy(strategy);
     }
 
@@ -50,7 +51,8 @@ public static class RouteBuilderExtensions
         if (builder == null)
             throw new ArgumentNullException(nameof(builder));
 
-        var strategy = new RealApiProxyStrategy(baseUrl, options, headers, builder.DynamicContentFieldsList);
+        var mergedDynamicFields = DynamicContentFieldsMerger.Merge(builder.Simulator.Options.DynamicContentFields, builder.DynamicContentFieldsList);
+        var strategy = new RealApiProxyStrategy(baseUrl, options, headers, mergedDynamicFields);
         return builder.WithStrategy(strategy);
     }
 
