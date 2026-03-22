@@ -149,9 +149,19 @@ simulator.UseAI(new AIOptions
     AzureDeploymentName = "",                // Required when UseAzureOpenAI = true
     AzureApiVersion = "2024-06-01",          // Azure API version
     MaxRetries = 5,                          // Retry attempts for transient failures
-    MaxConcurrentRequests = 10               // Concurrent request limit
+    MaxConcurrentRequests = 10               // Process-wide concurrent OpenAI limit (see below)
 });
 ```
+
+### OpenAI rate limits and call efficiency
+
+Augustus.AI reduces duplicate traffic and `429` rate-limit pressure in several ways:
+
+- **Shared throttling** — For a given API key (or Azure endpoint + key), model/deployment, and `MaxConcurrentRequests` value, all OpenAI chat completions in the process share one concurrency gate. This applies across the default `UseAI` handler and route-level `UseAI`, so parallel test classes do not each get a full `MaxConcurrentRequests` budget in isolation.
+- **In-flight deduplication** — Concurrent requests that resolve to the same cache key (same method, path, query, normalized body, and route instructions) share a single in-flight OpenAI completion instead of fanning out.
+- **Retries** — Transient failures (`429`, `5xx`) use exponential backoff with **jitter**. When the service returns a `Retry-After` header, the delay respects it (in addition to backoff caps from `InitialRetryDelayMs` / `MaxRetryDelayMs`).
+- **Proxy / `UseRealApi`** — Upstream HTTP calls retry on `429` and `5xx` with the same delay settings; global `DynamicContentFields` from `APISimulatorOptions` are merged with per-route `WithDynamicFields` for cache keys.
+- **Practical tips** — For first-time cache generation, prefer a **low** `MaxConcurrentRequests` (for example `1`–`2`) and/or run tests **serially** so retries do not multiply billed attempts. Use **cache-only** CI (`CacheOnly` / committed mocks) so CI never calls OpenAI.
 
 ## Response Strategies
 
@@ -181,6 +191,8 @@ simulator.ForPost("/api/echo")
 ```
 
 ### AI-generated (Augustus.AI)
+
+Route-level `UseAI` uses the same **structured cache keys** as the default AI handler (`CacheKeyComputer`), stores entries in the simulator’s cache folder, and still reads **legacy** curl-based cache files if present. Azure OpenAI is supported on routes the same way as `simulator.UseAI(...)`.
 
 ```csharp
 simulator.ForGet("/v1/payments/{id}")

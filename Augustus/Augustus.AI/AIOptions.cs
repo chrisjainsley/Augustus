@@ -132,7 +132,8 @@ public sealed class AIOptions
     }
 
     /// <summary>
-    /// Gets or sets the maximum number of concurrent OpenAI API requests.
+    /// Gets or sets the maximum number of concurrent OpenAI chat completion requests per process for this
+    /// credential, model/deployment, and concurrency setting. Shared across default and route-level AI handlers.
     /// </summary>
     public int MaxConcurrentRequests
     {

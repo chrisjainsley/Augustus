@@ -87,7 +87,10 @@ internal class CacheManager
         }
     }
 
-    public static string GenerateRequestHash(string curlRequest, List<string> instructions)
+    /// <summary>
+    /// Legacy cache key used by older route-level AI caches (curl + instructions). Prefer <see cref="CacheKeyComputer"/> for new entries.
+    /// </summary>
+    public static string GenerateLegacyCurlBasedCacheKey(string curlRequest, List<string> instructions)
     {
         var combinedContent = string.Join("|", instructions) + "|" + curlRequest;
         var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combinedContent));
