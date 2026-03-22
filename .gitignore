@@ -403,5 +403,8 @@ FodyWeavers.xsd
 # Claude Code worktree checkouts (local copies; not part of the repo)
 .claude/worktrees/
 
+# Claude Code scheduled tasks lock file
+.claude/scheduled_tasks.lock
+
 # Reqnroll auto-generated feature code-behind files
 *.feature.cs
