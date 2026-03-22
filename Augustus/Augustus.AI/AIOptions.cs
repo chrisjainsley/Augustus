@@ -147,6 +147,28 @@ public sealed class AIOptions
 
     private int _proxyTimeoutSeconds = 120;
 
+    private int _cacheMissMaterializedBodyPrefixSha256ByteCount;
+
+    /// <summary>
+    /// When greater than 0 and a cache miss occurs in cache-only mode, includes a SHA-256 digest (64-character hex)
+    /// of the first N bytes of the materialized request body used for the cache key.
+    /// Raw body bytes are never included in the response, avoiding accidental exposure of secrets or PII.
+    /// </summary>
+    /// <remarks>
+    /// Proxy JSON adds <c>materializedBodyPrefixSha256</c>; the AI default handler appends the same digest to the error text.
+    /// Use only for local or controlled debugging (e.g. comparing Linux vs Windows); keep <c>0</c> (default) in production.
+    /// </remarks>
+    public int CacheMissMaterializedBodyPrefixSha256ByteCount
+    {
+        get => _cacheMissMaterializedBodyPrefixSha256ByteCount;
+        set
+        {
+            if (value < 0 || value > 4096)
+                throw new ArgumentOutOfRangeException(nameof(CacheMissMaterializedBodyPrefixSha256ByteCount), "Value must be between 0 and 4096.");
+            _cacheMissMaterializedBodyPrefixSha256ByteCount = value;
+        }
+    }
+
     /// <summary>
     /// Gets or sets the timeout in seconds for upstream proxy requests.
     /// </summary>

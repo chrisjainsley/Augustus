@@ -295,6 +295,8 @@ Features/
 
 ## Caching
 
+Cache file names and `RequestHash` are derived from the HTTP method, path, query string, and a **canonical form of JSON request bodies** (sorted object keys at every depth, plus optional `DynamicContentFields` normalization). Non-JSON bodies use raw bytes. See [`CHANGELOG.md`](CHANGELOG.md) for release notes when this algorithm changes — **upgrades can invalidate existing on-disk caches**.
+
 Augustus caches responses as JSON files:
 
 ```json

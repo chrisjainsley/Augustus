@@ -20,9 +20,19 @@ internal static class CacheKeyBodyNormalizer
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public static byte[] NormalizeForCacheKey(byte[] body, IReadOnlyCollection<string> propertyNames)
+    /// <summary>
+    /// Produces the UTF-8 JSON bytes used when hashing the request body for cache keys.
+    /// Valid JSON is parsed, object keys are sorted lexicographically at every depth (cross-platform
+    /// semantic equivalence), optional dynamic fields are replaced with a placeholder, then the
+    /// result is serialized with <see cref="SerializerOptions"/>. Non-JSON bodies are returned unchanged.
+    /// </summary>
+    public static byte[] PrepareBodyForCacheKey(byte[] body, IReadOnlyCollection<string>? propertyNames)
     {
-        if (propertyNames.Count == 0 || body.Length == 0)
+        propertyNames ??= Array.Empty<string>();
+        if (body.Length == 0)
+            return body;
+
+        if (!LooksLikeJson(body))
             return body;
 
         try
@@ -31,12 +41,81 @@ internal static class CacheKeyBodyNormalizer
             if (node is null)
                 return body;
 
-            NormalizeNode(node, propertyNames);
-            return JsonSerializer.SerializeToUtf8Bytes(node, SerializerOptions);
+            var canonical = SortKeysRecursive(node);
+            if (canonical is null)
+                return body;
+
+            if (propertyNames.Count > 0)
+                NormalizeNode(canonical, propertyNames);
+
+            return JsonSerializer.SerializeToUtf8Bytes(canonical, SerializerOptions);
         }
         catch (JsonException)
         {
             return body;
+        }
+    }
+
+    /// <summary>
+    /// Backward-compatible name; delegates to <see cref="PrepareBodyForCacheKey"/>.
+    /// </summary>
+    public static byte[] NormalizeForCacheKey(byte[] body, IReadOnlyCollection<string> propertyNames)
+        => PrepareBodyForCacheKey(body, propertyNames);
+
+    /// <summary>
+    /// Deep-clones a subtree into nodes with no parent (JsonNode cannot be re-parented).
+    /// Uses round-trip for <see cref="JsonValue"/> leaves so we do not depend on JsonNode.DeepClone (net8+ only).
+    /// </summary>
+    private static JsonNode? DetachCopy(JsonNode? node)
+    {
+        switch (node)
+        {
+            case null:
+                return null;
+            case JsonObject obj:
+                var o = new JsonObject();
+                foreach (var kvp in obj)
+                    o[kvp.Key] = DetachCopy(kvp.Value);
+                return o;
+            case JsonArray arr:
+                var a = new JsonArray();
+                foreach (var item in arr)
+                    a.Add(DetachCopy(item));
+                return a;
+            case JsonValue value when value.TryGetValue<JsonElement>(out var element):
+                return JsonValue.Create(element.Clone());
+            default:
+                return JsonNode.Parse(node.ToJsonString())!;
+        }
+    }
+
+    /// <summary>
+    /// Builds a deep copy of the JSON tree with every <see cref="JsonObject"/> having properties
+    /// ordered by key (<see cref="StringComparer.Ordinal"/>) so semantically equivalent payloads
+    /// hash the same across clients that emit different property orders.
+    /// </summary>
+    private static JsonNode? SortKeysRecursive(JsonNode? node)
+    {
+        switch (node)
+        {
+            case null:
+                return null;
+            case JsonObject obj:
+                var sorted = new JsonObject();
+                foreach (var kvp in obj.OrderBy(static kvp => kvp.Key, StringComparer.Ordinal))
+                {
+                    sorted[kvp.Key] = SortKeysRecursive(kvp.Value);
+                }
+                return sorted;
+            case JsonArray arr:
+                var newArr = new JsonArray();
+                foreach (var item in arr)
+                {
+                    newArr.Add(SortKeysRecursive(item));
+                }
+                return newArr;
+            default:
+                return DetachCopy(node);
         }
     }
 
@@ -59,7 +138,7 @@ internal static class CacheKeyBodyNormalizer
                 {
                     if (kvp.Value is JsonObject or JsonArray)
                     {
-                        changed |= NormalizeNode(kvp.Value, propertyNames);
+                        changed |= NormalizeNode(kvp.Value!, propertyNames);
                     }
                 }
                 break;
@@ -69,11 +148,39 @@ internal static class CacheKeyBodyNormalizer
                 {
                     if (item is JsonObject or JsonArray)
                     {
-                        changed |= NormalizeNode(item, propertyNames);
+                        changed |= NormalizeNode(item!, propertyNames);
                     }
                 }
                 break;
         }
         return changed;
+    }
+
+    private static bool LooksLikeJson(byte[] body)
+    {
+        foreach (var b in body)
+        {
+            switch (b)
+            {
+                case (byte)' ':
+                case (byte)'\t':
+                case (byte)'\r':
+                case (byte)'\n':
+                    continue;
+                case (byte)'{':
+                case (byte)'[':
+                case (byte)'"':
+                case >= (byte)'0' and <= (byte)'9':
+                case (byte)'-':
+                case (byte)'t':
+                case (byte)'f':
+                case (byte)'n':
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        return false;
     }
 }

@@ -1,4 +1,3 @@
-using Augustus.AI;
 using Augustus.Extensions;
 using static Augustus.Sample.StripeApi.Tests.TestConfiguration;
 
@@ -9,8 +8,18 @@ public class CacheManagementTests
     [Fact]
     public async Task StaleCache_ShouldBeRemovedOnDispose()
     {
-        var apiKey = GetApiKey();
-        if (string.IsNullOrEmpty(apiKey))
+        if (IsStripeSampleCiCacheOnly())
+        {
+            await AssertCacheOnlyChargeHitAsync(
+                localPort: 9053,
+                amount: "1000",
+                currency: "usd",
+                source: "tok_visa",
+                committedHash: "6170F0873A1DF314EB4583DDFA2541D1549CBF24DCAF9C4888A0E7F2400AF91A");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(GetApiKey()))
             return;
 
         var cachePath = ResolveCachePath("Stripe");
@@ -26,11 +35,7 @@ public class CacheManagementTests
             .WithInstruction("Return realistic Stripe API JSON responses.")
             .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\".");
 
-            simulator.UseAI(new AIOptions
-            {
-                OpenAIApiKey = apiKey,
-                OpenAIModel = GetModel()
-            });
+            UseStripeAi(simulator);
 
             await simulator.StartAsync();
             var client = simulator.CreateClient();
@@ -60,8 +65,18 @@ public class CacheManagementTests
     [Fact]
     public async Task AutoRemoveStaleCache_WhenDisabled_ShouldKeepStaleFiles()
     {
-        var apiKey = GetApiKey();
-        if (string.IsNullOrEmpty(apiKey))
+        if (IsStripeSampleCiCacheOnly())
+        {
+            await AssertCacheOnlyChargeHitAsync(
+                localPort: 9054,
+                amount: "1000",
+                currency: "usd",
+                source: "tok_visa",
+                committedHash: "6170F0873A1DF314EB4583DDFA2541D1549CBF24DCAF9C4888A0E7F2400AF91A");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(GetApiKey()))
             return;
 
         var cachePath = ResolveCachePath("Stripe");
@@ -77,11 +92,7 @@ public class CacheManagementTests
             .WithInstruction("Return realistic Stripe API JSON responses.")
             .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\".");
 
-            simulator.UseAI(new AIOptions
-            {
-                OpenAIApiKey = apiKey,
-                OpenAIModel = GetModel()
-            });
+            UseStripeAi(simulator);
 
             await simulator.StartAsync();
             var client = simulator.CreateClient();
@@ -103,6 +114,41 @@ public class CacheManagementTests
         File.Exists(stalePath).Should().BeTrue("stale cache file should survive when AutoRemoveStaleCache is disabled");
 
         // Cleanup
-        try { File.Delete(stalePath); } catch { }
+        try { File.Delete(stalePath); } catch { /* ignore */ }
+    }
+
+    private async Task AssertCacheOnlyChargeHitAsync(
+        int localPort,
+        string amount,
+        string currency,
+        string source,
+        string committedHash)
+    {
+        await using var simulator = this.CreateStripeSimulator(opt =>
+        {
+            ApplyStripeSimulatorTransport(opt, localPort);
+            if (IsStripeSampleCiCacheOnly())
+            {
+                // CacheOnly forces AutoRemoveStaleCache=false; keep explicit for clarity.
+                opt.AutoRemoveStaleCache = false;
+            }
+        })
+        .WithInstruction("Return realistic Stripe API JSON responses.")
+        .WithInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\".");
+
+        UseStripeAi(simulator);
+
+        await simulator.StartAsync();
+        var client = simulator.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["amount"] = amount,
+            ["currency"] = currency,
+            ["source"] = source
+        });
+        var response = await client.PostAsync("/v1/charges", content);
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+        AssertCommittedMockExists(committedHash);
     }
 }

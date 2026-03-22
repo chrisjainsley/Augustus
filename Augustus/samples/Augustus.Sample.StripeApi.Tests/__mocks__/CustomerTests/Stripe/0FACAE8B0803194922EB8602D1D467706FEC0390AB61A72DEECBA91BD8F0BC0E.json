@@ -1,0 +1,14 @@
+{
+  "RequestHash": "0FACAE8B0803194922EB8602D1D467706FEC0390AB61A72DEECBA91BD8F0BC0E",
+  "Response": "{\n  \"id\": \"cus_json_post_ci\",\n  \"object\": \"customer\",\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"created\": 1690000000,\n  \"metadata\": {}\n}",
+  "OriginalRequest": "curl -X POST -H \"Content-Type: application/json\" -d '{\"name\":\"Jane Doe\",\"email\":\"jane@example.com\"}' \"http://localhost/v1/customers\"",
+  "Instructions": [
+    "You are a Stripe API simulator. You only respond to curl commands.",
+    "Only output the response body. Always output the full body you would expect from the API.",
+    "Generate realistic, properly formatted responses that match the API's expected structure and data types.",
+    "Use appropriate HTTP status codes in your responses when applicable.",
+    "Return realistic Stripe API JSON responses. Always return raw JSON only, no markdown.",
+    "Return a newly created customer object with \"object\": \"customer\", an \"id\" starting with \"cus_\", and the name/email from the request body."
+  ],
+  "Timestamp": "2026-03-22T00:00:00.0000000Z"
+}
