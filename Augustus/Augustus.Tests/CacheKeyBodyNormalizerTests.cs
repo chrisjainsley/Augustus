@@ -120,6 +120,86 @@ public class CacheKeyBodyNormalizerTests
     }
 
     [Fact]
+    public void NormalizeForCacheKey_CrLfAndLfInStringValues_ProduceIdenticalOutput()
+    {
+        // Simulates the real-world problem: StringBuilder.AppendLine() produces \r\n on Windows
+        // and \n on Linux. Both should produce the same normalized output for cache keys.
+        var windowsBody = Encoding.UTF8.GetBytes(
+            "{\"messages\":[{\"role\":\"system\",\"content\":\"CURRENT CONTEXT:\\r\\nFeature: Login\\r\\nAs a user\"}]}");
+        var linuxBody = Encoding.UTF8.GetBytes(
+            "{\"messages\":[{\"role\":\"system\",\"content\":\"CURRENT CONTEXT:\\nFeature: Login\\nAs a user\"}]}");
+
+        var r1 = CacheKeyBodyNormalizer.NormalizeForCacheKey(windowsBody, Array.Empty<string>());
+        var r2 = CacheKeyBodyNormalizer.NormalizeForCacheKey(linuxBody, Array.Empty<string>());
+
+        Encoding.UTF8.GetString(r1).Should().Be(Encoding.UTF8.GetString(r2));
+    }
+
+    [Fact]
+    public void NormalizeForCacheKey_CrLfInStringValues_ProducesSameCacheKey()
+    {
+        var windowsBody = Encoding.UTF8.GetBytes(
+            "{\"model\":\"gpt-4\",\"messages\":[{\"role\":\"user\",\"content\":\"line1\\r\\nline2\\r\\nline3\"}]}");
+        var linuxBody = Encoding.UTF8.GetBytes(
+            "{\"model\":\"gpt-4\",\"messages\":[{\"role\":\"user\",\"content\":\"line1\\nline2\\nline3\"}]}");
+
+        var hash1 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, windowsBody);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("POST", "/v1/chat/completions", null, linuxBody);
+
+        hash1.Should().Be(hash2);
+    }
+
+    [Fact]
+    public void NormalizeForCacheKey_CrLfDeeplyNested_IsNormalized()
+    {
+        var body = Encoding.UTF8.GetBytes(
+            "{\"outer\":{\"inner\":{\"text\":\"hello\\r\\nworld\"}}}");
+        var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, Array.Empty<string>());
+        var json = Encoding.UTF8.GetString(result);
+
+        json.Should().NotContain("\\r\\n");
+        json.Should().Contain("\\nworld");
+    }
+
+    [Fact]
+    public void NormalizeForCacheKey_CrLfInArrayStrings_IsNormalized()
+    {
+        var body = Encoding.UTF8.GetBytes(
+            "{\"items\":[\"line1\\r\\nline2\",\"line3\\r\\nline4\"]}");
+        var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, Array.Empty<string>());
+        var json = Encoding.UTF8.GetString(result);
+
+        json.Should().NotContain("\\r\\n");
+        json.Should().Contain("\\nline2");
+        json.Should().Contain("\\nline4");
+    }
+
+    [Fact]
+    public void NormalizeForCacheKey_StandaloneCr_IsNormalized()
+    {
+        // Standalone \r (old Mac line endings) should also be normalized to \n
+        var body = Encoding.UTF8.GetBytes(
+            "{\"text\":\"line1\\rline2\"}");
+        var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, Array.Empty<string>());
+        var json = Encoding.UTF8.GetString(result);
+
+        json.Should().NotContain("\\r");
+        json.Should().Contain("\\nline2");
+    }
+
+    [Fact]
+    public void NormalizeForCacheKey_RootLevelString_CrLfIsNormalized()
+    {
+        // A bare JSON string (rare, but valid JSON) should also have newlines normalized
+        var body = Encoding.UTF8.GetBytes("\"hello\\r\\nworld\"");
+        var result = CacheKeyBodyNormalizer.NormalizeForCacheKey(body, Array.Empty<string>());
+        var json = Encoding.UTF8.GetString(result);
+
+        json.Should().NotContain("\\r");
+        json.Should().Contain("\\nworld");
+    }
+
+    [Fact]
     public void NormalizeForCacheKey_EmptyBody_ReturnsUnchanged()
     {
         var body = Array.Empty<byte>();
