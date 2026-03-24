@@ -113,7 +113,7 @@ public class LatencyTests
             sw.Stop();
 
             response.Should().Contain("delayed");
-            sw.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(150, "response should be delayed by ~200ms");
+            sw.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(190, "response should be delayed by approximately the configured 200ms");
         }
         finally
         {

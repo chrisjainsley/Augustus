@@ -29,8 +29,12 @@ internal static class GaussianLatency
         u2 = rng.NextDouble();
 
         var gaussian = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
-        var delay = (int)(meanMs + stdDevMs * gaussian);
+        var rawDelay = meanMs + stdDevMs * gaussian;
 
-        return Math.Max(0, delay);
+        if (double.IsNaN(rawDelay) || double.IsInfinity(rawDelay))
+            return Math.Max(0, meanMs);
+
+        var clampedDelay = Math.Min(Math.Max(rawDelay, 0d), int.MaxValue);
+        return (int)clampedDelay;
     }
 }
