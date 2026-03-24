@@ -125,6 +125,23 @@ public sealed partial class APISimulator : IAsyncDisposable
     internal APISimulatorOptions Options => options;
 
     /// <summary>
+    /// Gets the latency configuration, or null if no latency simulation is configured.
+    /// </summary>
+    internal LatencyOptions? Latency { get; private set; }
+
+    /// <summary>
+    /// Configures Gaussian latency simulation for all responses from this simulator.
+    /// </summary>
+    /// <param name="meanMs">The mean delay in milliseconds.</param>
+    /// <param name="stdDevMs">The standard deviation of the delay in milliseconds.</param>
+    /// <returns>This <see cref="APISimulator"/> instance for method chaining.</returns>
+    public APISimulator WithLatency(int meanMs, int stdDevMs)
+    {
+        Latency = new LatencyOptions(meanMs, stdDevMs);
+        return this;
+    }
+
+    /// <summary>
     /// Starts the API simulator web server asynchronously.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>

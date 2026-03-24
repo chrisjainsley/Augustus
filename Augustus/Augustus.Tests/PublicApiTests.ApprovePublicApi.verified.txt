@@ -32,6 +32,7 @@ namespace Augustus
         public void SetTestContext(string testName) { }
         public System.Threading.Tasks.Task StartAsync(System.Threading.CancellationToken cancellationToken = default) { }
         public System.Threading.Tasks.Task StopAsync(System.Threading.CancellationToken cancellationToken = default) { }
+        public Augustus.APISimulator WithLatency(int meanMs, int stdDevMs) { }
     }
     public sealed class APISimulatorOptions
     {
