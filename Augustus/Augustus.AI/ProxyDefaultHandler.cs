@@ -159,13 +159,16 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
             request.Headers.TryAddWithoutValidation(header.Key, (IEnumerable<string>)header.Value);
         }
 
-        if (aiOptions.UseAzureOpenAI)
+        if (!string.IsNullOrEmpty(aiOptions.OpenAIApiKey))
         {
-            request.Headers.TryAddWithoutValidation("api-key", aiOptions.OpenAIApiKey);
-        }
-        else
-        {
-            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {aiOptions.OpenAIApiKey}");
+            if (aiOptions.UseAzureOpenAI)
+            {
+                request.Headers.TryAddWithoutValidation("api-key", aiOptions.OpenAIApiKey);
+            }
+            else
+            {
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {aiOptions.OpenAIApiKey}");
+            }
         }
 
         return request;
