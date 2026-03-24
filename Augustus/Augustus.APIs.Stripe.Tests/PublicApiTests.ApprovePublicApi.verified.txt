@@ -107,6 +107,7 @@ namespace Augustus.APIs.Stripe
         public Augustus.APIs.Stripe.StripeSubscriptionsBuilder Subscriptions() { }
         public Augustus.APIs.Stripe.StripeTokensBuilder Tokens() { }
         public Augustus.APIs.Stripe.StripeMock UseAllDefaults() { }
+        public Augustus.APIs.Stripe.StripeMock WithLatency(int meanMs, int stdDevMs) { }
     }
     public sealed class StripePaymentIntentsBuilder
     {

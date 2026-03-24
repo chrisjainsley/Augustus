@@ -271,6 +271,18 @@ public sealed class StripeMock
     }
 
     /// <summary>
+    /// Configures Gaussian latency simulation for all responses from this Stripe mock.
+    /// </summary>
+    /// <param name="meanMs">The mean delay in milliseconds.</param>
+    /// <param name="stdDevMs">The standard deviation of the delay in milliseconds.</param>
+    /// <returns>This <see cref="StripeMock"/> instance for method chaining.</returns>
+    public StripeMock WithLatency(int meanMs, int stdDevMs)
+    {
+        apiSimulator.WithLatency(meanMs, stdDevMs);
+        return this;
+    }
+
+    /// <summary>
     /// Builds the mock server and returns it for starting.
     /// </summary>
     public APISimulator Build() => apiSimulator;

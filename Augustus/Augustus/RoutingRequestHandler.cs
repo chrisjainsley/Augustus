@@ -31,12 +31,14 @@ internal class RoutingRequestHandler : IRequestHandler
         var route = simulator.GetRouteForRequest(path, method);
         if (route?.ResponseStrategy != null)
         {
+            await ApplyLatencyAsync(cancellationToken);
             await route.ResponseStrategy.GenerateResponseAsync(context, cancellationToken);
             return;
         }
 
         if (DefaultHandler != null)
         {
+            await ApplyLatencyAsync(cancellationToken);
             await DefaultHandler.HandleAsync(context, cancellationToken);
             return;
         }
@@ -54,4 +56,16 @@ internal class RoutingRequestHandler : IRequestHandler
 
     public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken)
         => DefaultHandler?.DrainPendingCacheWritesAsync(cancellationToken) ?? Task.CompletedTask;
+
+    private Task ApplyLatencyAsync(CancellationToken cancellationToken)
+    {
+        if (simulator.Latency is { } latency)
+        {
+            var delayMs = GaussianLatency.Sample(latency.MeanMs, latency.StdDevMs);
+            if (delayMs > 0)
+                return Task.Delay(delayMs, cancellationToken);
+        }
+
+        return Task.CompletedTask;
+    }
 }
