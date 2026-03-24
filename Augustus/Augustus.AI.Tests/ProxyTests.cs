@@ -26,13 +26,13 @@ public class ProxyTests
     }
 
     [Fact]
-    public void ProxyMode_RequiresApiKey()
+    public void ProxyMode_AllowsEmptyApiKey()
     {
+        // Proxy mode without an API key forwards the caller's auth headers as-is
         var simulator = this.CreateAPISimulator("TestAPI", options => { options.Port = 0; });
         var act = () => simulator.UseProxy(new AIOptions(), "https://api.openai.com");
 
-        act.Should().Throw<ValidationException>()
-            .WithMessage("*API key*");
+        act.Should().NotThrow();
     }
 
     [Fact]

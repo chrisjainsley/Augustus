@@ -185,4 +185,34 @@ public class CacheKeyTests
         var hashAgain = CacheKeyComputer.ComputeCacheKey("POST", "/v1/charges", null, body);
         hashAgain.Should().Be(hash);
     }
+
+    [Fact]
+    public void CacheKeyComputer_GetRequests_DifferentPaths_ProduceDifferentHashes()
+    {
+        var emptyBody = Array.Empty<byte>();
+        var hash1 = CacheKeyComputer.ComputeCacheKey("GET", "/repos/owner/repo/git/trees/HEAD", "?recursive=1", emptyBody);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("GET", "/repos/owner/repo/git/blobs/abc123", null, emptyBody);
+
+        hash1.Should().NotBe(hash2);
+    }
+
+    [Fact]
+    public void CacheKeyComputer_GetRequests_DifferentQueryStrings_ProduceDifferentHashes()
+    {
+        var emptyBody = Array.Empty<byte>();
+        var hash1 = CacheKeyComputer.ComputeCacheKey("GET", "/api/search", "?q=foo", emptyBody);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("GET", "/api/search", "?q=bar", emptyBody);
+
+        hash1.Should().NotBe(hash2);
+    }
+
+    [Fact]
+    public void CacheKeyComputer_GetRequest_EmptyBody_ProducesConsistentHash()
+    {
+        var emptyBody = Array.Empty<byte>();
+        var hash1 = CacheKeyComputer.ComputeCacheKey("GET", "/api/users/1", null, emptyBody);
+        var hash2 = CacheKeyComputer.ComputeCacheKey("GET", "/api/users/1", null, emptyBody);
+
+        hash1.Should().Be(hash2);
+    }
 }
