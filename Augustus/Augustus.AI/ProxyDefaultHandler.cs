@@ -16,7 +16,12 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
     {
         "Host", "Connection", "Keep-Alive", "Transfer-Encoding",
         "TE", "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Authenticate",
-        "Content-Type", "Content-Length", "Authorization", "api-key"
+        "Content-Type", "Content-Length"
+    };
+
+    private static readonly HashSet<string> AuthHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Authorization", "api-key"
     };
 
     private readonly AIOptions aiOptions;
@@ -151,15 +156,22 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
             }
         }
 
+        var hasConfiguredKey = !string.IsNullOrEmpty(aiOptions.OpenAIApiKey);
+
         foreach (var header in incoming.Headers)
         {
             if (SkippedHeaders.Contains(header.Key))
                 continue;
 
+            // When a key is configured, the proxy replaces auth headers below.
+            // When no key is configured, forward the caller's auth headers as-is.
+            if (hasConfiguredKey && AuthHeaders.Contains(header.Key))
+                continue;
+
             request.Headers.TryAddWithoutValidation(header.Key, (IEnumerable<string>)header.Value);
         }
 
-        if (!string.IsNullOrEmpty(aiOptions.OpenAIApiKey))
+        if (hasConfiguredKey)
         {
             if (aiOptions.UseAzureOpenAI)
             {

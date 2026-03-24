@@ -37,7 +37,9 @@ public static class AISimulatorExtensions
     /// and caches the responses.
     /// </summary>
     /// <param name="simulator">The API simulator instance.</param>
-    /// <param name="options">AI configuration options including API key for upstream authentication.</param>
+    /// <param name="options">AI configuration options including API key for upstream authentication.
+    /// When <see cref="AIOptions.OpenAIApiKey"/> is empty, the proxy forwards the caller's
+    /// Authorization headers to the upstream instead of injecting its own.</param>
     /// <param name="upstreamUrl">The base URL of the real API to proxy to (e.g., "https://api.openai.com").</param>
     /// <returns>The same <see cref="APISimulator"/> instance for method chaining.</returns>
     /// <remarks>
@@ -50,10 +52,14 @@ public static class AISimulatorExtensions
         if (options == null) throw new ArgumentNullException(nameof(options));
         if (string.IsNullOrWhiteSpace(upstreamUrl)) throw new ArgumentException("Upstream URL is required", nameof(upstreamUrl));
 
-        // In cache-only mode, skip API key validation
         if (!simulator.Options.CacheOnly)
         {
-            options.Validate();
+            // Proxy mode: validate the API key only when one is provided.
+            // When empty, the proxy forwards the caller's auth headers as-is.
+            if (!string.IsNullOrEmpty(options.OpenAIApiKey))
+            {
+                options.Validate();
+            }
 
             if (!Uri.IsWellFormedUriString(upstreamUrl, UriKind.Absolute))
             {
