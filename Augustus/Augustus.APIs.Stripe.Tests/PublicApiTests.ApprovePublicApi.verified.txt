@@ -1,4 +1,4 @@
-﻿[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/chrisjainsley/augustus")]
+[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/chrisjainsley/augustus")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Augustus.Stripe.Tests")]
 namespace Augustus.APIs.Stripe
 {
@@ -83,6 +83,7 @@ namespace Augustus.APIs.Stripe
     public sealed class StripeMock
     {
         public Augustus.APISimulator APISimulator { get; }
+        public System.Collections.Generic.IReadOnlyCollection<Augustus.DeliveredWebhook> DeliveredWebhooks { get; }
         public bool IsRunning { get; }
         public Augustus.APIs.Stripe.StripeBalanceBuilder Balance() { }
         public Augustus.APIs.Stripe.StripeBalanceTransactionsBuilder BalanceTransactions() { }
@@ -95,6 +96,7 @@ namespace Augustus.APIs.Stripe
         public Augustus.APIs.Stripe.StripeEventsBuilder Events() { }
         public Augustus.APIs.Stripe.StripeInvoiceItemsBuilder InvoiceItems() { }
         public Augustus.APIs.Stripe.StripeInvoicesBuilder Invoices() { }
+        public Augustus.WebhookTriggerBuilder OnRequest(System.Net.Http.HttpMethod httpMethod, string pattern) { }
         public Augustus.APIs.Stripe.StripePaymentIntentsBuilder PaymentIntents() { }
         public Augustus.APIs.Stripe.StripePaymentMethodsBuilder PaymentMethods() { }
         public Augustus.APIs.Stripe.StripePayoutsBuilder Payouts() { }
@@ -108,6 +110,7 @@ namespace Augustus.APIs.Stripe
         public Augustus.APIs.Stripe.StripeTokensBuilder Tokens() { }
         public Augustus.APIs.Stripe.StripeMock UseAllDefaults() { }
         public Augustus.APIs.Stripe.StripeMock WithLatency(int meanMs, int stdDevMs) { }
+        public Augustus.APIs.Stripe.StripeMock WithWebhook(string url, string? signingSecret = null) { }
     }
     public sealed class StripePaymentIntentsBuilder
     {
@@ -205,5 +208,33 @@ namespace Augustus.APIs.Stripe
     {
         public Augustus.APIs.Stripe.StripeResourceConfigurer Create() { }
         public Augustus.APIs.Stripe.StripeResourceConfigurer Get(string tokenId = "{id}") { }
+    }
+    public static class StripeWebhookEvents
+    {
+        public const string ChargeFailed = "charge.failed";
+        public const string ChargeRefunded = "charge.refunded";
+        public const string ChargeSucceeded = "charge.succeeded";
+        public const string CheckoutSessionCompleted = "checkout.session.completed";
+        public const string CheckoutSessionExpired = "checkout.session.expired";
+        public const string CustomerCreated = "customer.created";
+        public const string CustomerDeleted = "customer.deleted";
+        public const string CustomerSubscriptionCreated = "customer.subscription.created";
+        public const string CustomerSubscriptionDeleted = "customer.subscription.deleted";
+        public const string CustomerSubscriptionPaused = "customer.subscription.paused";
+        public const string CustomerSubscriptionResumed = "customer.subscription.resumed";
+        public const string CustomerSubscriptionTrialWillEnd = "customer.subscription.trial_will_end";
+        public const string CustomerSubscriptionUpdated = "customer.subscription.updated";
+        public const string CustomerUpdated = "customer.updated";
+        public const string InvoiceCreated = "invoice.created";
+        public const string InvoiceFinalized = "invoice.finalized";
+        public const string InvoicePaid = "invoice.paid";
+        public const string InvoicePaymentFailed = "invoice.payment_failed";
+        public const string InvoiceVoided = "invoice.voided";
+        public const string PaymentIntentCanceled = "payment_intent.canceled";
+        public const string PaymentIntentCreated = "payment_intent.created";
+        public const string PaymentIntentPaymentFailed = "payment_intent.payment_failed";
+        public const string PaymentIntentSucceeded = "payment_intent.succeeded";
+        public const string PaymentMethodAttached = "payment_method.attached";
+        public const string PaymentMethodDetached = "payment_method.detached";
     }
 }

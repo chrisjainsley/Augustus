@@ -33,6 +33,7 @@ internal class RoutingRequestHandler : IRequestHandler
         {
             await ApplyLatencyAsync(cancellationToken);
             await route.ResponseStrategy.GenerateResponseAsync(context, cancellationToken);
+            simulator.FireWebhooksForRequest(path, method);
             return;
         }
 
@@ -40,6 +41,7 @@ internal class RoutingRequestHandler : IRequestHandler
         {
             await ApplyLatencyAsync(cancellationToken);
             await DefaultHandler.HandleAsync(context, cancellationToken);
+            simulator.FireWebhooksForRequest(path, method);
             return;
         }
 
@@ -54,8 +56,12 @@ internal class RoutingRequestHandler : IRequestHandler
         await context.Response.WriteAsync(error, cancellationToken);
     }
 
-    public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken)
-        => DefaultHandler?.DrainPendingCacheWritesAsync(cancellationToken) ?? Task.CompletedTask;
+    public async Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken)
+    {
+        var cacheTask = DefaultHandler?.DrainPendingCacheWritesAsync(cancellationToken) ?? Task.CompletedTask;
+        var webhookTask = simulator.DrainPendingWebhookDeliveriesAsync(cancellationToken);
+        await Task.WhenAll(cacheTask, webhookTask).ConfigureAwait(false);
+    }
 
     private Task ApplyLatencyAsync(CancellationToken cancellationToken)
     {

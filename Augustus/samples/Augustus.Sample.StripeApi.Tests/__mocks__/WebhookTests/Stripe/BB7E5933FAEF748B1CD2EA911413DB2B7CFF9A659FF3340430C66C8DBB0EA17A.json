@@ -1,0 +1,14 @@
+{
+  "RequestHash": "BB7E5933FAEF748B1CD2EA911413DB2B7CFF9A659FF3340430C66C8DBB0EA17A",
+  "Response": "{\n  \u0022id\u0022: \u0022sub_ABC1234567890\u0022,\n  \u0022object\u0022: \u0022subscription\u0022,\n  \u0022status\u0022: \u0022active\u0022,\n  \u0022customer\u0022: \u0022cus_demo_001\u0022,\n  \u0022items\u0022: {\n    \u0022data\u0022: [\n      {\n        \u0022id\u0022: \u0022item_1\u0022,\n        \u0022price\u0022: {\n          \u0022id\u0022: \u0022price_123\u0022,\n          \u0022object\u0022: \u0022price\u0022,\n          \u0022unit_amount\u0022: 2000,\n          \u0022currency\u0022: \u0022usd\u0022,\n          \u0022product\u0022: \u0022prod_ABC123\u0022,\n          \u0022active\u0022: true,\n          \u0022billing_scheme\u0022: \u0022per_unit\u0022,\n          \u0022nickname\u0022: \u0022Monthly Subscription\u0022\n        },\n        \u0022quantity\u0022: 1\n      }\n    ],\n    \u0022has_more\u0022: false,\n    \u0022total_count\u0022: 1,\n    \u0022url\u0022: \u0022/v1/subscription_items/sub_ABC1234567890/items\u0022\n  },\n  \u0022start_date\u0022: 1633046400,\n  \u0022current_period_start\u0022: 1633046400,\n  \u0022current_period_end\u0022: 1635724800,\n  \u0022created\u0022: 1633046400\n}",
+  "OriginalRequest": "curl -X POST -H \u0022Host: localhost:9055\u0022 -H \u0022Content-Type: application/json; charset=utf-8\u0022 -H \u0022Content-Length: 59\u0022 -d \u0027{\u0022customer\u0022:\u0022cus_demo_001\u0022,\u0022items\u0022:[{\u0022price\u0022:\u0022price_123\u0022}]}\u0027 \u0022http://localhost:9055/v1/subscriptions\u0022",
+  "Instructions": [
+    "You are a Stripe API simulator. You only respond to curl commands.",
+    "Only output the response body. Always output the full body you would expect from the API.",
+    "Generate realistic, properly formatted responses that match the API\u0027s expected structure and data types.",
+    "Use appropriate HTTP status codes in your responses when applicable.",
+    "Return realistic Stripe API JSON responses. Always return raw JSON only, no markdown.",
+    "Return a subscription object with \u0022object\u0022: \u0022subscription\u0022, an \u0022id\u0022 starting with \u0022sub_\u0022, \u0022status\u0022: \u0022active\u0022, and a \u0022customer\u0022 field starting with \u0022cus_\u0022."
+  ],
+  "Timestamp": "2026-03-25T16:54:26.968654Z"
+}
