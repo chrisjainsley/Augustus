@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in *.cs) dotnet format Augustus/Augustus.sln --include \"$f\" --no-restore ;; esac; } 2>/dev/null || true",
+            "command": "if ! command -v jq >/dev/null 2>&1; then echo 'Skipping C# formatting: jq not installed.' >&2; exit 0; fi; if ! command -v dotnet >/dev/null 2>&1; then echo 'Skipping C# formatting: dotnet SDK not installed.' >&2; exit 0; fi; f=$(jq -r '.tool_input.file_path // .tool_response.filePath'); case \"$f\" in *.cs) dotnet format Augustus/Augustus.sln --include \"$f\" --no-restore ;; esac",
             "timeout": 30,
             "statusMessage": "Formatting..."
           }

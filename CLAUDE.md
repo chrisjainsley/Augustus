@@ -10,7 +10,7 @@ dotnet test Augustus/Augustus.sln
 dotnet test Augustus/Augustus.sln -f net9.0  # single framework
 ```
 
-The solution multi-targets net6.0, net7.0, net8.0, net9.0, and net10.0. CI runs tests on all frameworks; for local dev, testing on one framework is usually sufficient.
+Projects in this repo target net6.0, net7.0, net8.0, net9.0, and net10.0 (varies by project). CI runs tests for each project's target frameworks; for local dev, testing on one framework is usually sufficient.
 
 ## Testing Conventions
 

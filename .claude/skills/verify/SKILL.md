@@ -24,5 +24,5 @@ Build and test the Augustus solution to verify all changes work correctly.
 
 ## Notes
 
-- The solution multi-targets net6.0, net7.0, net8.0, net9.0, and net10.0. CI tests all frameworks, but for local verification a single framework run is acceptable unless the change is framework-sensitive.
+- Projects in the solution target net6.0, net7.0, net8.0, net9.0, and net10.0 (coverage may vary by project). CI exercises all supported frameworks, but for local verification a single-framework run is acceptable unless the change is framework-sensitive.
 - For framework-specific testing: `dotnet test Augustus/Augustus.sln -f net9.0`

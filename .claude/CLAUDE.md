@@ -8,6 +8,6 @@ When you request branch or worktree work, the branch-worktree-manager agent will
 
 ## Automated Code Review
 
-A Stop hook runs an agent-based code review when Claude stops processing. It reviews C# source files, fixes Critical/High issues, and runs tests. Trigger manually with `/review-and-fix`.
+You can optionally configure a Stop hook in `.claude/settings.json` to run agent-based review when Claude stops processing. That review can scan C# source files, fix Critical/High issues, and run tests. Trigger manually with `/review-and-fix`.
 
 See `.claude/commands/review-and-fix.md` for review criteria.
