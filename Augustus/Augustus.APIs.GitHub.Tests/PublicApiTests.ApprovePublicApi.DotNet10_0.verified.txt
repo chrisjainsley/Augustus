@@ -1,0 +1,140 @@
+﻿[assembly: System.Reflection.AssemblyMetadata("RepositoryUrl", "https://github.com/chrisjainsley/augustus")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Augustus.GitHub.Tests")]
+namespace Augustus.APIs.GitHub
+{
+    public sealed class GitHubActionsBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer GetWorkflowRun() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer ListWorkflowRuns() { }
+    }
+    public sealed class GitHubBranchesBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer List() { }
+    }
+    public sealed class GitHubCommitsBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer List() { }
+    }
+    public static class GitHubErrors
+    {
+        public static string Forbidden(string message = "Resource not accessible by integration", string? documentationUrl = null) { }
+        public static string NotFound(string message = "Not Found", string? documentationUrl = null) { }
+        public static string RateLimitExceeded(string message = "API rate limit exceeded", string? documentationUrl = null) { }
+        public static string ServerError(string message = "Internal Server Error", string? documentationUrl = null) { }
+        public static string Unauthorized(string message = "Bad credentials", string? documentationUrl = null) { }
+        public static string UnprocessableEntity(string message = "Validation Failed", Augustus.APIs.GitHub.GitHubValidationError[]? errors = null, string? documentationUrl = null) { }
+        public static string ValidationFailed(string message = "Validation Failed", Augustus.APIs.GitHub.GitHubValidationError[]? errors = null, string? documentationUrl = null) { }
+    }
+    public static class GitHubExtensions
+    {
+        public static Augustus.APIs.GitHub.GitHubMock CreateGitHubMock(this object testClass, System.Action<Augustus.APISimulatorOptions>? configureOptions = null) { }
+        public static Augustus.APIs.GitHub.GitHubRouteBuilder GitHub(this Augustus.APISimulator apiSimulator) { }
+        public static Augustus.APIs.GitHub.GitHubRouteBuilder GitHub(this Augustus.APIs.GitHub.GitHubMock gitHubMock) { }
+    }
+    public sealed class GitHubGitRefsBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Create() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer List() { }
+    }
+    public sealed class GitHubIssuesBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Create() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer List() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Update() { }
+    }
+    public sealed class GitHubMock
+    {
+        public Augustus.APISimulator APISimulator { get; }
+        public bool IsRunning { get; }
+        public Augustus.APIs.GitHub.GitHubActionsBuilder Actions() { }
+        public Augustus.APIs.GitHub.GitHubBranchesBuilder Branches() { }
+        public Augustus.APISimulator Build() { }
+        public Augustus.APIs.GitHub.GitHubCommitsBuilder Commits() { }
+        public System.Net.Http.HttpClient CreateClient() { }
+        public Augustus.APIs.GitHub.GitHubGitRefsBuilder GitRefs() { }
+        public Augustus.APIs.GitHub.GitHubIssuesBuilder Issues() { }
+        public Augustus.APIs.GitHub.GitHubOrganizationsBuilder Organizations() { }
+        public Augustus.APIs.GitHub.GitHubPullRequestsBuilder PullRequests() { }
+        public Augustus.APIs.GitHub.GitHubReleasesBuilder Releases() { }
+        public Augustus.APIs.GitHub.GitHubRepositoriesBuilder Repositories() { }
+        public Augustus.APIs.GitHub.GitHubSearchBuilder Search() { }
+        public System.Threading.Tasks.Task StartAsync(System.Threading.CancellationToken cancellationToken = default) { }
+        public System.Threading.Tasks.Task StopAsync(System.Threading.CancellationToken cancellationToken = default) { }
+        public Augustus.APIs.GitHub.GitHubMock UseAllDefaults() { }
+        public Augustus.APIs.GitHub.GitHubUsersBuilder Users() { }
+        public Augustus.APIs.GitHub.GitHubMock WithLatency(int meanMs, int stdDevMs) { }
+    }
+    public sealed class GitHubOrganizationsBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer ListForAuthenticatedUser() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer ListForUser() { }
+    }
+    public sealed class GitHubPullRequestsBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Create() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer List() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Update() { }
+    }
+    public sealed class GitHubReleasesBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Create() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer List() { }
+    }
+    public sealed class GitHubRepositoriesBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Create() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Delete() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer ListForAuthenticatedUser() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer ListForUser() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Update() { }
+    }
+    public sealed class GitHubResourceConfigurer
+    {
+        public void UseDefault() { }
+        public void WithError(int statusCode, string errorJson) { }
+        public void WithJsonFile(string filePath) { }
+        public void WithResponse(object responseObject) { }
+        public void WithResponse(string jsonResponse) { }
+    }
+    public sealed class GitHubRouteBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubActionsBuilder Actions() { }
+        public Augustus.APIs.GitHub.GitHubBranchesBuilder Branches() { }
+        public Augustus.APIs.GitHub.GitHubCommitsBuilder Commits() { }
+        public Augustus.APIs.GitHub.GitHubGitRefsBuilder GitRefs() { }
+        public Augustus.APIs.GitHub.GitHubIssuesBuilder Issues() { }
+        public Augustus.APIs.GitHub.GitHubOrganizationsBuilder Organizations() { }
+        public Augustus.APIs.GitHub.GitHubPullRequestsBuilder PullRequests() { }
+        public Augustus.APIs.GitHub.GitHubReleasesBuilder Releases() { }
+        public Augustus.APIs.GitHub.GitHubRepositoriesBuilder Repositories() { }
+        public Augustus.APIs.GitHub.GitHubSearchBuilder Search() { }
+        public Augustus.APIs.GitHub.GitHubUsersBuilder Users() { }
+    }
+    public sealed class GitHubSearchBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Code() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Issues() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Repositories() { }
+    }
+    public sealed class GitHubUsersBuilder
+    {
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer Get() { }
+        public Augustus.APIs.GitHub.GitHubResourceConfigurer GetAuthenticated() { }
+    }
+    public sealed class GitHubValidationError
+    {
+        public GitHubValidationError() { }
+        public GitHubValidationError(string resource, string field, string code) { }
+        public string? Code { get; set; }
+        public string? Field { get; set; }
+        public string? Resource { get; set; }
+    }
+}

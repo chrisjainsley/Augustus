@@ -50,14 +50,25 @@ public sealed class RouteConfiguration
     {
         try
         {
-            // Replace placeholders before escaping so metacharacters in the rest
-            // of the pattern are treated as literals (same approach as RouteInstruction)
-            var regexPattern = Regex.Escape(
-                pattern
-                    .Replace("{id}", "\x00ID\x00")
-                    .Replace("{*}", "\x00WILD\x00"))
-                .Replace("\x00ID\x00", @"[^/]+")
+            // Replace all named parameter placeholders (e.g., {id}, {owner}, {repo})
+            // and the wildcard placeholder {*} before escaping, so metacharacters in
+            // the rest of the pattern are treated as literals.
+            int counter = 0;
+            var paramMarkers = new List<string>();
+            var preprocessed = Regex.Replace(pattern, @"\{([^}]+)\}", match =>
+            {
+                if (match.Groups[1].Value == "*")
+                    return "\x00WILD\x00";
+                var marker = $"\x00P{counter++}\x00";
+                paramMarkers.Add(marker);
+                return marker;
+            });
+
+            var regexPattern = Regex.Escape(preprocessed)
                 .Replace("\x00WILD\x00", ".*");
+
+            foreach (var marker in paramMarkers)
+                regexPattern = regexPattern.Replace(marker, @"[^/]+");
 
             return new Regex($"^{regexPattern}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         }
