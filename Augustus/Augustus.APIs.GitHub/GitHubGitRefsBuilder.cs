@@ -15,7 +15,8 @@ public sealed class GitHubGitRefsBuilder
     }
 
     /// <summary>
-    /// Configures the GET /repos/{owner}/{repo}/git/ref/{ref} endpoint.
+    /// Configures the GET /repos/{owner}/{repo}/git/ref/{*} endpoint.
+    /// Uses a wildcard to support slash-delimited refs (e.g., <c>heads/main</c>, <c>tags/v1.0</c>).
     /// </summary>
     public GitHubResourceConfigurer Get()
     {
@@ -23,7 +24,8 @@ public sealed class GitHubGitRefsBuilder
     }
 
     /// <summary>
-    /// Configures the GET /repos/{owner}/{repo}/git/matching-refs/{ref} endpoint (list matching references).
+    /// Configures the GET /repos/{owner}/{repo}/git/matching-refs/{*} endpoint (list matching references).
+    /// Uses a wildcard to support slash-delimited ref prefixes (e.g., <c>heads/</c>, <c>tags/v1</c>).
     /// </summary>
     public GitHubResourceConfigurer List()
     {
