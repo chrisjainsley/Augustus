@@ -81,16 +81,23 @@ public sealed class VerificationBuilder
 
     private string BuildMessage(string expected, int actual)
     {
+        const int maxDisplayed = 20;
         var sb = new StringBuilder();
         sb.AppendLine($"Expected {expected} matching request(s), but found {actual}.");
         sb.AppendLine();
         sb.AppendLine($"Recorded requests ({allRequests.Count} total):");
 
-        for (var i = 0; i < allRequests.Count; i++)
+        var displayCount = Math.Min(allRequests.Count, maxDisplayed);
+        for (var i = 0; i < displayCount; i++)
         {
             var r = allRequests[i];
             var marker = predicate(r) ? " [matched]" : "";
             sb.AppendLine($"  [{i}] {r.Method} {r.Path} ({r.Timestamp:O}){marker}");
+        }
+
+        if (allRequests.Count > maxDisplayed)
+        {
+            sb.AppendLine($"  ... and {allRequests.Count - maxDisplayed} more (inspect ReceivedRequests for full list)");
         }
 
         return sb.ToString().TrimEnd();

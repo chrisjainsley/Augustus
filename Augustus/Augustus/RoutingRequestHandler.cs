@@ -31,15 +31,19 @@ internal class RoutingRequestHandler : IRequestHandler
         var method = context.Request.Method;
 
         // Record the request before any routing or response generation
-        var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
-        string? body = bodyBytes.Length > 0 ? Encoding.UTF8.GetString(bodyBytes) : null;
+        string? body = null;
+        if (context.Request.ContentLength is > 0)
+        {
+            var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
+            body = Encoding.UTF8.GetString(bodyBytes);
+        }
 
         simulator.RecordRequest(new RecordedRequest
         {
             Method = ParseMethod(method),
             Path = path,
-            Headers = context.Request.Headers.ToDictionary(
-                h => h.Key, h => h.Value.ToString()),
+            Headers = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(
+                context.Request.Headers.ToDictionary(h => h.Key, h => h.Value.ToString())),
             Body = body,
             Timestamp = DateTimeOffset.UtcNow
         });
