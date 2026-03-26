@@ -2,6 +2,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Augustus.Extensions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Augustus.Tests;
 
@@ -113,14 +119,28 @@ public class WebhookDeliveryTests
     [Fact]
     public async Task WebhookDelivery_WithHmacSigning_ShouldIncludeSignatureHeader()
     {
-        await using var receiver = this.CreateAPISimulator(o => o.Port = 0);
-        receiver.ForPost("/webhook")
-            .WithResponse(new { ok = true })
-            .Add();
-        await receiver.StartAsync();
-        var receiverUrl = receiver.CreateClient().BaseAddress + "webhook";
+        // Arrange - receiver that captures the signature header and body
+        string? capturedSignatureHeader = null;
+        string? capturedBody = null;
+        var receiverHost = Host.CreateDefaultBuilder()
+            .ConfigureWebHostDefaults(web =>
+            {
+                web.UseUrls("http://127.0.0.1:0");
+                web.Configure(app => app.Run(async ctx =>
+                {
+                    capturedSignatureHeader = ctx.Request.Headers["X-Webhook-Signature"];
+                    using var reader = new StreamReader(ctx.Request.Body);
+                    capturedBody = await reader.ReadToEndAsync();
+                    ctx.Response.StatusCode = 200;
+                }));
+            })
+            .Build();
+        await receiverHost.StartAsync();
+        var server = receiverHost.Services.GetRequiredService<IServer>();
+        var receiverUrl = server.Features.Get<IServerAddressesFeature>()!.Addresses.First() + "/webhook";
 
         var secret = "test_secret_key";
+        var payload = "{\"type\":\"charge.succeeded\"}";
 
         await using var simulator = this.CreateAPISimulator(o => o.Port = 0);
         simulator.ForPost("/v1/charges")
@@ -133,7 +153,7 @@ public class WebhookDeliveryTests
         });
         simulator.OnRequest(HttpMethod.Post, "/v1/charges")
             .FireWebhookEvent("charge.succeeded")
-            .WithPayload("{\"type\":\"charge.succeeded\"}")
+            .WithPayload(payload)
             .Add();
         await simulator.StartAsync();
 
@@ -141,8 +161,17 @@ public class WebhookDeliveryTests
         using var body = new StringContent("{}");
         await client.PostAsync("/v1/charges", body);
         await simulator.StopAsync();
+        await receiverHost.StopAsync();
 
-        // The webhook was delivered successfully (signing doesn't affect delivery)
+        // Verify the receiver got the signature header with a valid HMAC
+        capturedSignatureHeader.Should().NotBeNullOrEmpty();
+        capturedBody.Should().Be(payload);
+
+        // Compute expected HMAC and verify it matches
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        var expectedSignature = Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+        capturedSignatureHeader.Should().Be(expectedSignature);
+
         simulator.DeliveredWebhooks.Should().ContainSingle()
             .Which.Success.Should().BeTrue();
     }

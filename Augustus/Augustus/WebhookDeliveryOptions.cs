@@ -45,7 +45,12 @@ public sealed class WebhookDeliveryOptions
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="url"/> is null.</exception>
     public WebhookDeliveryOptions(string url)
     {
-        Url = url ?? throw new ArgumentNullException(nameof(url));
+        if (url is null)
+            throw new ArgumentNullException(nameof(url));
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) ||
+            (parsed.Scheme != "http" && parsed.Scheme != "https"))
+            throw new ArgumentException($"Webhook URL must be an absolute HTTP or HTTPS URI, but got: '{url}'", nameof(url));
+        Url = url;
     }
 }
 

@@ -17,6 +17,7 @@ internal sealed class WebhookDeliveryService
     private readonly byte[]? signingKeyBytes;
     private readonly ConcurrentQueue<DeliveredWebhook> deliveredWebhooks = new();
     private readonly ConcurrentDictionary<int, Task> pendingDeliveries = new();
+    private CancellationTokenSource? drainCts;
     private int deliveryId;
 
     public IReadOnlyCollection<DeliveredWebhook> DeliveredWebhooks => deliveredWebhooks.ToArray();
@@ -31,18 +32,25 @@ internal sealed class WebhookDeliveryService
     public void EnqueueDelivery(WebhookTrigger trigger)
     {
         var id = Interlocked.Increment(ref deliveryId);
-        var task = DeliverAsync(id, trigger);
-        pendingDeliveries.TryAdd(id, task);
+        // Register the id before starting the task to avoid a race where the task
+        // completes (and tries TryRemove) before TryAdd runs.
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        pendingDeliveries.TryAdd(id, tcs.Task);
+
+        _ = DeliverAsync(id, trigger, tcs);
     }
 
-    private async Task DeliverAsync(int id, WebhookTrigger trigger)
+    private async Task DeliverAsync(int id, WebhookTrigger trigger, TaskCompletionSource tcs)
     {
+        var payload = string.Empty;
         try
         {
-            if (trigger.Delay > TimeSpan.Zero)
-                await Task.Delay(trigger.Delay).ConfigureAwait(false);
+            var ct = drainCts?.Token ?? CancellationToken.None;
 
-            var payload = ResolvePayload(trigger);
+            if (trigger.Delay > TimeSpan.Zero)
+                await Task.Delay(trigger.Delay, ct).ConfigureAwait(false);
+
+            payload = ResolvePayload(trigger);
 
             using var request = new HttpRequestMessage(System.Net.Http.HttpMethod.Post, options.Url);
             request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
@@ -62,7 +70,7 @@ internal sealed class WebhookDeliveryService
                 request.Headers.TryAddWithoutValidation(options.SignatureHeader, headerValue);
             }
 
-            var response = await SharedHttpClient.SendAsync(request).ConfigureAwait(false);
+            using var response = await SharedHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
             deliveredWebhooks.Enqueue(new DeliveredWebhook(
                 trigger.EventType,
@@ -78,15 +86,16 @@ internal sealed class WebhookDeliveryService
 
             deliveredWebhooks.Enqueue(new DeliveredWebhook(
                 trigger.EventType,
-                string.Empty,
+                payload,
                 DateTimeOffset.UtcNow,
                 false,
                 null,
-                ex.Message));
+                ex.ToString()));
         }
         finally
         {
             pendingDeliveries.TryRemove(id, out _);
+            tcs.TrySetResult();
         }
     }
 
@@ -124,6 +133,9 @@ internal sealed class WebhookDeliveryService
 
     public async Task DrainAsync(CancellationToken cancellationToken = default)
     {
+        // Signal all in-flight deliveries to cancel via the shared drain token
+        drainCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         var tasks = pendingDeliveries.Values.ToArray();
         if (tasks.Length > 0)
         {

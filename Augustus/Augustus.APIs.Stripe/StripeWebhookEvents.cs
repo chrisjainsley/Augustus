@@ -2,7 +2,7 @@ namespace Augustus.APIs.Stripe;
 
 /// <summary>
 /// Constants for common Stripe webhook event types.
-/// Use with <see cref="WebhookTriggerBuilder.FireWebhookEvent"/> to configure webhook triggers.
+/// Use with <see cref="Augustus.WebhookTriggerBuilder.FireWebhookEvent"/> to configure webhook triggers.
 /// </summary>
 public static class StripeWebhookEvents
 {
