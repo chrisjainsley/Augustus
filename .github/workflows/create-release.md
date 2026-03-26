@@ -32,7 +32,7 @@ tools:
   bash: true
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 
 timeout-minutes: 30
@@ -148,6 +148,26 @@ create a single issue titled
 `[Release Review] Release Blocked — <short reason>` listing every failure and
 critical code-review finding, then stop.
 
+#### 0-pre. Branch verification
+
+Before running any other checks, verify the workflow is executing on the
+repository's default branch:
+
+```bash
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo "Current branch: $CURRENT_BRANCH"
+echo "Default branch: $DEFAULT_BRANCH"
+if [ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: Release must run from the default branch ($DEFAULT_BRANCH), not $CURRENT_BRANCH"
+  exit 1
+fi
+```
+
+If this check fails, it is a **blocker**. Create an issue titled
+`[Release Review] Release Blocked — not on default branch` explaining that
+the workflow was dispatched from `$CURRENT_BRANCH` instead of the default
+branch, and stop.
+
 #### 0-A. Build check
 
 ```bash
@@ -161,7 +181,9 @@ Both commands must exit `0`. Any build error is a blocker.
 
 ```bash
 dotnet test Augustus/Augustus.Tests/Augustus.Tests.csproj --configuration Release --verbosity normal
+dotnet test Augustus/Augustus.AI.Tests/Augustus.AI.Tests.csproj --configuration Release --verbosity normal
 dotnet test Augustus/Augustus.Reqnroll.Tests/Augustus.Reqnroll.Tests.csproj --configuration Release --verbosity normal
+dotnet test Augustus/Augustus.APIs.Stripe.Tests/Augustus.Stripe.Tests.csproj --configuration Release --verbosity normal
 ```
 
 All tests must pass. Pay special attention to **public API approval tests** —

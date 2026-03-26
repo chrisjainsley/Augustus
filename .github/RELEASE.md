@@ -175,9 +175,9 @@ If a version is published incorrectly:
 ## Frequently Asked Questions
 
 **Q: Can I release from any branch?**
-A: The workflow triggers on `workflow_dispatch` from the Actions tab. Always
-ensure `master` is up-to-date before triggering, as the workflow checks out
-the default branch.
+A: No. The workflow must be triggered from the `master` branch. If dispatched
+from a different branch, the releasability check will detect the mismatch and
+block the release. Always ensure `master` is up-to-date before triggering.
 
 **Q: What if I need to release a hotfix?**
 A: Create a bugfix branch, fix the issue, merge to `master`. Then trigger the
