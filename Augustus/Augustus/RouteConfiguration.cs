@@ -46,27 +46,7 @@ public sealed class RouteConfiguration
     {
     }
 
-    private static Regex CompilePattern(string pattern)
-    {
-        try
-        {
-            // Replace placeholders before escaping so metacharacters in the rest
-            // of the pattern are treated as literals (same approach as RouteInstruction)
-            var regexPattern = Regex.Escape(
-                pattern
-                    .Replace("{id}", "\x00ID\x00")
-                    .Replace("{*}", "\x00WILD\x00"))
-                .Replace("\x00ID\x00", @"[^/]+")
-                .Replace("\x00WILD\x00", ".*");
-
-            return new Regex($"^{regexPattern}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        }
-        catch (ArgumentException)
-        {
-            // If pattern compilation fails, treat as literal match
-            return new Regex($"^{Regex.Escape(pattern)}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        }
-    }
+    private static Regex CompilePattern(string pattern) => RoutePatternCompiler.Compile(pattern);
 
     /// <summary>
     /// Determines whether this route matches the specified request path and HTTP method.
