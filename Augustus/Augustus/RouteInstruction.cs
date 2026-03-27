@@ -7,7 +7,7 @@ namespace Augustus;
 /// </summary>
 /// <remarks>
 /// Route instructions allow you to provide different AI guidance for different API endpoints and HTTP methods.
-/// Patterns support placeholders like {id} for dynamic path segments.
+/// Patterns support arbitrary named placeholders like {id}, {owner}, {repo} for single path segments and {*} for wildcards.
 /// </remarks>
 public sealed class RouteInstruction
 {
@@ -44,7 +44,7 @@ public sealed class RouteInstruction
     /// <summary>
     /// Initializes a new instance of the <see cref="RouteInstruction"/> class.
     /// </summary>
-    /// <param name="pattern">The URL pattern to match. Supports {id} for path segments and {*} for wildcards.</param>
+    /// <param name="pattern">The URL pattern to match. Supports {name} for single path segments and {*} for wildcards.</param>
     /// <param name="httpMethod">The HTTP method to match, or "*" for all methods. Default is "*".</param>
     public RouteInstruction(string pattern, string httpMethod = "*")
     {
@@ -57,7 +57,7 @@ public sealed class RouteInstruction
     /// <summary>
     /// Initializes a new instance of the <see cref="RouteInstruction"/> class.
     /// </summary>
-    /// <param name="pattern">The URL pattern to match. Supports {id} for path segments and {*} for wildcards.</param>
+    /// <param name="pattern">The URL pattern to match. Supports {name} for single path segments and {*} for wildcards.</param>
     /// <param name="httpVerb">The HTTP method to match.</param>
     public RouteInstruction(string pattern, HttpVerb httpVerb)
         : this(pattern, httpVerb.ToMethodString())
@@ -71,23 +71,7 @@ public sealed class RouteInstruction
 
     private void CompilePattern()
     {
-        try
-        {
-            // Convert simple patterns like "/api/customers/{id}" to regex
-            // Also supports {deployment} for Azure OpenAI URL patterns
-            var regexPattern = Pattern
-                .Replace("{id}", @"[^/]+")
-                .Replace("{deployment}", @"[^/]+")
-                .Replace("{*}", ".*")
-                .Replace("/", @"\/");
-
-            _compiledPattern = new Regex($"^{regexPattern}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        }
-        catch
-        {
-            // If pattern compilation fails, treat as literal match
-            _compiledPattern = new Regex($"^{Regex.Escape(Pattern)}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        }
+        _compiledPattern = RoutePatternCompiler.Compile(Pattern);
     }
 
     /// <summary>

@@ -12,9 +12,11 @@ namespace Augustus
         public string ApiName { get; }
         public System.Collections.Generic.IReadOnlyCollection<Augustus.DeliveredWebhook> DeliveredWebhooks { get; }
         public bool IsRunning { get; }
+        public System.Collections.Generic.IReadOnlyList<Augustus.RecordedRequest> ReceivedRequests { get; }
         public void AddInstruction(string instruction) { }
         public void ClearCache() { }
         public void ClearInstructions() { }
+        public void ClearRecordedRequests() { }
         public void ClearRoutes() { }
         public void ClearTestContext() { }
         public Augustus.InstructionBuilder ConfigureRoutes() { }
@@ -35,6 +37,7 @@ namespace Augustus
         public void SetTestContext(string testName) { }
         public System.Threading.Tasks.Task StartAsync(System.Threading.CancellationToken cancellationToken = default) { }
         public System.Threading.Tasks.Task StopAsync(System.Threading.CancellationToken cancellationToken = default) { }
+        public Augustus.VerificationBuilder Verify(System.Func<Augustus.RecordedRequest, bool> predicate) { }
         public Augustus.APISimulator WithLatency(int meanMs, int stdDevMs) { }
         public Augustus.APISimulator WithWebhook(string url) { }
         public Augustus.APISimulator WithWebhook(string url, System.Action<Augustus.WebhookDeliveryOptions>? configure) { }
@@ -100,6 +103,15 @@ namespace Augustus
         public Augustus.InstructionBuilder WithJsonResponse(string jsonTemplate) { }
         public Augustus.InstructionBuilder WithStatusCode(int statusCode) { }
     }
+    public sealed class RecordedRequest
+    {
+        public RecordedRequest() { }
+        public string? Body { get; init; }
+        public System.Collections.Generic.IReadOnlyDictionary<string, string> Headers { get; init; }
+        public System.Net.Http.HttpMethod Method { get; init; }
+        public string Path { get; init; }
+        public System.DateTimeOffset Timestamp { get; init; }
+    }
     public sealed class RouteBuilder
     {
         public Augustus.APISimulator Add() { }
@@ -136,6 +148,19 @@ namespace Augustus
         public System.Collections.Generic.IReadOnlyList<string> Instructions { get; }
         public string Pattern { get; }
         public bool Matches(string path, string method) { }
+    }
+    public sealed class VerificationBuilder
+    {
+        public void WasCalledAtLeast(int minimumCount) { }
+        public void WasCalledAtMost(int maximumCount) { }
+        public void WasCalledOnce() { }
+        public void WasCalledTimes(int expectedCount) { }
+        public void WasNeverCalled() { }
+    }
+    public sealed class VerificationException : System.Exception
+    {
+        public VerificationException(string message) { }
+        public VerificationException(string message, System.Exception innerException) { }
     }
     public sealed class WebhookDeliveryOptions
     {
