@@ -17,7 +17,6 @@ internal sealed class WebhookDeliveryService
     private readonly byte[]? signingKeyBytes;
     private readonly ConcurrentQueue<DeliveredWebhook> deliveredWebhooks = new();
     private readonly ConcurrentDictionary<int, Task> pendingDeliveries = new();
-    private CancellationTokenSource? drainCts;
     private int deliveryId;
 
     public IReadOnlyCollection<DeliveredWebhook> DeliveredWebhooks => deliveredWebhooks.ToArray();
@@ -45,10 +44,8 @@ internal sealed class WebhookDeliveryService
         var payload = string.Empty;
         try
         {
-            var ct = drainCts?.Token ?? CancellationToken.None;
-
             if (trigger.Delay > TimeSpan.Zero)
-                await Task.Delay(trigger.Delay, ct).ConfigureAwait(false);
+                await Task.Delay(trigger.Delay).ConfigureAwait(false);
 
             payload = ResolvePayload(trigger);
 
@@ -70,7 +67,7 @@ internal sealed class WebhookDeliveryService
                 request.Headers.TryAddWithoutValidation(options.SignatureHeader, headerValue);
             }
 
-            using var response = await SharedHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            using var response = await SharedHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
 
             deliveredWebhooks.Enqueue(new DeliveredWebhook(
                 trigger.EventType,
@@ -133,9 +130,6 @@ internal sealed class WebhookDeliveryService
 
     public async Task DrainAsync(CancellationToken cancellationToken = default)
     {
-        // Signal all in-flight deliveries to cancel via the shared drain token
-        drainCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
         var tasks = pendingDeliveries.Values.ToArray();
         if (tasks.Length > 0)
         {
