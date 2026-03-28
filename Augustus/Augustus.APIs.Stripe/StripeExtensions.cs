@@ -271,6 +271,48 @@ public sealed class StripeMock
     }
 
     /// <summary>
+    /// Registers a webhook delivery endpoint with Stripe-specific defaults (Stripe-Signature header).
+    /// </summary>
+    /// <param name="url">The URL to receive webhook events.</param>
+    /// <param name="signingSecret">Optional Stripe webhook signing secret (whsec_...).</param>
+    /// <returns>This <see cref="StripeMock"/> instance for method chaining.</returns>
+    public StripeMock WithWebhook(string url, string? signingSecret = null)
+    {
+        apiSimulator.WithWebhook(url, options =>
+        {
+            options.SignatureHeader = "Stripe-Signature";
+            options.SigningSecret = signingSecret;
+            // Stripe signs "{timestamp}.{payload}" and formats as "t={timestamp},v1={hmac}"
+            options.WebhookSigner = (payload, secret) =>
+            {
+                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var signedPayload = $"{timestamp}.{payload}";
+                var keyBytes = System.Text.Encoding.UTF8.GetBytes(secret);
+                var payloadBytes = System.Text.Encoding.UTF8.GetBytes(signedPayload);
+                using var hmac = new System.Security.Cryptography.HMACSHA256(keyBytes);
+                var hash = hmac.ComputeHash(payloadBytes);
+                var hmacHex = Convert.ToHexString(hash).ToLowerInvariant();
+                return $"t={timestamp},v1={hmacHex}";
+            };
+        });
+        return this;
+    }
+
+    /// <summary>
+    /// Begins configuring a webhook trigger for requests matching the specified HTTP method and URL pattern.
+    /// </summary>
+    /// <param name="httpMethod">The HTTP method to match.</param>
+    /// <param name="pattern">The URL pattern to match.</param>
+    /// <returns>A <see cref="WebhookTriggerBuilder"/> for fluent configuration.</returns>
+    public WebhookTriggerBuilder OnRequest(System.Net.Http.HttpMethod httpMethod, string pattern)
+        => apiSimulator.OnRequest(httpMethod, pattern);
+
+    /// <summary>
+    /// Gets a read-only collection of all webhooks that have been delivered (or attempted).
+    /// </summary>
+    public IReadOnlyCollection<DeliveredWebhook> DeliveredWebhooks => apiSimulator.DeliveredWebhooks;
+
+    /// <summary>
     /// Configures Gaussian latency simulation for all responses from this Stripe mock.
     /// </summary>
     /// <param name="meanMs">The mean delay in milliseconds.</param>

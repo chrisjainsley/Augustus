@@ -10,6 +10,7 @@ namespace Augustus
         public APISimulator(Augustus.APISimulatorOptions options) { }
         public APISimulator(string apiName, Augustus.APISimulatorOptions options) { }
         public string ApiName { get; }
+        public System.Collections.Generic.IReadOnlyCollection<Augustus.DeliveredWebhook> DeliveredWebhooks { get; }
         public bool IsRunning { get; }
         public System.Collections.Generic.IReadOnlyList<Augustus.RecordedRequest> ReceivedRequests { get; }
         public void AddInstruction(string instruction) { }
@@ -28,6 +29,8 @@ namespace Augustus
         public Augustus.RouteBuilder ForPut(string pattern) { }
         public Augustus.RouteBuilder ForRoute(string pattern, Augustus.HttpVerb httpVerb) { }
         public Augustus.RouteBuilder ForRoute(string pattern, string httpMethod = "*") { }
+        public Augustus.WebhookTriggerBuilder OnRequest(Augustus.HttpVerb httpVerb, string pattern) { }
+        public Augustus.WebhookTriggerBuilder OnRequest(System.Net.Http.HttpMethod httpMethod, string pattern) { }
         public bool RemoveRoute(string pattern, Augustus.HttpVerb httpVerb) { }
         public bool RemoveRoute(string pattern, string httpMethod = "*") { }
         public void SetCacheBasePath(string path) { }
@@ -36,6 +39,8 @@ namespace Augustus
         public System.Threading.Tasks.Task StopAsync(System.Threading.CancellationToken cancellationToken = default) { }
         public Augustus.VerificationBuilder Verify(System.Func<Augustus.RecordedRequest, bool> predicate) { }
         public Augustus.APISimulator WithLatency(int meanMs, int stdDevMs) { }
+        public Augustus.APISimulator WithWebhook(string url) { }
+        public Augustus.APISimulator WithWebhook(string url, System.Action<Augustus.WebhookDeliveryOptions>? configure) { }
     }
     public sealed class APISimulatorOptions
     {
@@ -47,6 +52,16 @@ namespace Augustus
         public bool EnableCaching { get; set; }
         public int Port { get; set; }
         public void Validate() { }
+    }
+    public sealed class DeliveredWebhook : System.IEquatable<Augustus.DeliveredWebhook>
+    {
+        public DeliveredWebhook(string EventType, string Payload, System.DateTimeOffset Timestamp, bool Success, int? StatusCode, string? ErrorMessage) { }
+        public string? ErrorMessage { get; init; }
+        public string EventType { get; init; }
+        public string Payload { get; init; }
+        public int? StatusCode { get; init; }
+        public bool Success { get; init; }
+        public System.DateTimeOffset Timestamp { get; init; }
     }
     public static class HttpRequestExtensions
     {
@@ -146,6 +161,30 @@ namespace Augustus
     {
         public VerificationException(string message) { }
         public VerificationException(string message, System.Exception innerException) { }
+    }
+    public sealed class WebhookDeliveryOptions
+    {
+        public WebhookDeliveryOptions(string url) { }
+        public Augustus.WebhookSignatureAlgorithm SignatureAlgorithm { get; set; }
+        public string SignatureHeader { get; set; }
+        public string? SigningSecret { get; set; }
+        public string Url { get; }
+        public Augustus.WebhookSignerDelegate? WebhookSigner { get; set; }
+    }
+    public enum WebhookSignatureAlgorithm
+    {
+        HmacSha256 = 0,
+        HmacSha512 = 1,
+    }
+    public delegate string WebhookSignerDelegate(string payload, string signingSecret);
+    public sealed class WebhookTriggerBuilder
+    {
+        public Augustus.APISimulator Add() { }
+        public Augustus.WebhookTriggerBuilder FireWebhookEvent(string eventType) { }
+        public Augustus.WebhookTriggerBuilder WithDelay(System.TimeSpan delay) { }
+        public Augustus.WebhookTriggerBuilder WithPayload(object payloadObject) { }
+        public Augustus.WebhookTriggerBuilder WithPayload(string jsonPayload) { }
+        public Augustus.WebhookTriggerBuilder WithPayloadFactory(System.Func<string> factory) { }
     }
 }
 namespace Augustus.Extensions
