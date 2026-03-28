@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Http;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 
 namespace Augustus;
@@ -27,6 +29,24 @@ internal class RoutingRequestHandler : IRequestHandler
     {
         var path = context.Request.Path.Value ?? "/";
         var method = context.Request.Method;
+
+        // Record the request before any routing or response generation
+        string? body = null;
+        if (context.Request.ContentLength is > 0)
+        {
+            var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
+            body = Encoding.UTF8.GetString(bodyBytes);
+        }
+
+        simulator.RecordRequest(new RecordedRequest
+        {
+            Method = ParseMethod(method),
+            Path = path,
+            Headers = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(
+                context.Request.Headers.ToDictionary(h => h.Key, h => h.Value.ToString())),
+            Body = body,
+            Timestamp = DateTimeOffset.UtcNow
+        });
 
         var route = simulator.GetRouteForRequest(path, method);
         if (route?.ResponseStrategy != null)
@@ -68,4 +88,17 @@ internal class RoutingRequestHandler : IRequestHandler
 
         return Task.CompletedTask;
     }
+
+    private static HttpMethod ParseMethod(string method) => method.ToUpperInvariant() switch
+    {
+        "GET" => HttpMethod.Get,
+        "POST" => HttpMethod.Post,
+        "PUT" => HttpMethod.Put,
+        "DELETE" => HttpMethod.Delete,
+        "PATCH" => HttpMethod.Patch,
+        "HEAD" => HttpMethod.Head,
+        "OPTIONS" => HttpMethod.Options,
+        "TRACE" => HttpMethod.Trace,
+        _ => new HttpMethod(method),
+    };
 }

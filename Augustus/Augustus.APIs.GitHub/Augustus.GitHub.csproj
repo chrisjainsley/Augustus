@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Augustus.GitHub</PackageId>
+    <Version>0.0.1</Version>
+    <Authors>Augustus Contributors</Authors>
+    <Description>GitHub-specific extensions for Augustus. Provides fluent API for mocking GitHub REST API endpoints with built-in realistic defaults.</Description>
+    <PackageTags>testing;mocking;github;api;simulator;augustus</PackageTags>
+    <RepositoryUrl>https://github.com/chrisjainsley/augustus</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Augustus.GitHub.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Augustus\Augustus.csproj" />
+  </ItemGroup>
+</Project>
