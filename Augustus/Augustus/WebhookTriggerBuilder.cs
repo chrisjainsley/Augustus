@@ -92,6 +92,8 @@ public sealed class WebhookTriggerBuilder
     /// <returns>This builder for method chaining.</returns>
     public WebhookTriggerBuilder WithDelay(TimeSpan delay)
     {
+        if (delay < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(delay), "Delay must be greater than or equal to zero.");
         this.delay = delay;
         return this;
     }

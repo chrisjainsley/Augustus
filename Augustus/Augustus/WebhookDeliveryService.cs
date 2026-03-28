@@ -17,6 +17,7 @@ internal sealed class WebhookDeliveryService
     private readonly byte[]? signingKeyBytes;
     private readonly ConcurrentQueue<DeliveredWebhook> deliveredWebhooks = new();
     private readonly ConcurrentDictionary<int, Task> pendingDeliveries = new();
+    private readonly CancellationTokenSource deliveryCts = new();
     private int deliveryId;
 
     public IReadOnlyCollection<DeliveredWebhook> DeliveredWebhooks => deliveredWebhooks.ToArray();
@@ -42,10 +43,11 @@ internal sealed class WebhookDeliveryService
     private async Task DeliverAsync(int id, WebhookTrigger trigger, TaskCompletionSource tcs)
     {
         var payload = string.Empty;
+        var ct = deliveryCts.Token;
         try
         {
             if (trigger.Delay > TimeSpan.Zero)
-                await Task.Delay(trigger.Delay).ConfigureAwait(false);
+                await Task.Delay(trigger.Delay, ct).ConfigureAwait(false);
 
             payload = ResolvePayload(trigger);
 
@@ -67,7 +69,7 @@ internal sealed class WebhookDeliveryService
                 request.Headers.TryAddWithoutValidation(options.SignatureHeader, headerValue);
             }
 
-            using var response = await SharedHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+            using var response = await SharedHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
             deliveredWebhooks.Enqueue(new DeliveredWebhook(
                 trigger.EventType,
@@ -130,6 +132,11 @@ internal sealed class WebhookDeliveryService
 
     public async Task DrainAsync(CancellationToken cancellationToken = default)
     {
+        // When the caller cancels, cancel all in-flight deliveries so shutdown isn't blocked
+        // by long delays or unresponsive receivers.
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        linkedCts.Token.Register(() => deliveryCts.Cancel());
+
         var tasks = pendingDeliveries.Values.ToArray();
         if (tasks.Length > 0)
         {
@@ -138,5 +145,7 @@ internal sealed class WebhookDeliveryService
             await Task.WhenAny(allTasks, cancellationTask).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
         }
+
+        deliveryCts.Dispose();
     }
 }
