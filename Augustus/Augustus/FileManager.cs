@@ -168,7 +168,10 @@ public partial class APISimulator
             return await File.ReadAllTextAsync(fullPath).ConfigureAwait(false);
         }
 
-        public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
+        public Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
+            => CacheResponseAsync(requestHash, response, originalRequest, instructions, normalized: false);
+
+        public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized)
         {
             ValidateFileName(requestHash);
 
@@ -178,7 +181,8 @@ public partial class APISimulator
                 Response = response,
                 OriginalRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(originalRequest),
                 Instructions = instructions.Select(SensitiveDataSanitizer.SanitizeSensitiveValues).ToList(),
-                Timestamp = DateTime.UtcNow
+                Timestamp = DateTime.UtcNow,
+                Normalized = normalized
             };
 
             var json = JsonSerializer.Serialize(cacheEntry, CacheSerializerOptions);
@@ -187,6 +191,12 @@ public partial class APISimulator
         }
 
         public async Task<string?> ReadCachedResponseAsync(string requestHash)
+        {
+            var entry = await ReadCachedEntryAsync(requestHash).ConfigureAwait(false);
+            return entry?.Response;
+        }
+
+        public async Task<CacheEntry?> ReadCachedEntryAsync(string requestHash)
         {
             ValidateFileName(requestHash);
 
@@ -199,11 +209,10 @@ public partial class APISimulator
                 var cacheEntry = JsonSerializer.Deserialize<CacheEntry>(json);
                 if (cacheEntry?.Response != null)
                     _touchedHashes.TryAdd(requestHash, 0);
-                return cacheEntry?.Response;
+                return cacheEntry;
             }
             catch (JsonException)
             {
-                // Invalid cache file, return null
                 return null;
             }
         }
@@ -313,5 +322,6 @@ public partial class APISimulator
         public string OriginalRequest { get; set; } = string.Empty;
         public List<string> Instructions { get; set; } = new();
         public DateTime Timestamp { get; set; }
+        public bool Normalized { get; set; }
     }
 }

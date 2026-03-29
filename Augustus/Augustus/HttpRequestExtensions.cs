@@ -5,6 +5,13 @@ namespace Augustus;
 
 public static class HttpRequestExtensions
 {
+    internal static readonly HashSet<string> DefaultAISkipHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Host", "Connection", "Keep-Alive", "Transfer-Encoding",
+        "TE", "Trailer", "Upgrade", "Content-Length", "Accept-Encoding",
+        "Proxy-Authorization", "Proxy-Authenticate"
+    };
+
     public static async Task<byte[]> ReadBodyBytesAsync(this HttpRequest request, CancellationToken cancellationToken = default)
     {
         request.EnableBuffering();
@@ -14,7 +21,10 @@ public static class HttpRequestExtensions
         return ms.ToArray();
     }
 
-    public static async Task<string> ToCurlCommandAsync(this HttpRequest request)
+    public static Task<string> ToCurlCommandAsync(this HttpRequest request)
+        => ToCurlCommandAsync(request, skipHeaders: null);
+
+    public static async Task<string> ToCurlCommandAsync(this HttpRequest request, IReadOnlySet<string>? skipHeaders)
     {
         StringBuilder curlCommand = new StringBuilder(256); // Pre-allocate with estimated capacity
         curlCommand.Append("curl -X ").Append(request.Method);
@@ -22,6 +32,9 @@ public static class HttpRequestExtensions
         // Append headers (escape double quotes in header values)
         foreach (var header in request.Headers)
         {
+            if (skipHeaders != null && skipHeaders.Contains(header.Key))
+                continue;
+
             var escapedValue = EscapeForDoubleQuotes(header.Value.ToString());
             curlCommand.Append($" -H \"{header.Key}: {escapedValue}\"");
         }

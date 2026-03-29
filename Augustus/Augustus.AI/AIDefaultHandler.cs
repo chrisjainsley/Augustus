@@ -53,8 +53,6 @@ internal class AIDefaultHandler : IRequestHandler
         {
             var bodyBytes = await httpContext.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
 
-            var curlRequest = await Augustus.HttpRequestExtensions.ToCurlCommandAsync(httpContext.Request).ConfigureAwait(false);
-
             var instructions = instructionsContainer.GetInstructionsForRequest(
                 httpContext.Request.Path.Value ?? "/",
                 httpContext.Request.Method);
@@ -70,11 +68,14 @@ internal class AIDefaultHandler : IRequestHandler
 
             if (options.EnableCaching)
             {
-                var cachedResponse = await fileManager.ReadCachedResponseAsync(requestHash).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(cachedResponse))
+                var cachedEntry = await fileManager.ReadCachedEntryAsync(requestHash).ConfigureAwait(false);
+                if (cachedEntry?.Response is { Length: > 0 } cachedResponse)
                 {
-                    cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
-                        cachedResponse, httpContext.Request.Path.Value ?? "/");
+                    if (!cachedEntry.Normalized)
+                    {
+                        cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
+                            cachedResponse, httpContext.Request.Path.Value ?? "/");
+                    }
                     httpContext.Response.ContentType = "application/json";
                     await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
                     return;
@@ -112,12 +113,17 @@ internal class AIDefaultHandler : IRequestHandler
                 return;
             }
 
-            List<ChatMessage> messages = new List<ChatMessage>();
-            foreach (var instruction in instructions)
+            // Defer curl command generation until after cache check — avoids re-reading the body stream,
+            // iterating headers, and string building on cache hits. Filter noisy headers to reduce
+            // OpenAI prompt token usage.
+            var curlRequest = await Augustus.HttpRequestExtensions.ToCurlCommandAsync(
+                httpContext.Request, HttpRequestExtensions.DefaultAISkipHeaders).ConfigureAwait(false);
+
+            List<ChatMessage> messages = new List<ChatMessage>
             {
-                messages.Add(ChatMessage.CreateSystemMessage(instruction));
-            }
-            messages.Add(ChatMessage.CreateUserMessage(curlRequest));
+                ChatMessage.CreateSystemMessage(string.Join("\n\n", instructions)),
+                ChatMessage.CreateUserMessage(curlRequest)
+            };
 
             var chatOptions = AIResponseFormatting.CreateJsonObjectChatOptions();
 
@@ -148,7 +154,7 @@ internal class AIDefaultHandler : IRequestHandler
 
             if (options.EnableCaching)
             {
-                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions));
+                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true));
             }
         }
         catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)

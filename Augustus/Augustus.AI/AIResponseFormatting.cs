@@ -8,7 +8,8 @@ internal static class AIResponseFormatting
     {
         return new ChatCompletionOptions
         {
-            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
+            Temperature = 0f
         };
     }
 

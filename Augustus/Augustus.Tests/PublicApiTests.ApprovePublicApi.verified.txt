@@ -67,6 +67,7 @@ namespace Augustus
     {
         public static System.Threading.Tasks.Task<byte[]> ReadBodyBytesAsync(this Microsoft.AspNetCore.Http.HttpRequest request, System.Threading.CancellationToken cancellationToken = default) { }
         public static System.Threading.Tasks.Task<string> ToCurlCommandAsync(this Microsoft.AspNetCore.Http.HttpRequest request) { }
+        public static System.Threading.Tasks.Task<string> ToCurlCommandAsync(this Microsoft.AspNetCore.Http.HttpRequest request, System.Collections.Generic.IReadOnlySet<string>? skipHeaders) { }
     }
     public enum HttpVerb
     {
