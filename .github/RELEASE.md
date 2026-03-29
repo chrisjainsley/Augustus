@@ -99,8 +99,8 @@ Once the workflow creates a draft release and review issue:
    - Publishes the draft release
    - Comments on and closes the review issue
 4. Publishing triggers the `Publish NuGet Package` workflow, which builds,
-   packs, and publishes both `Augustus.AI` and `Augustus.AI.Reqnroll` to
-   NuGet.org
+   packs, and publishes `Augustus`, `Augustus.AI`, `Augustus.Reqnroll`, and
+   `Augustus.Stripe` to NuGet.org
 
 ### Option B — Publish Manually
 
@@ -175,13 +175,15 @@ If a version is published incorrectly:
 ## Frequently Asked Questions
 
 **Q: Can I release from any branch?**
-A: No. The workflow must be triggered from the `master` branch. If dispatched
-from a different branch, the releasability check will detect the mismatch and
-block the release. Always ensure `master` is up-to-date before triggering.
+A: No. The workflow must be triggered from the repository's default branch
+(currently `master` in this repository). If dispatched from a different branch,
+the releasability check will detect the mismatch and block the release. Always
+ensure the default branch is up-to-date before triggering.
 
 **Q: What if I need to release a hotfix?**
-A: Create a bugfix branch, fix the issue, merge to `master`. Then trigger the
-Create Release workflow from the Actions tab.
+A: Create a bugfix branch, fix the issue, merge it into the default branch
+(currently `master` in this repository). Then trigger the Create Release
+workflow from the Actions tab.
 
 **Q: Do I need to manually update the version in the csproj file?**
 A: No. The publish workflow automatically extracts the version from the release

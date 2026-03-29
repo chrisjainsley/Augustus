@@ -82,16 +82,19 @@ safe-outputs:
 
             # --- Delete existing draft release for this tag (if any) ---
             echo "Checking for existing draft release for tag: $TAG"
-            EXISTING_DRAFT=$(gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | awk -v tag="$TAG" '$0 == tag { print; exit }')
-            if [ -n "$EXISTING_DRAFT" ]; then
-              if [ "$DRY_RUN" = "true" ]; then
-                echo "[DRY RUN] Would delete existing draft release for tag: $EXISTING_DRAFT"
+            if IS_DRAFT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null); then
+              if [ "$IS_DRAFT" = "true" ]; then
+                if [ "$DRY_RUN" = "true" ]; then
+                  echo "[DRY RUN] Would delete existing draft release for tag: $TAG"
+                else
+                  echo "Deleting existing draft release for tag: $TAG"
+                  gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+                fi
               else
-                echo "Deleting existing draft release for tag: $EXISTING_DRAFT"
-                gh release delete "$EXISTING_DRAFT" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+                echo "Existing release for tag: $TAG is not a draft; skipping deletion."
               fi
             else
-              echo "No existing draft release found for tag: $TAG"
+              echo "No existing release found for tag: $TAG"
             fi
 
             # --- Create the new draft release ---
@@ -123,8 +126,8 @@ safe-outputs:
 # Create Release
 
 You are a release management assistant for the **Augustus** .NET library
-(`Augustus.AI` and `Augustus.AI.Reqnroll` on NuGet). Both packages are published
-from the same release with the same version number. Your task is to run
+(`Augustus`, `Augustus.AI`, `Augustus.Reqnroll`, and `Augustus.Stripe` on NuGet).
+All packages are published from the same release with the same version number. Your task is to run
 releasability checks, analyse changes since the last release, determine the
 right semantic version increment, write release notes, create a draft GitHub
 release for human review, and open a review issue.
@@ -371,7 +374,7 @@ goes live. The issue body must include:
      `approve-release.yml` workflow which publishes the draft and closes this
      issue.
    - **Or publish manually**: Go to
-     **[Releases → Drafts](https://github.com/chrisjainsley/Augustus/releases)**
+     **[Releases → Drafts](../../releases)**
      and open the draft release named `<release_name>`. Edit the release notes
      if needed, then click **"Publish release"**.
    - Publishing (by either method) automatically triggers NuGet packaging and
