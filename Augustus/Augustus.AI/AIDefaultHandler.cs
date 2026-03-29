@@ -118,6 +118,8 @@ internal class AIDefaultHandler : IRequestHandler
             // OpenAI prompt token usage.
             var curlRequest = await Augustus.HttpRequestExtensions.ToCurlCommandAsync(
                 httpContext.Request, HttpRequestExtensions.DefaultAISkipHeaders).ConfigureAwait(false);
+            // Sanitize any residual sensitive values (query params, body tokens) before forwarding to OpenAI.
+            curlRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(curlRequest);
 
             List<ChatMessage> messages = new List<ChatMessage>
             {

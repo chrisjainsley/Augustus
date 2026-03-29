@@ -123,9 +123,10 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
                 var cachedEntry = await fileManager.ReadCachedEntryAsync(requestHash).ConfigureAwait(false);
                 if (cachedEntry?.Response is not { Length: > 0 })
                 {
-                    // Legacy lookup needs the curl command; generate it on primary cache miss only.
-                    curlRequest = await httpContext.Request.ToCurlCommandAsync(HttpRequestExtensions.DefaultAISkipHeaders).ConfigureAwait(false);
-                    var legacyHash = CacheManager.GenerateLegacyCurlBasedCacheKey(curlRequest, instructions);
+                    // Legacy cache files were keyed on unfiltered cURL — use the original (no-skip-headers)
+                    // overload so existing entries remain discoverable after DefaultAISkipHeaders was introduced.
+                    var legacyCurl = await httpContext.Request.ToCurlCommandAsync().ConfigureAwait(false);
+                    var legacyHash = CacheManager.GenerateLegacyCurlBasedCacheKey(legacyCurl, instructions);
                     cachedEntry = await fileManager.ReadCachedEntryAsync(legacyHash).ConfigureAwait(false);
                 }
 
@@ -182,6 +183,8 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
 
             // Generate curl command if not already resolved during legacy cache lookup.
             curlRequest ??= await httpContext.Request.ToCurlCommandAsync(HttpRequestExtensions.DefaultAISkipHeaders).ConfigureAwait(false);
+            // Sanitize any residual sensitive values (query params, body tokens) before forwarding to OpenAI.
+            curlRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(curlRequest);
 
             List<ChatMessage> messages = new()
             {
