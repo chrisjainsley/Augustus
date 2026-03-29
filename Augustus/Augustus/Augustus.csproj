@@ -12,14 +12,14 @@
     <PackageTags>testing;mocking;api;simulator;xunit;nunit;mstest</PackageTags>
     <RepositoryUrl>https://github.com/chrisjainsley/augustus</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>PACKAGE_README.md</PackageReadmeFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="PACKAGE_README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
