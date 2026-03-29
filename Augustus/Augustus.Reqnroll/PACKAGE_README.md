@@ -12,7 +12,6 @@ Requires the [Augustus](https://www.nuget.org/packages/Augustus) core package (i
 Register your simulator in a Reqnroll `[Binding]` hook. Augustus.Reqnroll automatically intercepts the scenario lifecycle to route cached responses into per-scenario subdirectories next to your feature files.
 
 ```csharp
-using Augustus.AI;
 using Augustus.Extensions;
 using Augustus.Reqnroll;
 using Reqnroll;
@@ -26,11 +25,6 @@ public class Hooks
     public static async Task BeforeTestRun()
     {
         _simulator = new Hooks().CreateStripeSimulator();
-        _simulator.UseAI(new AIOptions
-        {
-            OpenAIApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY")!
-        });
-        _simulator.AddInstruction("Return realistic Stripe API responses");
 
         AugustusReqnrollContext.Register(_simulator);
         await _simulator.StartAsync();
@@ -40,9 +34,17 @@ public class Hooks
     public static async Task AfterTestRun()
     {
         AugustusReqnrollContext.Clear();
+        if (_simulator is not null)
+        {
+            await _simulator.StopAsync();
+            await _simulator.DisposeAsync();
+            _simulator = null;
+        }
     }
 }
 ```
+
+To use AI-generated responses, also install [Augustus.AI](https://www.nuget.org/packages/Augustus.AI) and call `_simulator.UseAI(...)` before `StartAsync`.
 
 ## Key Features
 

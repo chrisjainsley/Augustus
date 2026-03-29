@@ -102,7 +102,7 @@ var simulator = this.CreateAPISimulator("MyAPI", options =>
 {
     options.Port = 0;                        // 0 = auto-assign (default: 9001)
     options.EnableCaching = true;            // Cache responses (default: true)
-    options.CacheFolderPath = "./mocks";     // Cache location (default: ./mocks)
+    options.CacheFolderPath = "./mocks";     // Cache location (default: __mocks__/<TestClass>/<ApiName> via this.CreateAPISimulator; ./mocks via constructor)
     options.CacheOnly = false;               // Serve only from cache (default: false)
     options.AutoRemoveStaleCache = true;     // Clean up unused cache files (default: true)
 });
