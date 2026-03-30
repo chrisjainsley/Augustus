@@ -103,7 +103,6 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
         try
         {
             var bodyBytes = await httpContext.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
-            var curlRequest = await httpContext.Request.ToCurlCommandAsync().ConfigureAwait(false);
 
             var path = httpContext.Request.Path.Value ?? "/";
             var requestHash = CacheKeyComputer.ComputeCacheKey(
@@ -115,18 +114,28 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
                 instructions,
                 mergedDynamicFields);
 
+            // Defer curl command generation until after primary cache check — avoids re-reading the
+            // body stream, iterating headers, and string building on cache hits.
+            string? curlRequest = null;
+
             if (simOptions.EnableCaching && options.EnableCaching)
             {
-                var cachedResponse = await fileManager.ReadCachedResponseAsync(requestHash).ConfigureAwait(false);
-                if (string.IsNullOrEmpty(cachedResponse))
+                var cachedEntry = await fileManager.ReadCachedEntryAsync(requestHash).ConfigureAwait(false);
+                if (cachedEntry?.Response is not { Length: > 0 })
                 {
-                    var legacyHash = CacheManager.GenerateLegacyCurlBasedCacheKey(curlRequest, instructions);
-                    cachedResponse = await fileManager.ReadCachedResponseAsync(legacyHash).ConfigureAwait(false);
+                    // Legacy cache files were keyed on unfiltered cURL — use the original (no-skip-headers)
+                    // overload so existing entries remain discoverable after DefaultAISkipHeaders was introduced.
+                    var legacyCurl = await httpContext.Request.ToCurlCommandAsync().ConfigureAwait(false);
+                    var legacyHash = CacheManager.GenerateLegacyCurlBasedCacheKey(legacyCurl, instructions);
+                    cachedEntry = await fileManager.ReadCachedEntryAsync(legacyHash).ConfigureAwait(false);
                 }
 
-                if (!string.IsNullOrEmpty(cachedResponse))
+                if (cachedEntry?.Response is { Length: > 0 } cachedResponse)
                 {
-                    cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(cachedResponse, path);
+                    if (!cachedEntry.Normalized)
+                    {
+                        cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(cachedResponse, path);
+                    }
                     httpContext.Response.ContentType = "application/json";
                     await httpContext.Response.WriteAsync(cachedResponse, cancellationToken).ConfigureAwait(false);
                     return;
@@ -172,13 +181,16 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
                 return;
             }
 
-            List<ChatMessage> messages = new();
-            foreach (var instruction in instructions)
-            {
-                messages.Add(ChatMessage.CreateSystemMessage(instruction));
-            }
+            // Generate curl command if not already resolved during legacy cache lookup.
+            curlRequest ??= await httpContext.Request.ToCurlCommandAsync(HttpRequestExtensions.DefaultAISkipHeaders).ConfigureAwait(false);
+            // Sanitize any residual sensitive values (query params, body tokens) before forwarding to OpenAI.
+            curlRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(curlRequest);
 
-            messages.Add(ChatMessage.CreateUserMessage(curlRequest));
+            List<ChatMessage> messages = new()
+            {
+                ChatMessage.CreateSystemMessage(string.Join("\n\n", instructions)),
+                ChatMessage.CreateUserMessage(curlRequest)
+            };
 
             var chatOptions = AIResponseFormatting.CreateJsonObjectChatOptions();
             var chatResults = await requestHandler
@@ -208,7 +220,7 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
             {
                 try
                 {
-                    await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions).ConfigureAwait(false);
+                    await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true).ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

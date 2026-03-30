@@ -23,7 +23,10 @@ internal class CacheManager
         }
     }
 
-    public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
+    public Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
+        => CacheResponseAsync(requestHash, response, originalRequest, instructions, normalized: false);
+
+    public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized)
     {
         var cacheEntry = new CacheEntry
         {
@@ -31,7 +34,8 @@ internal class CacheManager
             Response = response,
             OriginalRequest = originalRequest,
             Instructions = instructions,
-            Timestamp = DateTime.UtcNow
+            Timestamp = DateTime.UtcNow,
+            Normalized = normalized
         };
 
         var json = JsonSerializer.Serialize(cacheEntry, new JsonSerializerOptions { WriteIndented = true });
@@ -105,4 +109,5 @@ internal class CacheEntry
     public string OriginalRequest { get; set; } = string.Empty;
     public List<string> Instructions { get; set; } = new();
     public DateTime Timestamp { get; set; }
+    public bool Normalized { get; set; }
 }

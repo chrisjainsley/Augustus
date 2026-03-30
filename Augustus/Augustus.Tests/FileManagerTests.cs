@@ -161,6 +161,84 @@ public class FileManagerTests
     }
 
     [Fact]
+    public async Task ReadCachedEntryAsync_NormalizedTrue_RoundTripsThoughDisk()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+
+        try
+        {
+            var fileManager = new APISimulator.FileManager(cachePath);
+            const string hash = "NORM_TRUE";
+
+            await fileManager.CacheResponseAsync(hash, "{\"ok\":true}", "curl ...", new List<string> { "inst" }, normalized: true);
+            var entry = await fileManager.ReadCachedEntryAsync(hash);
+
+            entry.Should().NotBeNull();
+            entry!.Normalized.Should().BeTrue();
+            entry.Response.Should().Be("{\"ok\":true}");
+        }
+        finally
+        {
+            if (Directory.Exists(cachePath))
+                Directory.Delete(cachePath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ReadCachedEntryAsync_DefaultNormalized_ReturnsFalse()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+
+        try
+        {
+            var fileManager = new APISimulator.FileManager(cachePath);
+            const string hash = "NORM_DEFAULT";
+
+            // Default overload omits normalized: true, so Normalized should be false
+            await fileManager.CacheResponseAsync(hash, "{\"ok\":true}", "curl ...", new List<string> { "inst" });
+            var entry = await fileManager.ReadCachedEntryAsync(hash);
+
+            entry.Should().NotBeNull();
+            entry!.Normalized.Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(cachePath))
+                Directory.Delete(cachePath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ReadCachedEntryAsync_LegacyFileWithoutNormalizedField_DefaultsToFalse()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+
+        try
+        {
+            var fileManager = new APISimulator.FileManager(cachePath);
+            const string hash = "LEGACY_NORM";
+
+            // Simulate a pre-existing cache file that predates the Normalized field
+            var legacyJson = "{\"RequestHash\":\"LEGACY_NORM\",\"Response\":\"{\\\"ok\\\":true}\",\"OriginalRequest\":\"curl ...\",\"Instructions\":[],\"Timestamp\":\"2024-01-01T00:00:00Z\"}";
+            await File.WriteAllTextAsync(Path.Combine(cachePath, $"{hash}.json"), legacyJson);
+
+            var entry = await fileManager.ReadCachedEntryAsync(hash);
+
+            entry.Should().NotBeNull();
+            entry!.Normalized.Should().BeFalse();
+            entry.Response.Should().Be("{\"ok\":true}");
+        }
+        finally
+        {
+            if (Directory.Exists(cachePath))
+                Directory.Delete(cachePath, recursive: true);
+        }
+    }
+
+    [Fact]
     public void RemoveStaleEntries_ShouldHandleNonexistentFolder()
     {
         var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");

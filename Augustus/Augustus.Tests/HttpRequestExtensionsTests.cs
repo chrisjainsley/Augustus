@@ -122,6 +122,47 @@ public class HttpRequestExtensionsTests
         CountOccurrences(curl, "https://").Should().Be(1);
     }
 
+    [Fact]
+    public async Task ToCurlCommandAsync_WithSkipHeaders_OmitsSpecifiedHeaders()
+    {
+        var context = new DefaultHttpContext();
+        var request = context.Request;
+        request.Method = HttpMethods.Get;
+        request.Scheme = "https";
+        request.Host = new HostString("api.example.com");
+        request.Path = "/v1/resources";
+        request.Headers.Append("X-Trace-Id", "keep-me");
+        request.Headers.Append("Authorization", "Bearer secret-token");
+        request.Headers.Append("Content-Length", "0");
+
+        var skipHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Authorization", "Content-Length" };
+        var curl = await request.ToCurlCommandAsync(skipHeaders);
+
+        curl.Should().Contain("-H \"X-Trace-Id: keep-me\"");
+        curl.Should().NotContain("Authorization");
+        curl.Should().NotContain("Content-Length");
+    }
+
+    [Fact]
+    public async Task ToCurlCommandAsync_DefaultAISkipHeaders_MatchingIsCaseInsensitive()
+    {
+        var context = new DefaultHttpContext();
+        var request = context.Request;
+        request.Method = HttpMethods.Get;
+        request.Scheme = "https";
+        request.Host = new HostString("api.example.com");
+        request.Path = "/v1/resources";
+        request.Headers.Append("content-length", "42");
+        request.Headers.Append("AUTHORIZATION", "Bearer tok");
+        request.Headers.Append("X-Custom", "keep-me");
+
+        var curl = await request.ToCurlCommandAsync(HttpRequestExtensions.DefaultAISkipHeaders);
+
+        curl.Should().NotContain("content-length");
+        curl.Should().NotContain("AUTHORIZATION");
+        curl.Should().Contain("-H \"X-Custom: keep-me\"");
+    }
+
     private static int CountOccurrences(string value, string segment)
     {
         var count = 0;
