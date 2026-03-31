@@ -1,0 +1,112 @@
+name: Approve Release
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  publish-draft:
+    if: >
+      github.event.label.name == 'release-approved'
+      && startsWith(github.event.issue.title, '[Release Review]')
+      && contains(github.event.issue.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure gh CLI for GitHub Enterprise
+        run: |
+          SERVER_URL="${{ github.server_url }}"
+          if [ "$SERVER_URL" != "https://github.com" ]; then
+            echo "GH_HOST=$(echo "$SERVER_URL" | sed 's|https://||')" >> "$GITHUB_ENV"
+          fi
+
+      - name: Authorize release approver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          PERMISSION=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$ACTOR/permission" -q .permission 2>/dev/null || echo "none")
+          case "$PERMISSION" in
+            admin|maintain|write)
+              echo "Actor $ACTOR authorized to publish releases (permission: $PERMISSION)."
+              ;;
+            *)
+              echo "::error::Actor $ACTOR is not authorized to publish releases (permission: $PERMISSION)."
+              echo "Only collaborators with write, maintain, or admin access may approve releases."
+              exit 1
+              ;;
+          esac
+
+      - name: Extract version from issue title
+        id: version
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          # Title format: [Release Review] Augustus 0.3.0 - Release Ready for Review
+          VERSION=$(echo "$ISSUE_TITLE" | grep -oP 'Augustus\s+\K[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.\-]*')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not extract version from issue title: $ISSUE_TITLE"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Extracted version: $VERSION (tag: $TAG)"
+
+      - name: Verify draft release exists
+        id: verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          RELEASE_JSON=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName 2>/dev/null || true)
+          if [ -z "$RELEASE_JSON" ]; then
+            echo "::error::No release found for tag $TAG"
+            exit 1
+          fi
+
+          IS_DRAFT=$(echo "$RELEASE_JSON" | jq -r '.isDraft')
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "Release $TAG is not a draft — it has already been published. Treating as no-op."
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Confirmed draft release exists for $TAG"
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish the draft release
+        if: steps.verify.outputs.already_published != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          echo "Release $TAG published successfully."
+
+      - name: Comment on and close the review issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          TAG: ${{ steps.version.outputs.tag }}
+          ALREADY_PUBLISHED: ${{ steps.verify.outputs.already_published }}
+        run: |
+          if [ "$ALREADY_PUBLISHED" = "true" ]; then
+            gh issue comment "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "Release **$TAG** was already published. No action needed."
+          else
+            BODY="Release **$TAG** has been published. NuGet packaging will begin automatically via the \`Publish NuGet Package\` workflow.
+
+- [View release]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG)
+- [Monitor NuGet publish]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/publish-nuget.yml)"
+            gh issue comment "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "$BODY"
+          fi
+
+          gh issue close "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --reason completed
