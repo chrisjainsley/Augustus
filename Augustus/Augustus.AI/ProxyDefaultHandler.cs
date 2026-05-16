@@ -54,24 +54,33 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
         try
         {
             var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
-            var cacheKey = CacheKeyComputer.ComputeCacheKey(
+            var rules = options.BuildCacheKeyRules();
+            var keyResult = RequestKeyFactory.Create(
                 context.Request.Method,
                 context.Request.Path.Value ?? "/",
                 context.Request.QueryString.Value,
                 bodyBytes,
-                out var materializedBody,
-                dynamicContentFields: options.DynamicContentFields);
+                null,
+                rules);
+            var cacheKey = keyResult.Hash;
+            var materializedBody = keyResult.MaterializedBody;
+            var canonical = keyResult.Canonical;
 
             if (options.EnableCaching)
             {
-                var cached = await fileManager.ReadCachedResponseAsync(cacheKey).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(cached))
+                var cachedEntry = await fileManager
+                    .ResolveEntryAsync(cacheKey, c => RequestKeyFactory.ComputeKeyFromCanonical(c, rules))
+                    .ConfigureAwait(false);
+                if (cachedEntry?.Response is { Length: > 0 } cached)
                 {
                     context.Response.ContentType = "application/json";
                     await context.Response.WriteAsync(cached, cancellationToken).ConfigureAwait(false);
                     return;
                 }
             }
+
+            options.OnCacheMiss?.Invoke(
+                new CacheMissDiagnostic(canonical, cacheKey, fileManager.CurrentCachePath));
 
             if (options.CacheOnly)
             {
@@ -81,7 +90,8 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                 {
                     ["error"] = "Cache miss in CacheOnly mode. No cached response found for this request.",
                     ["status"] = 503,
-                    ["requestHash"] = cacheKey
+                    ["requestHash"] = cacheKey,
+                    ["expectedCanonicalRequest"] = canonical
                 };
                 var digestInputLen = aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount;
                 if (digestInputLen > 0)
@@ -119,7 +129,7 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                 _cacheWriter.Enqueue(() =>
                 {
                     var requestInfo = $"PROXY {method} {path}";
-                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>());
+                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>(), normalized: false, canonical);
                 });
             }
         }

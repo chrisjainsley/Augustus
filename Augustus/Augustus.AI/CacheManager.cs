@@ -1,5 +1,6 @@
 namespace Augustus.AI;
 
+using Augustus;
 using System.Text.Json;
 
 /// <summary>
@@ -26,7 +27,7 @@ internal class CacheManager
     public Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
         => CacheResponseAsync(requestHash, response, originalRequest, instructions, normalized: false);
 
-    public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized)
+    public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized, CanonicalRequest? canonical = null)
     {
         var cacheEntry = new CacheEntry
         {
@@ -35,7 +36,8 @@ internal class CacheManager
             OriginalRequest = originalRequest,
             Instructions = instructions,
             Timestamp = DateTime.UtcNow,
-            Normalized = normalized
+            Normalized = normalized,
+            CanonicalRequest = canonical
         };
 
         var json = JsonSerializer.Serialize(cacheEntry, new JsonSerializerOptions { WriteIndented = true });
@@ -110,4 +112,10 @@ internal class CacheEntry
     public List<string> Instructions { get; set; } = new();
     public DateTime Timestamp { get; set; }
     public bool Normalized { get; set; }
+
+    /// <summary>
+    /// The canonical request this fixture matches, written for new entries so the file
+    /// can be renamed or hand-authored. Null for legacy fixtures (matched by filename).
+    /// </summary>
+    public CanonicalRequest? CanonicalRequest { get; set; }
 }

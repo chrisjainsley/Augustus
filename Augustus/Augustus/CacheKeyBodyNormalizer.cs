@@ -27,6 +27,13 @@ internal static class CacheKeyBodyNormalizer
     /// result is serialized with <see cref="SerializerOptions"/>. Non-JSON bodies are returned unchanged.
     /// </summary>
     public static byte[] PrepareBodyForCacheKey(byte[] body, IReadOnlyCollection<string>? propertyNames)
+        => PrepareBodyForCacheKey(body, propertyNames, stripNullProperties: false, hashMessagesContentOnly: false);
+
+    public static byte[] PrepareBodyForCacheKey(
+        byte[] body,
+        IReadOnlyCollection<string>? propertyNames,
+        bool stripNullProperties,
+        bool hashMessagesContentOnly)
     {
         propertyNames ??= Array.Empty<string>();
         if (body.Length == 0)
@@ -61,6 +68,20 @@ internal static class CacheKeyBodyNormalizer
             {
                 NormalizeNewlines(canonical);
             }
+
+            if (hashMessagesContentOnly && canonical is JsonObject obj && obj["messages"] is JsonArray msgs)
+            {
+                var reduced = new JsonArray();
+                foreach (var m in msgs)
+                {
+                    if (m is JsonObject mo && mo.TryGetPropertyValue("content", out var content))
+                        reduced.Add(content is null ? null : JsonNode.Parse(content.ToJsonString()));
+                }
+                canonical = new JsonObject { ["messages"] = reduced };
+            }
+
+            if (stripNullProperties)
+                StripNulls(canonical);
 
             if (propertyNames.Count > 0)
                 NormalizeNode(canonical, propertyNames);
@@ -133,6 +154,31 @@ internal static class CacheKeyBodyNormalizer
                 return newArr;
             default:
                 return DetachCopy(node);
+        }
+    }
+
+    /// <summary>
+    /// Recursively removes object properties whose value is JSON <c>null</c> so that an
+    /// explicit-null vs. omitted-property difference does not churn the cache key.
+    /// </summary>
+    private static void StripNulls(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var key in obj.Select(kvp => kvp.Key).ToList())
+                {
+                    var child = obj[key];
+                    if (child is null)
+                        obj.Remove(key);
+                    else
+                        StripNulls(child);
+                }
+                break;
+            case JsonArray arr:
+                foreach (var item in arr)
+                    StripNulls(item);
+                break;
         }
     }
 

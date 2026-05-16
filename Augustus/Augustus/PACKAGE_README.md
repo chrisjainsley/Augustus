@@ -108,6 +108,13 @@ var simulator = this.CreateAPISimulator("MyAPI", options =>
 });
 ```
 
+Fixtures are **renameable and hand-authorable**: each file stores its `CanonicalRequest` and
+matching is content-based, so the file name is just a label. Keep keys stable across incidental
+request changes with `NormalizeAzureOpenAIDeployment`, `RequestKeyTransform`,
+`IgnoredQueryParameters`, `StripNullBodyProperties`, or `HashMessagesContentOnly`; inspect
+`OnCacheMiss` to discover the expected identity; and re-baseline committed fixtures with zero
+upstream calls via `CacheMaintenance.Rekey`.
+
 ## Route Resolution Order
 
 1. **Route with strategy** — matched route executes its configured `IResponseStrategy`

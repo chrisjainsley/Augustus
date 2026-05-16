@@ -134,6 +134,15 @@ var simulator = this.CreateAPISimulator("MyAPI", options =>
     options.CacheFolderPath = "./mocks";     // Where cache files live (default: ./mocks)
     options.CacheOnly = false;               // Serve only from cache, 503 on miss (default: false)
     options.AutoRemoveStaleCache = true;     // Clean up untouched cache files on dispose (default: true)
+
+    // Stable, renameable, hand-authorable fixtures (see "Cache identity" below)
+    options.NormalizeAzureOpenAIDeployment = true;            // /openai/deployments/{x}/ → constant
+    options.RequestKeyTransform = key => key with { ... };    // strip/rewrite volatile request parts
+    options.IgnoredQueryParameters.Add("_cb");                // drop cache-buster params from the key
+    options.StripNullBodyProperties = true;                   // null vs omitted no longer churns
+    options.HashMessagesContentOnly = true;                   // only messages[].content keys the cache
+    options.OnCacheMiss = d =>                                // discover the expected identity
+        Console.WriteLine($"miss: {d.ComputedKey} {d.ExpectedCanonicalRequest.Path}");
 });
 ```
 
@@ -307,7 +316,18 @@ Features/
 
 ## Caching
 
-Cache file names and `RequestHash` are derived from the HTTP method, path, query string, and a **canonical form of JSON request bodies** (sorted object keys at every depth, plus optional `DynamicContentFields` normalization). Non-JSON bodies use raw bytes. See [`CHANGELOG.md`](CHANGELOG.md) for release notes when this algorithm changes — **upgrades can invalidate existing on-disk caches**.
+Cache keys are derived from the HTTP method, path, query string, and a **canonical form of JSON request bodies** (sorted object keys at every depth, plus optional `DynamicContentFields` normalization). Non-JSON bodies use raw bytes. See [`CHANGELOG.md`](CHANGELOG.md) for release notes when this algorithm changes — **upgrades can invalidate existing on-disk caches**.
+
+### Cache identity (renameable / hand-authorable fixtures)
+
+Each fixture stores its `CanonicalRequest`, and matching is **content-based**: the file name is a free-form label, not the key. So you can:
+
+- **Rename or hand-author** a fixture file to any name — it still resolves.
+- Keep keys stable across incidental request changes with `NormalizeAzureOpenAIDeployment`, `RequestKeyTransform`, `IgnoredQueryParameters`, `StripNullBodyProperties`, or `HashMessagesContentOnly`.
+- Use `OnCacheMiss` (or the diagnostic fields in the `503` body) to discover the exact identity Augustus expected, so a fixture can be authored offline.
+- Re-baseline committed fixtures after a keying-rule change **with zero upstream calls** via `CacheMaintenance.Rekey(path, new RekeyOptions { … })`.
+
+Legacy fixtures without a `CanonicalRequest` keep resolving by their original hash file name, and the default key is unchanged — no rekey is needed unless you opt into a new rule.
 
 Augustus caches responses as JSON files:
 

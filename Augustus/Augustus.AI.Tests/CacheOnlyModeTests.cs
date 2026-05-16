@@ -110,4 +110,43 @@ public class CacheOnlyModeTests : IDisposable
             body.Should().Contain("no cached response found");
         }
     }
+
+    [Fact]
+    public async Task AiCacheMiss_FiresHookAndExtends503_PreservingExistingMessage()
+    {
+        var cacheDir = CreateTempCacheDir();
+        global::Augustus.CacheMissDiagnostic? captured = null;
+        var sim = this.CreateAPISimulator("TestAPI", options =>
+        {
+            options.CacheOnly = true;
+            options.CacheFolderPath = cacheDir;
+            options.Port = 0;
+            options.OnCacheMiss = d => captured = d;
+        });
+        sim.UseAI(new AIOptions());
+        sim.AddInstruction("Return test responses");
+
+        await using (sim)
+        {
+            await sim.StartAsync();
+            using var client = sim.CreateClient();
+
+            var response = await client.GetAsync("/v1/widgets");
+            response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+            var body = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            // Existing contract preserved.
+            root.GetProperty("error").GetString().Should().Contain("Cache-only mode");
+            root.GetProperty("status").GetInt32().Should().Be(503);
+            // New diagnostic fields.
+            root.GetProperty("computedKey").GetString().Should().NotBeNullOrEmpty();
+            root.GetProperty("expectedCanonicalRequest").GetProperty("Path").GetString()
+                .Should().Be("/v1/widgets");
+
+            captured.Should().NotBeNull();
+            captured!.ExpectedCanonicalRequest.Method.Should().Be("GET");
+        }
+    }
 }
