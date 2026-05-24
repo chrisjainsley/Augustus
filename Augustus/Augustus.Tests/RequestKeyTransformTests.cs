@@ -25,6 +25,68 @@ public class RequestKeyTransformTests
     }
 
     [Fact]
+    public void AzureNormalization_StripsModelFieldFromBody_BodyOnlyDeploymentRenameMatches()
+    {
+        // The Azure OpenAI deployment name appears in TWO places in a typical request:
+        // the URL path AND the body's top-level "model" property. A region rename that
+        // updates BOTH must still hash identically once NormalizeAzureOpenAIDeployment is on.
+        var rules = new CacheKeyRules { NormalizeAzureOpenAIDeployment = true };
+
+        var before = RequestKeyFactory.Create(
+            "POST", "/openai/deployments/gpt-4-dev/chat/completions", "?api-version=2024-06-01",
+            Body("{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"model\":\"gpt-4-dev\"}"),
+            null, rules);
+        var after = RequestKeyFactory.Create(
+            "POST", "/openai/deployments/gpt-4-eus2-dev/chat/completions", "?api-version=2024-06-01",
+            Body("{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"model\":\"gpt-4-eus2-dev\"}"),
+            null, rules);
+
+        after.Hash.Should().Be(before.Hash,
+            "deployment-name rename in BOTH path and body must reduce to the same key under NormalizeAzureOpenAIDeployment");
+        before.Canonical.NormalizedBody.Should().Contain("\"model\":\"__DEPLOYMENT__\"");
+    }
+
+    [Fact]
+    public void AzureNormalization_BodyWithoutTopLevelModel_LeavesBodyAlone()
+    {
+        // Defensive: the body normalization only touches a TOP-LEVEL "model" property
+        // so requests without one (or with model nested deeper) hash identically to the
+        // pre-PR behavior when paths match.
+        var rules = new CacheKeyRules { NormalizeAzureOpenAIDeployment = true };
+
+        var noModel = RequestKeyFactory.Create(
+            "POST", "/openai/deployments/x/foo", null,
+            Body("{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}"),
+            null, rules);
+
+        noModel.Canonical.NormalizedBody.Should().NotContain("__DEPLOYMENT__");
+    }
+
+    [Fact]
+    public void AzureNormalization_RecomputeFromCanonical_BodyModelFieldStillNormalized()
+    {
+        // Round-trip guarantee: a fixture's stored canonical body (which retains the
+        // original "model" value) must produce the same key as a fresh request under
+        // a different deployment name when both go through NormalizeAzureOpenAIDeployment.
+        var rules = new CacheKeyRules { NormalizeAzureOpenAIDeployment = true };
+
+        var recorded = RequestKeyFactory.Create(
+            "POST", "/openai/deployments/gpt-4-dev/chat/completions", "?api-version=2024-06-01",
+            Body("{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"model\":\"gpt-4-dev\"}"),
+            null, rules: null); // recorded WITHOUT normalization (legacy fixture path)
+
+        var recomputed = RequestKeyFactory.ComputeKeyFromCanonical(recorded.Canonical, rules);
+
+        var liveRequest = RequestKeyFactory.Create(
+            "POST", "/openai/deployments/gpt-4-eus2-dev/chat/completions", "?api-version=2024-06-01",
+            Body("{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"model\":\"gpt-4-eus2-dev\"}"),
+            null, rules);
+
+        liveRequest.Hash.Should().Be(recomputed,
+            "rekey computing key from a legacy canonical must produce the same hash as a live request under new rules");
+    }
+
+    [Fact]
     public void AzureNormalization_Disabled_DeploymentRenameChangesKey()
     {
         var a = RequestKeyFactory.Create(

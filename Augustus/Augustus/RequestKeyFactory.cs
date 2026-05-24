@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace Augustus;
@@ -185,25 +186,73 @@ internal static class RequestKeyFactory
 
 /// <summary>
 /// Built-in request-key transform that replaces the volatile Azure OpenAI deployment
-/// path segment with a constant so a deployment or region rename does not invalidate
-/// committed fixtures.
+/// path segment AND the top-level <c>"model"</c> field in the JSON request body with
+/// a constant so a deployment or region rename does not invalidate committed fixtures.
+/// Both substitutions are necessary because the deployment name appears in TWO places
+/// in a typical Azure OpenAI chat-completion request: the URL path
+/// (<c>/openai/deployments/{deployment}/chat/completions</c>) and the body's top-level
+/// <c>model</c> property, which the OpenAI SDK populates from the deployment name.
 /// </summary>
 internal static class AzureOpenAINormalization
 {
     private const string DeploymentPlaceholder = "__DEPLOYMENT__";
+    private const string ModelFieldName = "model";
 
     private static readonly Regex DeploymentSegment = new(
         @"(?<prefix>/openai/deployments/)(?<deployment>[^/]+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    // Must match the encoder used by CacheKeyBodyNormalizer so a re-serialized body
+    // hashes byte-identically to the originally normalized body.
+    private static readonly JsonSerializerOptions BodySerializerOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     public static RequestKey Apply(RequestKey key)
     {
-        if (string.IsNullOrEmpty(key.Path) || !DeploymentSegment.IsMatch(key.Path))
+        var newPath = NormalizePath(key.Path);
+        var newBody = NormalizeBodyModelField(key.NormalizedBody);
+
+        if (ReferenceEquals(newPath, key.Path) && ReferenceEquals(newBody, key.NormalizedBody))
             return key;
 
-        var normalizedPath = DeploymentSegment.Replace(
-            key.Path, "${prefix}" + DeploymentPlaceholder);
+        return key with { Path = newPath, NormalizedBody = newBody };
+    }
 
-        return normalizedPath == key.Path ? key : key with { Path = normalizedPath };
+    private static string NormalizePath(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !DeploymentSegment.IsMatch(path))
+            return path;
+
+        var replaced = DeploymentSegment.Replace(path, "${prefix}" + DeploymentPlaceholder);
+        return replaced == path ? path : replaced;
+    }
+
+    private static string NormalizeBodyModelField(string body)
+    {
+        // Fast bail-out — avoid parsing for non-JSON or bodies that obviously don't
+        // contain a top-level "model" property.
+        if (string.IsNullOrEmpty(body) || !body.Contains("\"" + ModelFieldName + "\""))
+            return body;
+
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(body);
+            if (node is System.Text.Json.Nodes.JsonObject obj && obj.ContainsKey(ModelFieldName))
+            {
+                // System.Text.Json.Nodes.JsonObject preserves insertion order. The canonical
+                // body's keys were sorted alphabetically by CacheKeyBodyNormalizer.SortKeysRecursive,
+                // so mutating in place keeps that order — serialization round-trips at the same hash.
+                obj[ModelFieldName] = DeploymentPlaceholder;
+                return obj.ToJsonString(BodySerializerOptions);
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Body looked like JSON but wasn't — leave it alone.
+        }
+
+        return body;
     }
 }
