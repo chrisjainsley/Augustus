@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Text;
 using System.Text.Json;
 
 namespace Augustus.Tests;
@@ -251,5 +252,288 @@ public class FileManagerTests
 
         var act = () => fileManager.RemoveStaleEntries();
         act.Should().NotThrow();
+    }
+
+    [Fact]
+    public async Task CacheResponseAsync_PersistsCanonicalRequest()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            var fileManager = new APISimulator.FileManager(cachePath);
+            var canonical = new CanonicalRequest(
+                "POST", "/v1/chat/completions", "?api-version=2024-06-01",
+                new[] { "be terse" }, "{\"model\":\"gpt-4\"}");
+
+            await fileManager.CacheResponseAsync("ABCDEF", "{\"ok\":true}", "curl ...",
+                new List<string> { "be terse" }, normalized: true, canonical: canonical);
+
+            var entry = await fileManager.ReadCachedEntryAsync("ABCDEF");
+            entry.Should().NotBeNull();
+            entry!.CanonicalRequest.Should().NotBeNull();
+            entry.CanonicalRequest!.Method.Should().Be("POST");
+            entry.CanonicalRequest.Path.Should().Be("/v1/chat/completions");
+            entry.CanonicalRequest.NormalizedBody.Should().Be("{\"model\":\"gpt-4\"}");
+        }
+        finally
+        {
+            if (Directory.Exists(cachePath))
+                Directory.Delete(cachePath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ReadCachedEntryAsync_LegacyFileWithoutCanonicalRequest_StillDeserializes()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            // Pre-#106 on-disk shape: no CanonicalRequest field.
+            var legacyJson =
+                "{\"RequestHash\":\"DEADBEEF\",\"Response\":\"{\\\"ok\\\":true}\"," +
+                "\"OriginalRequest\":\"curl ...\",\"Instructions\":[],\"Timestamp\":\"2024-01-01T00:00:00Z\"," +
+                "\"Normalized\":true}";
+            await File.WriteAllTextAsync(Path.Combine(cachePath, "DEADBEEF.json"), legacyJson);
+
+            var fileManager = new APISimulator.FileManager(cachePath);
+            var entry = await fileManager.ReadCachedEntryAsync("DEADBEEF");
+
+            entry.Should().NotBeNull();
+            entry!.Response.Should().Be("{\"ok\":true}");
+            entry.CanonicalRequest.Should().BeNull();
+        }
+        finally
+        {
+            if (Directory.Exists(cachePath))
+                Directory.Delete(cachePath, recursive: true);
+        }
+    }
+
+    private static readonly Func<CanonicalRequest, string> Recompute =
+        c => RequestKeyFactory.ComputeKeyFromCanonical(c, null);
+
+    private static (string key, CanonicalRequest canonical) BuildKey(
+        string method, string path, string? query, byte[] body)
+    {
+        var result = RequestKeyFactory.Create(method, path, query, body, null, null);
+        return (result.Hash, result.Canonical);
+    }
+
+    [Fact]
+    public async Task ResolveEntryAsync_FilenameEqualsHash_ResolvesViaFastPath()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
+            var (key, canonical) = BuildKey("POST", "/v1/chat/completions", null, body);
+            var fm = new APISimulator.FileManager(cachePath);
+            await fm.CacheResponseAsync(key, "{\"ok\":1}", "curl", new List<string>(), true, canonical);
+
+            var entry = await fm.ResolveEntryAsync(key, Recompute);
+
+            entry.Should().NotBeNull();
+            entry!.Response.Should().Be("{\"ok\":1}");
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
+    public async Task ResolveEntryAsync_RenamedFile_ResolvesByCanonicalRequest()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
+            var (key, canonical) = BuildKey("POST", "/v1/chat/completions", null, body);
+            var fm = new APISimulator.FileManager(cachePath);
+            await fm.CacheResponseAsync(key, "{\"ok\":2}", "curl", new List<string>(), true, canonical);
+
+            // Rename the fixture to a human-friendly label.
+            File.Move(
+                Path.Combine(cachePath, $"{key}.json"),
+                Path.Combine(cachePath, "happy-path-chat.json"));
+
+            // Fresh manager so no in-memory state remembers the original name.
+            var fm2 = new APISimulator.FileManager(cachePath);
+            var entry = await fm2.ResolveEntryAsync(key, Recompute);
+
+            entry.Should().NotBeNull();
+            entry!.Response.Should().Be("{\"ok\":2}");
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
+    public async Task ResolveEntryAsync_HandAuthoredFile_ResolvesByCanonicalRequest()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
+            var (key, canonical) = BuildKey("POST", "/v1/chat/completions", null, body);
+
+            // Author a fixture entirely by hand under an arbitrary name.
+            var handAuthored = new
+            {
+                RequestHash = "ignored",
+                Response = "{\"ok\":\"hand\"}",
+                OriginalRequest = "",
+                Instructions = Array.Empty<string>(),
+                Timestamp = DateTime.UtcNow,
+                Normalized = true,
+                CanonicalRequest = canonical
+            };
+            await File.WriteAllTextAsync(
+                Path.Combine(cachePath, "authored-by-a-human.json"),
+                JsonSerializer.Serialize(handAuthored));
+
+            var fm = new APISimulator.FileManager(cachePath);
+            var entry = await fm.ResolveEntryAsync(key, Recompute);
+
+            entry.Should().NotBeNull();
+            entry!.Response.Should().Be("{\"ok\":\"hand\"}");
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
+    public async Task RemoveStaleEntries_KeepsContentMatchedRenamedFile()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
+            var (key, canonical) = BuildKey("POST", "/v1/chat/completions", null, body);
+            var fm = new APISimulator.FileManager(cachePath);
+            await fm.CacheResponseAsync(key, "{\"ok\":3}", "curl", new List<string>(), true, canonical);
+            File.Move(
+                Path.Combine(cachePath, $"{key}.json"),
+                Path.Combine(cachePath, "renamed.json"));
+
+            var fm2 = new APISimulator.FileManager(cachePath);
+            (await fm2.ResolveEntryAsync(key, Recompute)).Should().NotBeNull();
+            fm2.RemoveStaleEntries();
+
+            File.Exists(Path.Combine(cachePath, "renamed.json")).Should().BeTrue();
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
+    public async Task ResolveEntryAsync_FastPath_RejectsLabelMismatch_FallsThroughToContent()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            // Fixture A's canonical, but parked at filename = fixture B's hash on disk.
+            var bodyA = Encoding.UTF8.GetBytes("{\"model\":\"A\"}");
+            var bodyB = Encoding.UTF8.GetBytes("{\"model\":\"B\"}");
+            var (keyA, canonicalA) = BuildKey("POST", "/v1/x", null, bodyA);
+            var (keyB, _) = BuildKey("POST", "/v1/x", null, bodyB);
+            keyA.Should().NotBe(keyB);
+
+            // Author A's canonical under B's hash name — a stale/misplaced file.
+            var bogus = new
+            {
+                RequestHash = "ignored",
+                Response = "{\"served\":\"wrong\"}",
+                OriginalRequest = "",
+                Instructions = Array.Empty<string>(),
+                Timestamp = DateTime.UtcNow,
+                Normalized = true,
+                CanonicalRequest = canonicalA
+            };
+            await File.WriteAllTextAsync(
+                Path.Combine(cachePath, $"{keyB}.json"),
+                JsonSerializer.Serialize(bogus));
+
+            // Asking for keyB: fast path finds {keyB}.json, but its CanonicalRequest
+            // recomputes to keyA — must reject, not return the wrong response.
+            var fm = new APISimulator.FileManager(cachePath);
+            var entry = await fm.ResolveEntryAsync(keyB, Recompute);
+            entry.Should().BeNull();
+
+            // Asking for keyA: fast path misses, content lookup finds it under keyB.json.
+            var fm2 = new APISimulator.FileManager(cachePath);
+            var match = await fm2.ResolveEntryAsync(keyA, Recompute);
+            match.Should().NotBeNull();
+            match!.Response.Should().Contain("wrong"); // body content, matched correctly
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
+    public async Task GetOrBuildIndex_KeyCollision_FirstWinsByOrdinalSort_Deterministic()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            // Three fixtures with the SAME canonical (so they recompute to the same key)
+            // but file names that DO NOT match filesystem-enumeration order — the index
+            // build must sort to make first-wins reproducible across machines.
+            var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
+            var (_, canonical) = BuildKey("POST", "/v1/x", null, body);
+
+            async Task Write(string name, string response)
+            {
+                var fixture = new
+                {
+                    RequestHash = "ignored",
+                    Response = response,
+                    OriginalRequest = "",
+                    Instructions = Array.Empty<string>(),
+                    Timestamp = DateTime.UtcNow,
+                    Normalized = true,
+                    CanonicalRequest = canonical
+                };
+                await File.WriteAllTextAsync(
+                    Path.Combine(cachePath, name),
+                    JsonSerializer.Serialize(fixture));
+            }
+            // Write order != ordinal order so we can't accidentally pass via fs ordering.
+            await Write("mmm.json", "{\"served\":\"middle\"}");
+            await Write("aaa.json", "{\"served\":\"alpha\"}");
+            await Write("zzz.json", "{\"served\":\"omega\"}");
+
+            var key = RequestKeyFactory.ComputeKeyFromCanonical(canonical, null);
+            var fm = new APISimulator.FileManager(cachePath);
+            var entry = await fm.ResolveEntryAsync(key, Recompute);
+
+            // Deterministic: first by ordinal-sorted filename wins.
+            entry.Should().NotBeNull();
+            entry!.Response.Should().Be("{\"served\":\"alpha\"}");
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
+    public async Task ResolveEntryAsync_LegacyFileNoCanonicalRequest_ResolvesByFilename()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            var legacyJson =
+                "{\"RequestHash\":\"LEGACYKEY\",\"Response\":\"{\\\"ok\\\":\\\"legacy\\\"}\"," +
+                "\"OriginalRequest\":\"\",\"Instructions\":[],\"Timestamp\":\"2024-01-01T00:00:00Z\"," +
+                "\"Normalized\":true}";
+            await File.WriteAllTextAsync(Path.Combine(cachePath, "LEGACYKEY.json"), legacyJson);
+
+            var fm = new APISimulator.FileManager(cachePath);
+            var entry = await fm.ResolveEntryAsync("LEGACYKEY", Recompute);
+
+            entry.Should().NotBeNull();
+            entry!.Response.Should().Be("{\"ok\":\"legacy\"}");
+        }
+        finally { Directory.Delete(cachePath, true); }
     }
 }

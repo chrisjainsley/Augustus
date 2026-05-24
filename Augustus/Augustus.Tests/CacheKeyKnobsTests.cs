@@ -1,0 +1,144 @@
+using System.Text;
+using Augustus;
+using FluentAssertions;
+
+namespace Augustus.Tests;
+
+public class CacheKeyKnobsTests
+{
+    private static byte[] B(string s) => Encoding.UTF8.GetBytes(s);
+
+    [Fact]
+    public void IgnoredQueryParameters_DoNotChurnKey()
+    {
+        var rules = new CacheKeyRules { IgnoredQueryParameters = new[] { "_t", "nonce" } };
+
+        var a = RequestKeyFactory.Create("GET", "/v1/x", "?id=1&_t=111&nonce=aaa", Array.Empty<byte>(), null, rules);
+        var b = RequestKeyFactory.Create("GET", "/v1/x", "?id=1&_t=999&nonce=zzz", Array.Empty<byte>(), null, rules);
+
+        b.Hash.Should().Be(a.Hash);
+    }
+
+    [Fact]
+    public void IgnoredQueryParameters_RetainedParameterStillMatters()
+    {
+        var rules = new CacheKeyRules { IgnoredQueryParameters = new[] { "_t" } };
+
+        var a = RequestKeyFactory.Create("GET", "/v1/x", "?id=1&_t=1", Array.Empty<byte>(), null, rules);
+        var b = RequestKeyFactory.Create("GET", "/v1/x", "?id=2&_t=1", Array.Empty<byte>(), null, rules);
+
+        a.Hash.Should().NotBe(b.Hash);
+    }
+
+    [Fact]
+    public void StripNullBodyProperties_NullVsOmitted_ProduceSameKey()
+    {
+        var rules = new CacheKeyRules { StripNullBodyProperties = true };
+
+        var withNull = RequestKeyFactory.Create(
+            "POST", "/v1/chat", null, B("{\"model\":\"gpt-4\",\"user\":null}"), null, rules);
+        var omitted = RequestKeyFactory.Create(
+            "POST", "/v1/chat", null, B("{\"model\":\"gpt-4\"}"), null, rules);
+
+        withNull.Hash.Should().Be(omitted.Hash);
+    }
+
+    [Fact]
+    public void StripNullBodyProperties_Disabled_NullVsOmitted_Differ()
+    {
+        var withNull = RequestKeyFactory.Create(
+            "POST", "/v1/chat", null, B("{\"model\":\"gpt-4\",\"user\":null}"), null, null);
+        var omitted = RequestKeyFactory.Create(
+            "POST", "/v1/chat", null, B("{\"model\":\"gpt-4\"}"), null, null);
+
+        withNull.Hash.Should().NotBe(omitted.Hash);
+    }
+
+    [Fact]
+    public void HashMessagesContentOnly_CosmeticNonContentEdits_DoNotChurnKey()
+    {
+        var rules = new CacheKeyRules { HashMessagesContentOnly = true };
+
+        var a = RequestKeyFactory.Create("POST", "/v1/chat", null,
+            B("{\"model\":\"gpt-4\",\"temperature\":0.2,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}"),
+            null, rules);
+        var b = RequestKeyFactory.Create("POST", "/v1/chat", null,
+            B("{\"model\":\"gpt-4-turbo\",\"temperature\":0.9,\"messages\":[{\"role\":\"system\",\"content\":\"hi\"}]}"),
+            null, rules);
+
+        b.Hash.Should().Be(a.Hash);
+    }
+
+    [Fact]
+    public void HashMessagesContentOnly_ContentEditStillChurnsKey()
+    {
+        var rules = new CacheKeyRules { HashMessagesContentOnly = true };
+
+        var a = RequestKeyFactory.Create("POST", "/v1/chat", null,
+            B("{\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}"), null, rules);
+        var b = RequestKeyFactory.Create("POST", "/v1/chat", null,
+            B("{\"messages\":[{\"role\":\"user\",\"content\":\"goodbye\"}]}"), null, rules);
+
+        a.Hash.Should().NotBe(b.Hash);
+    }
+
+    [Fact]
+    public void IgnoredQueryParameters_MalformedPercentEncoding_DoesNotThrow()
+    {
+        // Regression: Uri.UnescapeDataString throws on "?bad=%". The factory must compare
+        // safely so cache-key computation never turns into a 500.
+        var rules = new CacheKeyRules { IgnoredQueryParameters = new[] { "drop" } };
+
+        var act = () => RequestKeyFactory.Create("GET", "/v1/x", "?bad=%&keep=1", Array.Empty<byte>(), null, rules);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Create_NonUtf8Body_FlagsCanonicalAsNonRoundtrippable()
+    {
+        // Bytes 0xFF, 0xFE are not valid UTF-8 → GetString produces replacement chars,
+        // GetBytes of that string ≠ original. Persisting CanonicalRequest in that case
+        // would make the fixture unresolvable via both fast-path and content index.
+        var binary = new byte[] { 0xFF, 0xFE, 0x00, 0x01, 0x02 };
+
+        var result = RequestKeyFactory.Create("POST", "/v1/upload", null, binary, null, null);
+
+        result.CanonicalIsRoundtrippable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Create_Utf8JsonBody_FlagsCanonicalAsRoundtrippable()
+    {
+        var json = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\",\"x\":\"héllo\"}");
+
+        var result = RequestKeyFactory.Create("POST", "/v1/chat", null, json, null, null);
+
+        result.CanonicalIsRoundtrippable.Should().BeTrue();
+        // And the invariant the renameable feature depends on still holds:
+        RequestKeyFactory.ComputeKeyFromCanonical(result.Canonical, null)
+            .Should().Be(result.Hash);
+    }
+
+    [Fact]
+    public void Create_EmptyBody_FlagsCanonicalAsRoundtrippable()
+    {
+        var result = RequestKeyFactory.Create("GET", "/v1/health", null, Array.Empty<byte>(), null, null);
+        result.CanonicalIsRoundtrippable.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Options_ExposeKnobsAndBuildRules()
+    {
+        var options = new APISimulatorOptions();
+        options.IgnoredHeaders.Add("x-request-id");
+        options.IgnoredQueryParameters.Add("_cb");
+        options.StripNullBodyProperties = true;
+        options.HashMessagesContentOnly = true;
+
+        options.IgnoredHeaders.Should().Contain("x-request-id");
+        options.IgnoredQueryParameters.Should().Contain("_cb");
+        options.StripNullBodyProperties.Should().BeTrue();
+        options.HashMessagesContentOnly.Should().BeTrue();
+    }
+}

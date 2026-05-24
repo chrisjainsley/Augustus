@@ -57,7 +57,13 @@ public sealed partial class APISimulator : IAsyncDisposable
             options.ResetCacheFolderPathExplicitFlag();
         }
 
-        fileManager = new FileManager(options.CacheFolderPath);
+        fileManager = new FileManager(options.CacheFolderPath)
+        {
+            // Make per-scenario stale removal in ClearTestContext honor the same option
+            // that controls end-of-run stale removal. Without this, AutoRemoveStaleCache
+            // = false is silently violated every time a scenario hits ClearTestContext.
+            AutoRemoveStaleCache = options.AutoRemoveStaleCache,
+        };
         instructionsContainer = new InstructionsContainer(apiName);
 
         routingHandler = new RoutingRequestHandler(this);

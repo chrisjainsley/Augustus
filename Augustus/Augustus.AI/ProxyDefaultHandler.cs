@@ -54,23 +54,44 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
         try
         {
             var bodyBytes = await context.Request.ReadBodyBytesAsync(cancellationToken).ConfigureAwait(false);
-            var cacheKey = CacheKeyComputer.ComputeCacheKey(
+            var rules = options.BuildCacheKeyRules();
+            var keyResult = RequestKeyFactory.Create(
                 context.Request.Method,
                 context.Request.Path.Value ?? "/",
                 context.Request.QueryString.Value,
                 bodyBytes,
-                out var materializedBody,
-                dynamicContentFields: options.DynamicContentFields);
+                null,
+                rules);
+            var cacheKey = keyResult.Hash;
+            var materializedBody = keyResult.MaterializedBody;
+            var canonical = keyResult.Canonical;
+            // For non-UTF-8 binary bodies the canonical can't be re-hashed losslessly, so
+            // we must persist as legacy (filename-keyed, no canonical) to keep the fixture
+            // resolvable. Same gate applies to the backfill path below.
+            var persistedCanonical = keyResult.CanonicalIsRoundtrippable ? canonical : null;
 
             if (options.EnableCaching)
             {
-                var cached = await fileManager.ReadCachedResponseAsync(cacheKey).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(cached))
+                var resolved = await fileManager
+                    .ResolveEntryWithLabelAsync(cacheKey, c => RequestKeyFactory.ComputeKeyFromCanonical(c, rules))
+                    .ConfigureAwait(false);
+                if (resolved is { Entry.Response: { Length: > 0 } cached })
                 {
+                    if (options.BackfillLegacyCanonicalRequest && resolved.Entry.CanonicalRequest is null && persistedCanonical is not null)
+                    {
+                        var label = resolved.Label;
+                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, persistedCanonical));
+                    }
+
                     context.Response.ContentType = "application/json";
                     await context.Response.WriteAsync(cached, cancellationToken).ConfigureAwait(false);
                     return;
                 }
+
+                // Only fire after we actually searched the cache and missed — otherwise
+                // consumers with caching disabled would see a misleading miss per request.
+                options.OnCacheMiss?.Invoke(
+                    new CacheMissDiagnostic(canonical, cacheKey, fileManager.CurrentCachePath));
             }
 
             if (options.CacheOnly)
@@ -81,7 +102,8 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                 {
                     ["error"] = "Cache miss in CacheOnly mode. No cached response found for this request.",
                     ["status"] = 503,
-                    ["requestHash"] = cacheKey
+                    ["requestHash"] = cacheKey,
+                    ["expectedCanonicalRequest"] = canonical
                 };
                 var digestInputLen = aiOptions.CacheMissMaterializedBodyPrefixSha256ByteCount;
                 if (digestInputLen > 0)
@@ -119,7 +141,7 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                 _cacheWriter.Enqueue(() =>
                 {
                     var requestInfo = $"PROXY {method} {path}";
-                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>());
+                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>(), normalized: false, persistedCanonical);
                 });
             }
         }

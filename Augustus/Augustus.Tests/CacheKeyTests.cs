@@ -215,4 +215,45 @@ public class CacheKeyTests
 
         hash1.Should().Be(hash2);
     }
+
+    [Fact]
+    public void CacheKeyComputer_NonJsonBody_MatchesHistoricalByteLayout()
+    {
+        // Pins the legacy key layout: UTF8(method) | UTF8(path) | UTF8(query??"") | bodyBytes.
+        // A non-JSON (form) body is passed through unchanged by the normalizer, so the
+        // expected hash can be reconstructed independently of the implementation.
+        const string method = "POST";
+        const string path = "/v1/charges";
+        var bodyBytes = System.Text.Encoding.UTF8.GetBytes("amount=2000&currency=usd&source=tok_visa");
+
+        using var ms = new MemoryStream();
+        void Append(string s) => ms.Write(System.Text.Encoding.UTF8.GetBytes(s));
+        Append(method);
+        Append("|");
+        Append(path);
+        Append("|");
+        Append(string.Empty);
+        Append("|");
+        ms.Write(bodyBytes);
+        var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(ms.ToArray()));
+
+        var actual = CacheKeyComputer.ComputeCacheKey(method, path, null, bodyBytes);
+
+        actual.Should().Be(expected);
+    }
+
+    [Fact]
+    public void CacheKeyComputer_JsonBody_MatchesPinnedHistoricalHash()
+    {
+        // Pinned value captured from the pre-refactor implementation. Any change here means
+        // every downstream committed fixture would be invalidated — treat a failure as a
+        // signal to add migration/rekey, never as "just update the constant".
+        var body = System.Text.Encoding.UTF8.GetBytes(
+            "{\"model\":\"gpt-4\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}");
+
+        var hash = CacheKeyComputer.ComputeCacheKey(
+            "POST", "/v1/chat/completions", "?api-version=2024-06-01", body);
+
+        hash.Should().Be("04DADA3079E42C3831F4B0F2B2F419ED8546BE52B43D6DA2374A9605162AD040");
+    }
 }

@@ -57,29 +57,48 @@ internal class AIDefaultHandler : IRequestHandler
                 httpContext.Request.Path.Value ?? "/",
                 httpContext.Request.Method);
 
-            var requestHash = CacheKeyComputer.ComputeCacheKey(
+            var rules = options.BuildCacheKeyRules();
+            var keyResult = RequestKeyFactory.Create(
                 httpContext.Request.Method,
                 httpContext.Request.Path.Value ?? "/",
                 httpContext.Request.QueryString.Value,
                 bodyBytes,
-                out var materializedBody,
                 instructions,
-                options.DynamicContentFields);
+                rules);
+            var requestHash = keyResult.Hash;
+            var materializedBody = keyResult.MaterializedBody;
+            var canonical = keyResult.Canonical;
+            // For non-UTF-8 binary bodies the canonical can't be re-hashed losslessly, so
+            // we must persist as legacy (filename-keyed, no canonical) to keep the fixture
+            // resolvable. Same gate applies to the backfill path below.
+            var persistedCanonical = keyResult.CanonicalIsRoundtrippable ? canonical : null;
 
             if (options.EnableCaching)
             {
-                var cachedEntry = await fileManager.ReadCachedEntryAsync(requestHash).ConfigureAwait(false);
-                if (cachedEntry?.Response is { Length: > 0 } cachedResponse)
+                var resolved = await fileManager
+                    .ResolveEntryWithLabelAsync(requestHash, c => RequestKeyFactory.ComputeKeyFromCanonical(c, rules))
+                    .ConfigureAwait(false);
+                if (resolved is { Entry.Response: { Length: > 0 } cachedResponse } cachedHit)
                 {
-                    if (!cachedEntry.Normalized)
+                    if (!cachedHit.Entry.Normalized)
                     {
                         cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
                             cachedResponse, httpContext.Request.Path.Value ?? "/");
+                    }
+                    if (options.BackfillLegacyCanonicalRequest && cachedHit.Entry.CanonicalRequest is null && persistedCanonical is not null)
+                    {
+                        var label = cachedHit.Label;
+                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, persistedCanonical));
                     }
                     httpContext.Response.ContentType = "application/json";
                     await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
                     return;
                 }
+
+                // Only fire after we actually searched the cache and missed — otherwise
+                // consumers with caching disabled would see a misleading miss per request.
+                options.OnCacheMiss?.Invoke(
+                    new CacheMissDiagnostic(canonical, requestHash, fileManager.CurrentCachePath));
             }
 
             if (cacheOnly)
@@ -97,7 +116,8 @@ internal class AIDefaultHandler : IRequestHandler
                     }
                 }
 
-                await WriteErrorResponse(httpContext, message, 503, cancellationToken);
+                await WriteErrorResponse(httpContext, message, 503, cancellationToken,
+                    canonical, requestHash);
                 return;
             }
 
@@ -116,8 +136,16 @@ internal class AIDefaultHandler : IRequestHandler
             // Defer curl command generation until after cache check — avoids re-reading the body stream,
             // iterating headers, and string building on cache hits. Filter noisy headers to reduce
             // OpenAI prompt token usage.
+            IReadOnlySet<string> skipHeaders = HttpRequestExtensions.DefaultAISkipHeaders;
+            if (options.IgnoredHeaders.Count > 0)
+            {
+                var combined = new HashSet<string>(skipHeaders, StringComparer.OrdinalIgnoreCase);
+                foreach (var h in options.IgnoredHeaders)
+                    combined.Add(h);
+                skipHeaders = combined;
+            }
             var curlRequest = await Augustus.HttpRequestExtensions.ToCurlCommandAsync(
-                httpContext.Request, HttpRequestExtensions.DefaultAISkipHeaders).ConfigureAwait(false);
+                httpContext.Request, skipHeaders).ConfigureAwait(false);
             // Sanitize any residual sensitive values (query params, body tokens) before forwarding to OpenAI.
             curlRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(curlRequest);
 
@@ -156,7 +184,7 @@ internal class AIDefaultHandler : IRequestHandler
 
             if (options.EnableCaching)
             {
-                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true));
+                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true, persistedCanonical));
             }
         }
         catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
@@ -168,11 +196,22 @@ internal class AIDefaultHandler : IRequestHandler
     public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
         => _cacheWriter.DrainAsync(cancellationToken);
 
-    private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken = default)
+    private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken = default, CanonicalRequest? expectedCanonicalRequest = null, string? computedKey = null)
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
-        var errorResponse = JsonSerializer.Serialize(new { error = message, status = statusCode });
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["error"] = message,
+            ["status"] = statusCode,
+        };
+        if (expectedCanonicalRequest is not null)
+            payload["expectedCanonicalRequest"] = expectedCanonicalRequest;
+        if (computedKey is not null)
+            payload["computedKey"] = computedKey;
+
+        var errorResponse = JsonSerializer.Serialize(payload);
         await context.Response.WriteAsync(errorResponse, cancellationToken);
     }
 }

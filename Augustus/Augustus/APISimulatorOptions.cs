@@ -125,6 +125,83 @@ public sealed class APISimulatorOptions
         }
     }
 
+    /// <summary>
+    /// Gets or sets a transform applied to the <see cref="RequestKey"/> before hashing and
+    /// matching. Use it to strip or rewrite volatile parts of the request (path segments,
+    /// query values) so incidental changes do not invalidate committed fixtures. The same
+    /// transform is applied to incoming requests and re-applied to each fixture's stored
+    /// <see cref="CanonicalRequest"/>, so a keying-rule change re-baselines with zero
+    /// upstream calls. Must be pure, deterministic, and idempotent (<c>f(f(x)) == f(x)</c>).
+    /// </summary>
+    public Func<RequestKey, RequestKey>? RequestKeyTransform { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the volatile Azure OpenAI deployment path
+    /// segment (<c>/openai/deployments/{deployment}/…</c>) is replaced with a constant
+    /// before hashing, making cache keys deployment- and region-agnostic. Default is
+    /// <c>false</c>. Applied before <see cref="RequestKeyTransform"/>.
+    /// </summary>
+    public bool NormalizeAzureOpenAIDeployment { get; set; }
+
+    /// <summary>
+    /// Gets or sets a callback invoked on every cache miss with the canonical request and
+    /// computed key Augustus expected. Use it to discover the exact identity needed to
+    /// author or rename a fixture by hand when the upstream API is unavailable.
+    /// </summary>
+    public Action<CacheMissDiagnostic>? OnCacheMiss { get; set; }
+
+    private readonly List<string> _ignoredHeaders = new();
+    private readonly List<string> _ignoredQueryParameters = new();
+
+    /// <summary>
+    /// Gets a list of request header names excluded from the request forwarded to the AI
+    /// model when generating a response. Cache identity never includes headers; use this
+    /// to keep volatile headers out of the AI prompt so they do not influence generation.
+    /// </summary>
+    public IList<string> IgnoredHeaders => _ignoredHeaders;
+
+    /// <summary>
+    /// Gets a list of query-string parameter names removed before the cache key is
+    /// computed, so volatile parameters (cache-busters, timestamps) do not invalidate
+    /// committed fixtures.
+    /// </summary>
+    public IList<string> IgnoredQueryParameters => _ignoredQueryParameters;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether JSON body properties whose value is
+    /// <c>null</c> are removed before the cache key is computed, so an explicit-null vs.
+    /// omitted-property difference does not churn the cache. Default is <c>false</c>.
+    /// </summary>
+    public bool StripNullBodyProperties { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether only <c>messages[].content</c> participates
+    /// in the cache key, so cosmetic changes to other body fields (temperature, metadata)
+    /// do not churn caches. Default is <c>false</c>.
+    /// </summary>
+    public bool HashMessagesContentOnly { get; set; }
+
+    /// <summary>
+    /// On cache HIT for a legacy fixture (no <see cref="CanonicalRequest"/>), rewrite the
+    /// file in place with the freshly computed canonical request so it can later be
+    /// renamed offline via <see cref="CacheMaintenance.Rekey"/>. The on-disk filename is
+    /// not changed by the backfill; only the JSON body gains the missing
+    /// <c>CanonicalRequest</c> block. Idempotent — a fixture that already has a
+    /// CanonicalRequest is never rewritten. Default is <c>false</c>, preserving
+    /// byte-identical behavior for legacy fixtures.
+    /// </summary>
+    /// <remarks>
+    /// Use this for one-shot migration of pre-canonical-request fixtures: enable it,
+    /// run the existing test suite in proxy mode with the historical keying rules so
+    /// every request still hits the legacy filename, and the backfill embeds
+    /// CanonicalRequest into each fixture without any upstream API calls. After the
+    /// migration pass, disable it and enable the keying-rule knobs you want
+    /// (<see cref="NormalizeAzureOpenAIDeployment"/>, <see cref="RequestKeyTransform"/>,
+    /// etc.), then call <see cref="CacheMaintenance.Rekey"/> to rename files under the
+    /// new rules.
+    /// </remarks>
+    public bool BackfillLegacyCanonicalRequest { get; set; }
+
     private readonly List<string> _dynamicContentFields = new();
 
     /// <summary>
@@ -137,6 +214,18 @@ public sealed class APISimulatorOptions
     /// Add items via the <see cref="ICollection{T}.Add"/> method on the returned list.
     /// </remarks>
     public IList<string> DynamicContentFields => _dynamicContentFields;
+
+    /// <summary>
+    /// Builds the normalization rules applied when computing and matching cache keys.
+    /// The default (no transform, no knobs) reproduces the historical key byte-for-byte.
+    /// </summary>
+    internal CacheKeyRules BuildCacheKeyRules() => CacheKeyRules.From(
+        _dynamicContentFields,
+        _ignoredQueryParameters,
+        RequestKeyTransform,
+        NormalizeAzureOpenAIDeployment,
+        StripNullBodyProperties,
+        HashMessagesContentOnly);
 
     /// <summary>
     /// Validates that all required configuration is present and correct.

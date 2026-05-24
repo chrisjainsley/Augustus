@@ -15,6 +15,22 @@ public partial class APISimulator
         private ConcurrentDictionary<string, byte> _touchedHashes = new();
         private string? _currentTestContext;
 
+        /// <summary>
+        /// Mirrors <see cref="APISimulatorOptions.AutoRemoveStaleCache"/> so per-scenario
+        /// context cleanup honors the option. Default <c>true</c> preserves historical
+        /// behavior for callers that construct a <see cref="FileManager"/> directly.
+        /// </summary>
+        internal bool AutoRemoveStaleCache { get; set; } = true;
+
+        // Content-addressed index per effective cache path: recomputed key -> file label
+        // (filename without extension). Lets renamed / hand-authored / rule-changed fixtures
+        // resolve when the fast {key}.json probe misses. Built once per path (fixtures are
+        // expected to exist before the first request); our own writes patch it incrementally;
+        // dropped on context/base-path changes. Fixtures added externally mid-run are not
+        // picked up until the next context switch — edit fixtures between runs.
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _indexByCachePath = new();
+        private readonly object _indexLock = new();
+
         public FileManager(string cacheFolderPath)
         {
             this.cacheFolderPath = cacheFolderPath;
@@ -40,6 +56,7 @@ public partial class APISimulator
                 throw new ArgumentException("Test name cannot be null or whitespace.", nameof(testName));
             _currentTestContext = testName;
             _touchedHashes.Clear();
+            InvalidateIndex();
             var contextPath = CurrentCachePath;
             if (!Directory.Exists(contextPath))
             {
@@ -48,16 +65,22 @@ public partial class APISimulator
         }
 
         /// <summary>
-        /// Clears the current test context. Runs scoped stale entry removal for the
-        /// context's subdirectory before clearing.
+        /// Clears the current test context. When <see cref="AutoRemoveStaleCache"/> is
+        /// <c>true</c>, runs scoped stale entry removal for the context's subdirectory
+        /// before clearing — fixtures not touched during the scenario are deleted on disk.
+        /// When <c>false</c>, the on-disk fixtures are preserved verbatim; this is the
+        /// right setting for committed __mocks__/ trees where a scenario miss must never
+        /// silently delete the file you're trying to debug.
         /// </summary>
         public void ClearTestContext()
         {
             if (_currentTestContext != null)
             {
-                RemoveStaleEntriesFromPath(CurrentCachePath);
+                if (AutoRemoveStaleCache)
+                    RemoveStaleEntriesFromPath(CurrentCachePath);
                 _currentTestContext = null;
                 _touchedHashes.Clear();
+                InvalidateIndex();
             }
         }
 
@@ -106,6 +129,7 @@ public partial class APISimulator
                 throw new ArgumentException("Cache base path cannot be null or whitespace.", nameof(newBasePath));
             cacheFolderPath = newBasePath;
             _touchedHashes.Clear();
+            InvalidateIndex();
             EnsureCacheFolderExists();
 
             // If a test context is active, ensure its subdirectory also exists under the new base
@@ -171,7 +195,7 @@ public partial class APISimulator
         public Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
             => CacheResponseAsync(requestHash, response, originalRequest, instructions, normalized: false);
 
-        public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized)
+        public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized, CanonicalRequest? canonical = null)
         {
             ValidateFileName(requestHash);
 
@@ -182,12 +206,18 @@ public partial class APISimulator
                 OriginalRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(originalRequest),
                 Instructions = instructions.Select(SensitiveDataSanitizer.SanitizeSensitiveValues).ToList(),
                 Timestamp = DateTime.UtcNow,
-                Normalized = normalized
+                Normalized = normalized,
+                CanonicalRequest = canonical
             };
 
             var json = JsonSerializer.Serialize(cacheEntry, CacheSerializerOptions);
             await WriteToFileAsync($"{requestHash}.json", json).ConfigureAwait(false);
             _touchedHashes.TryAdd(requestHash, 0);
+
+            // Keep an already-built index consistent within the same process: a freshly
+            // written fixture's filename label is its key. Avoids a full rescan after record.
+            if (_indexByCachePath.TryGetValue(CurrentCachePath, out var index))
+                index[requestHash] = requestHash;
         }
 
         public async Task<string?> ReadCachedResponseAsync(string requestHash)
@@ -201,20 +231,173 @@ public partial class APISimulator
             ValidateFileName(requestHash);
 
             var json = await ReadFromFileAsync($"{requestHash}.json");
+            var cacheEntry = DeserializeEntry(json);
+            if (cacheEntry?.Response != null)
+                _touchedHashes.TryAdd(requestHash, 0);
+            return cacheEntry;
+        }
+
+        /// <summary>
+        /// Resolves a cache entry by content: first the fast <c>{primaryKey}.json</c> probe,
+        /// then a content-addressed lookup that recomputes each fixture's key from its stored
+        /// <see cref="CanonicalRequest"/> via <paramref name="recompute"/>. This is what makes
+        /// fixtures renameable / hand-authorable and lets a keying-rule change re-baseline
+        /// existing files with zero upstream calls.
+        /// </summary>
+        public async Task<CacheEntry?> ResolveEntryAsync(string primaryKey, Func<CanonicalRequest, string> recompute)
+        {
+            var result = await ResolveEntryWithLabelAsync(primaryKey, recompute).ConfigureAwait(false);
+            return result?.Entry;
+        }
+
+        /// <summary>
+        /// Same as <see cref="ResolveEntryAsync"/> but also returns the on-disk file label
+        /// (filename without extension) that produced the match. The label is needed by
+        /// callers that want to rewrite the fixture in place — e.g.
+        /// <see cref="BackfillCanonicalAsync"/> for the
+        /// <see cref="APISimulatorOptions.BackfillLegacyCanonicalRequest"/> flow.
+        /// </summary>
+        public async Task<ResolveResult?> ResolveEntryWithLabelAsync(string primaryKey, Func<CanonicalRequest, string> recompute)
+        {
+            var direct = await ReadCachedEntryAsync(primaryKey).ConfigureAwait(false);
+            if (direct?.Response is { Length: > 0 })
+            {
+                // For entries that carry a CanonicalRequest, verify it really matches the
+                // requested key before serving — otherwise a stale/hand-authored file whose
+                // label happens to equal another request's hash would return the wrong
+                // response. Legacy entries (null canonical) are trusted by filename for
+                // back-compat.
+                if (direct.CanonicalRequest is null || recompute(direct.CanonicalRequest) == primaryKey)
+                    return new ResolveResult(direct, primaryKey);
+            }
+
+            // Built once per effective cache path (fixtures are expected to exist before the
+            // first request); our own writes patch it incrementally, context switches drop it.
+            var index = GetOrBuildIndex(CurrentCachePath, recompute);
+            if (index.TryGetValue(primaryKey, out var label))
+            {
+                var json = await ReadFromFileAsync($"{label}.json").ConfigureAwait(false);
+                var matched = DeserializeEntry(json);
+                if (matched?.Response is { Length: > 0 })
+                {
+                    // Track by the on-disk label so stale-removal keeps renamed fixtures.
+                    _touchedHashes.TryAdd(label, 0);
+                    return new ResolveResult(matched, label);
+                }
+
+                // Label points at a file that was deleted/renamed mid-run: self-heal so the
+                // failed probe is not repeated for every subsequent matching request.
+                index.TryRemove(primaryKey, out _);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// One-shot in-place rewrite: if the fixture at <paramref name="label"/> has no
+        /// <see cref="CanonicalRequest"/>, set it to <paramref name="canonical"/> and
+        /// reserialize. Idempotent — a fixture that already carries a CanonicalRequest is
+        /// left untouched and the method returns <c>false</c>. The filename is not changed;
+        /// use <see cref="CacheMaintenance.Rekey"/> afterwards to apply a new keying rule.
+        /// </summary>
+        /// <returns><c>true</c> if the file was rewritten, <c>false</c> if it was skipped (idempotent no-op or unreadable).</returns>
+        public async Task<bool> BackfillCanonicalAsync(string label, CanonicalRequest canonical)
+        {
+            ArgumentNullException.ThrowIfNull(canonical);
+            ValidateFileName($"{label}.json");
+
+            var json = await ReadFromFileAsync($"{label}.json").ConfigureAwait(false);
+            var entry = DeserializeEntry(json);
+            if (entry is null || entry.CanonicalRequest is not null)
+                return false;
+
+            entry.CanonicalRequest = canonical;
+            var updated = JsonSerializer.Serialize(entry, CacheSerializerOptions);
+            await WriteToFileAsync($"{label}.json", updated).ConfigureAwait(false);
+            return true;
+        }
+
+        private static CacheEntry? DeserializeEntry(string? json)
+        {
             if (string.IsNullOrEmpty(json))
                 return null;
-
             try
             {
-                var cacheEntry = JsonSerializer.Deserialize<CacheEntry>(json);
-                if (cacheEntry?.Response != null)
-                    _touchedHashes.TryAdd(requestHash, 0);
-                return cacheEntry;
+                return JsonSerializer.Deserialize<CacheEntry>(json);
             }
             catch (JsonException)
             {
                 return null;
             }
+        }
+
+        private ConcurrentDictionary<string, string> GetOrBuildIndex(
+            string path, Func<CanonicalRequest, string> recompute)
+        {
+            if (_indexByCachePath.TryGetValue(path, out var existing))
+                return existing;
+
+            lock (_indexLock)
+            {
+                if (_indexByCachePath.TryGetValue(path, out existing))
+                    return existing;
+
+                var index = new ConcurrentDictionary<string, string>();
+                // Sort so first-wins on key collision is deterministic across machines —
+                // Directory.GetFiles enumeration order is unspecified, and the only signal
+                // for a duplicate-key fixture is a Debug.WriteLine, so an arbitrary winner
+                // would silently shift cache hits between runs.
+                var files = CacheFiles.JsonFiles(path);
+                Array.Sort(files, StringComparer.Ordinal);
+                foreach (var file in files)
+                {
+                    var label = Path.GetFileNameWithoutExtension(file);
+                    CacheEntry? entry;
+                    try
+                    {
+                        entry = DeserializeEntry(File.ReadAllText(file));
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        continue;
+                    }
+
+                    if (entry?.CanonicalRequest is { } canonical)
+                    {
+                        try
+                        {
+                            var key = recompute(canonical);
+                            // First-wins + warn: silently overwriting would return an
+                            // arbitrary response depending on directory-enumeration order.
+                            if (!index.TryAdd(key, label) && index[key] != label)
+                            {
+                                System.Diagnostics.Debug.WriteLine(
+                                    $"Warning: cache fixture {file} recomputes to key {key} " +
+                                    $"already claimed by {index[key]}.json — skipping. " +
+                                    "Remove or re-normalize the duplicate fixture.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine(
+                                $"Warning: failed to recompute key for cache file {file}: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        // Legacy fixture: only resolvable by its original hash filename.
+                        index.TryAdd(label, label);
+                    }
+                }
+
+                _indexByCachePath[path] = index;
+                return index;
+            }
+        }
+
+        private void InvalidateIndex()
+        {
+            _indexByCachePath.Clear();
         }
 
         public void RemoveStaleEntries()
@@ -224,20 +407,7 @@ public partial class APISimulator
 
         private void RemoveStaleEntriesFromPath(string path)
         {
-            if (!Directory.Exists(path))
-                return;
-
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(path, "*.json");
-            }
-            catch (DirectoryNotFoundException)
-            {
-                return;
-            }
-
-            foreach (var file in files)
+            foreach (var file in CacheFiles.JsonFiles(path))
             {
                 var hash = Path.GetFileNameWithoutExtension(file);
                 if (!_touchedHashes.ContainsKey(hash))
@@ -283,20 +453,7 @@ public partial class APISimulator
 
         private static void ClearCacheFromPath(string path)
         {
-            if (!Directory.Exists(path))
-                return;
-
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(path, "*.json");
-            }
-            catch (DirectoryNotFoundException)
-            {
-                return;
-            }
-
-            foreach (var file in files)
+            foreach (var file in CacheFiles.JsonFiles(path))
             {
                 try
                 {
@@ -323,5 +480,20 @@ public partial class APISimulator
         public List<string> Instructions { get; set; } = new();
         public DateTime Timestamp { get; set; }
         public bool Normalized { get; set; }
+
+        /// <summary>
+        /// The canonical request this fixture matches, written for new entries so the file
+        /// can be renamed or hand-authored. Null for legacy fixtures (matched by filename).
+        /// </summary>
+        public CanonicalRequest? CanonicalRequest { get; set; }
     }
+
+    /// <summary>
+    /// Outcome of <see cref="FileManager.ResolveEntryWithLabelAsync"/>: the matched
+    /// <see cref="CacheEntry"/> and the on-disk file label (filename without extension)
+    /// that produced the match. Use the label for in-place rewrites that must target the
+    /// actual fixture file (e.g. legacy <see cref="CanonicalRequest"/> backfill) instead
+    /// of the request's computed primary key.
+    /// </summary>
+    internal sealed record ResolveResult(CacheEntry Entry, string Label);
 }

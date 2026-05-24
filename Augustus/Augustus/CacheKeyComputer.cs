@@ -1,12 +1,12 @@
-using System.Security.Cryptography;
-using System.Text;
-
 namespace Augustus;
 
+/// <summary>
+/// Computes the cache key for a request. Thin façade over <see cref="RequestKeyFactory"/>;
+/// the default (no rules) path is byte-identical to the historical key so existing
+/// fixtures keep resolving without a rekey.
+/// </summary>
 internal static class CacheKeyComputer
 {
-    private static readonly byte[] Separator = Encoding.UTF8.GetBytes("|");
-
     public static string ComputeCacheKey(string method, string path, string? queryString, byte[] body, List<string>? instructions = null, IEnumerable<string>? dynamicContentFields = null)
     {
         return ComputeCacheKey(method, path, queryString, body, out _, instructions, dynamicContentFields);
@@ -14,30 +14,15 @@ internal static class CacheKeyComputer
 
     public static string ComputeCacheKey(string method, string path, string? queryString, byte[] body, out byte[] materializedBody, List<string>? instructions = null, IEnumerable<string>? dynamicContentFields = null)
     {
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        sha.AppendData(Encoding.UTF8.GetBytes(method));
-        sha.AppendData(Separator);
-        sha.AppendData(Encoding.UTF8.GetBytes(path));
-        sha.AppendData(Separator);
-        sha.AppendData(Encoding.UTF8.GetBytes(queryString ?? string.Empty));
-        sha.AppendData(Separator);
-
-        var materializedFields = dynamicContentFields as IReadOnlyCollection<string>
+        var fields = dynamicContentFields as IReadOnlyCollection<string>
             ?? (dynamicContentFields != null ? dynamicContentFields.ToArray() : null);
-        materializedBody = CacheKeyBodyNormalizer.PrepareBodyForCacheKey(
-            body,
-            materializedFields ?? (IReadOnlyCollection<string>)Array.Empty<string>());
-        sha.AppendData(materializedBody);
-        if (instructions is { Count: > 0 })
-        {
-            sha.AppendData(Separator);
-            sha.AppendData(Encoding.UTF8.GetBytes(instructions.Count.ToString()));
-            foreach (var instruction in instructions)
-            {
-                sha.AppendData(Separator);
-                sha.AppendData(Encoding.UTF8.GetBytes(instruction));
-            }
-        }
-        return Convert.ToHexString(sha.GetHashAndReset());
+
+        var rules = fields is { Count: > 0 }
+            ? new CacheKeyRules { DynamicContentFields = fields }
+            : CacheKeyRules.Legacy;
+
+        var result = RequestKeyFactory.Create(method, path, queryString, body, instructions, rules);
+        materializedBody = result.MaterializedBody;
+        return result.Hash;
     }
 }

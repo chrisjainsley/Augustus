@@ -46,12 +46,42 @@ namespace Augustus
     {
         public APISimulatorOptions() { }
         public bool AutoRemoveStaleCache { get; set; }
+        public bool BackfillLegacyCanonicalRequest { get; set; }
         public string CacheFolderPath { get; set; }
         public bool CacheOnly { get; set; }
         public System.Collections.Generic.IList<string> DynamicContentFields { get; }
         public bool EnableCaching { get; set; }
+        public bool HashMessagesContentOnly { get; set; }
+        public System.Collections.Generic.IList<string> IgnoredHeaders { get; }
+        public System.Collections.Generic.IList<string> IgnoredQueryParameters { get; }
+        public bool NormalizeAzureOpenAIDeployment { get; set; }
+        public System.Action<Augustus.CacheMissDiagnostic>? OnCacheMiss { get; set; }
         public int Port { get; set; }
+        public System.Func<Augustus.RequestKey, Augustus.RequestKey>? RequestKeyTransform { get; set; }
+        public bool StripNullBodyProperties { get; set; }
         public void Validate() { }
+    }
+    public static class CacheMaintenance
+    {
+        public static Augustus.RekeyResult Rekey(string cachePath, Augustus.RekeyOptions options) { }
+    }
+    public sealed class CacheMissDiagnostic : System.IEquatable<Augustus.CacheMissDiagnostic>
+    {
+        public CacheMissDiagnostic(Augustus.CanonicalRequest ExpectedCanonicalRequest, string ComputedKey, string CachePath) { }
+        public string CachePath { get; init; }
+        public string ComputedKey { get; init; }
+        public Augustus.CanonicalRequest ExpectedCanonicalRequest { get; init; }
+    }
+    public sealed class CanonicalRequest : System.IEquatable<Augustus.CanonicalRequest>
+    {
+        public CanonicalRequest(string Method, string Path, string? QueryString, System.Collections.Generic.IReadOnlyList<string> Instructions, string NormalizedBody) { }
+        public System.Collections.Generic.IReadOnlyList<string> Instructions { get; init; }
+        public string Method { get; init; }
+        public string NormalizedBody { get; init; }
+        public string Path { get; init; }
+        public string? QueryString { get; init; }
+        public bool Equals(Augustus.CanonicalRequest? other) { }
+        public override int GetHashCode() { }
     }
     public sealed class DeliveredWebhook : System.IEquatable<Augustus.DeliveredWebhook>
     {
@@ -112,6 +142,37 @@ namespace Augustus
         public System.Net.Http.HttpMethod Method { get; init; }
         public string Path { get; init; }
         public System.DateTimeOffset Timestamp { get; init; }
+    }
+    public sealed class RekeyOptions
+    {
+        public RekeyOptions() { }
+        public bool DryRun { get; set; }
+        public System.Collections.Generic.IList<string> DynamicContentFields { get; }
+        public bool HashMessagesContentOnly { get; set; }
+        public System.Collections.Generic.IList<string> IgnoredQueryParameters { get; }
+        public bool NormalizeAzureOpenAIDeployment { get; set; }
+        public bool Recursive { get; set; }
+        public System.Func<Augustus.RequestKey, Augustus.RequestKey>? RequestKeyTransform { get; set; }
+        public bool StripNullBodyProperties { get; set; }
+    }
+    public sealed class RekeyResult : System.IEquatable<Augustus.RekeyResult>
+    {
+        public RekeyResult(int Scanned, int Renamed, int Skipped, System.Collections.Generic.IReadOnlyList<string> Conflicts) { }
+        public System.Collections.Generic.IReadOnlyList<string> Conflicts { get; init; }
+        public int Renamed { get; init; }
+        public int Scanned { get; init; }
+        public int Skipped { get; init; }
+    }
+    public sealed class RequestKey : System.IEquatable<Augustus.RequestKey>
+    {
+        public RequestKey(string Method, string Path, string? QueryString, System.Collections.Generic.IReadOnlyList<string> Instructions, string NormalizedBody) { }
+        public System.Collections.Generic.IReadOnlyList<string> Instructions { get; init; }
+        public string Method { get; init; }
+        public string NormalizedBody { get; init; }
+        public string Path { get; init; }
+        public string? QueryString { get; init; }
+        public bool Equals(Augustus.RequestKey? other) { }
+        public override int GetHashCode() { }
     }
     public sealed class RouteBuilder
     {
