@@ -181,6 +181,27 @@ public sealed class APISimulatorOptions
     /// </summary>
     public bool HashMessagesContentOnly { get; set; }
 
+    /// <summary>
+    /// On cache HIT for a legacy fixture (no <see cref="CanonicalRequest"/>), rewrite the
+    /// file in place with the freshly computed canonical request so it can later be
+    /// renamed offline via <see cref="CacheMaintenance.Rekey"/>. The on-disk filename is
+    /// not changed by the backfill; only the JSON body gains the missing
+    /// <c>CanonicalRequest</c> block. Idempotent — a fixture that already has a
+    /// CanonicalRequest is never rewritten. Default is <c>false</c>, preserving
+    /// byte-identical behavior for legacy fixtures.
+    /// </summary>
+    /// <remarks>
+    /// Use this for one-shot migration of pre-canonical-request fixtures: enable it,
+    /// run the existing test suite in proxy mode with the historical keying rules so
+    /// every request still hits the legacy filename, and the backfill embeds
+    /// CanonicalRequest into each fixture without any upstream API calls. After the
+    /// migration pass, disable it and enable the keying-rule knobs you want
+    /// (<see cref="NormalizeAzureOpenAIDeployment"/>, <see cref="RequestKeyTransform"/>,
+    /// etc.), then call <see cref="CacheMaintenance.Rekey"/> to rename files under the
+    /// new rules.
+    /// </remarks>
+    public bool BackfillLegacyCanonicalRequest { get; set; }
+
     private readonly List<string> _dynamicContentFields = new();
 
     /// <summary>

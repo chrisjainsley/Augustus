@@ -71,15 +71,20 @@ internal class AIDefaultHandler : IRequestHandler
 
             if (options.EnableCaching)
             {
-                var cachedEntry = await fileManager
-                    .ResolveEntryAsync(requestHash, c => RequestKeyFactory.ComputeKeyFromCanonical(c, rules))
+                var resolved = await fileManager
+                    .ResolveEntryWithLabelAsync(requestHash, c => RequestKeyFactory.ComputeKeyFromCanonical(c, rules))
                     .ConfigureAwait(false);
-                if (cachedEntry?.Response is { Length: > 0 } cachedResponse)
+                if (resolved is { Entry.Response: { Length: > 0 } cachedResponse } cachedHit)
                 {
-                    if (!cachedEntry.Normalized)
+                    if (!cachedHit.Entry.Normalized)
                     {
                         cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
                             cachedResponse, httpContext.Request.Path.Value ?? "/");
+                    }
+                    if (options.BackfillLegacyCanonicalRequest && cachedHit.Entry.CanonicalRequest is null)
+                    {
+                        var label = cachedHit.Label;
+                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, canonical));
                     }
                     httpContext.Response.ContentType = "application/json";
                     await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);

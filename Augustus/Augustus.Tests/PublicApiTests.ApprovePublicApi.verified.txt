@@ -46,6 +46,7 @@ namespace Augustus
     {
         public APISimulatorOptions() { }
         public bool AutoRemoveStaleCache { get; set; }
+        public bool BackfillLegacyCanonicalRequest { get; set; }
         public string CacheFolderPath { get; set; }
         public bool CacheOnly { get; set; }
         public System.Collections.Generic.IList<string> DynamicContentFields { get; }

@@ -246,9 +246,22 @@ public partial class APISimulator
         /// </summary>
         public async Task<CacheEntry?> ResolveEntryAsync(string primaryKey, Func<CanonicalRequest, string> recompute)
         {
+            var result = await ResolveEntryWithLabelAsync(primaryKey, recompute).ConfigureAwait(false);
+            return result?.Entry;
+        }
+
+        /// <summary>
+        /// Same as <see cref="ResolveEntryAsync"/> but also returns the on-disk file label
+        /// (filename without extension) that produced the match. The label is needed by
+        /// callers that want to rewrite the fixture in place — e.g.
+        /// <see cref="BackfillCanonicalAsync"/> for the
+        /// <see cref="APISimulatorOptions.BackfillLegacyCanonicalRequest"/> flow.
+        /// </summary>
+        public async Task<ResolveResult?> ResolveEntryWithLabelAsync(string primaryKey, Func<CanonicalRequest, string> recompute)
+        {
             var direct = await ReadCachedEntryAsync(primaryKey).ConfigureAwait(false);
             if (direct?.Response is { Length: > 0 })
-                return direct;
+                return new ResolveResult(direct, primaryKey);
 
             // Built once per effective cache path (fixtures are expected to exist before the
             // first request); our own writes patch it incrementally, context switches drop it.
@@ -261,7 +274,7 @@ public partial class APISimulator
                 {
                     // Track by the on-disk label so stale-removal keeps renamed fixtures.
                     _touchedHashes.TryAdd(label, 0);
-                    return matched;
+                    return new ResolveResult(matched, label);
                 }
 
                 // Label points at a file that was deleted/renamed mid-run: self-heal so the
@@ -270,6 +283,30 @@ public partial class APISimulator
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// One-shot in-place rewrite: if the fixture at <paramref name="label"/> has no
+        /// <see cref="CanonicalRequest"/>, set it to <paramref name="canonical"/> and
+        /// reserialize. Idempotent — a fixture that already carries a CanonicalRequest is
+        /// left untouched and the method returns <c>false</c>. The filename is not changed;
+        /// use <see cref="CacheMaintenance.Rekey"/> afterwards to apply a new keying rule.
+        /// </summary>
+        /// <returns><c>true</c> if the file was rewritten, <c>false</c> if it was skipped (idempotent no-op or unreadable).</returns>
+        public async Task<bool> BackfillCanonicalAsync(string label, CanonicalRequest canonical)
+        {
+            ArgumentNullException.ThrowIfNull(canonical);
+            ValidateFileName($"{label}.json");
+
+            var json = await ReadFromFileAsync($"{label}.json").ConfigureAwait(false);
+            var entry = DeserializeEntry(json);
+            if (entry is null || entry.CanonicalRequest is not null)
+                return false;
+
+            entry.CanonicalRequest = canonical;
+            var updated = JsonSerializer.Serialize(entry, CacheSerializerOptions);
+            await WriteToFileAsync($"{label}.json", updated).ConfigureAwait(false);
+            return true;
         }
 
         private static CacheEntry? DeserializeEntry(string? json)
@@ -427,4 +464,13 @@ public partial class APISimulator
         /// </summary>
         public CanonicalRequest? CanonicalRequest { get; set; }
     }
+
+    /// <summary>
+    /// Outcome of <see cref="FileManager.ResolveEntryWithLabelAsync"/>: the matched
+    /// <see cref="CacheEntry"/> and the on-disk file label (filename without extension)
+    /// that produced the match. Use the label for in-place rewrites that must target the
+    /// actual fixture file (e.g. legacy <see cref="CanonicalRequest"/> backfill) instead
+    /// of the request's computed primary key.
+    /// </summary>
+    internal sealed record ResolveResult(CacheEntry Entry, string Label);
 }

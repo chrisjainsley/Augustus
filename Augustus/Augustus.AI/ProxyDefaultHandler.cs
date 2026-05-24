@@ -68,11 +68,17 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
 
             if (options.EnableCaching)
             {
-                var cachedEntry = await fileManager
-                    .ResolveEntryAsync(cacheKey, c => RequestKeyFactory.ComputeKeyFromCanonical(c, rules))
+                var resolved = await fileManager
+                    .ResolveEntryWithLabelAsync(cacheKey, c => RequestKeyFactory.ComputeKeyFromCanonical(c, rules))
                     .ConfigureAwait(false);
-                if (cachedEntry?.Response is { Length: > 0 } cached)
+                if (resolved is { Entry.Response: { Length: > 0 } cached })
                 {
+                    if (options.BackfillLegacyCanonicalRequest && resolved.Entry.CanonicalRequest is null)
+                    {
+                        var label = resolved.Label;
+                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, canonical));
+                    }
+
                     context.Response.ContentType = "application/json";
                     await context.Response.WriteAsync(cached, cancellationToken).ConfigureAwait(false);
                     return;
