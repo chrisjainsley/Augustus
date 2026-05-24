@@ -18,11 +18,11 @@ public static class CacheMaintenance
     /// <param name="cachePath">The cache folder to rekey.</param>
     /// <param name="options">Keying rules and behavior (recursion, dry-run).</param>
     /// <remarks>
-    /// Renames execute in directory order with no overwrite. A key <em>cycle</em>
-    /// (fixture A's new key is B's current file name and vice-versa) is reported in
-    /// <see cref="RekeyResult.Conflicts"/> and left untouched on the first pass; re-run
-    /// <see cref="Rekey"/> while <see cref="RekeyResult.Conflicts"/> is non-empty to drain
-    /// such cycles. Data is never overwritten.
+    /// Renames are two-phase per directory (every planned file moves to a unique temp name
+    /// first, then to its final key), so chains and cycles like <c>A→B, B→A</c> resolve in
+    /// a single pass. N→1 collisions (two fixtures recomputing to the same key) and
+    /// unreadable files are reported in <see cref="RekeyResult.Conflicts"/> /
+    /// <see cref="RekeyResult.Skipped"/> and never overwritten.
     /// </remarks>
     public static RekeyResult Rekey(string cachePath, RekeyOptions options)
     {
@@ -68,10 +68,11 @@ public static class CacheMaintenance
                 targetCounts[targetName] = targetCounts.GetValueOrDefault(targetName) + 1;
             }
 
+            // Filter the plan: drop already-correctly-keyed files and N→1 collisions.
+            var moves = new List<(string source, string targetName)>();
             foreach (var (source, targetName) in plan)
             {
-                var sourceName = Path.GetFileName(source);
-                if (string.Equals(sourceName, targetName, StringComparison.Ordinal))
+                if (string.Equals(Path.GetFileName(source), targetName, StringComparison.Ordinal))
                     continue; // already correctly keyed
 
                 if (targetCounts[targetName] > 1)
@@ -80,26 +81,54 @@ public static class CacheMaintenance
                     continue;
                 }
 
+                moves.Add((source, targetName));
+            }
+
+            // A planned target is only blocked if some existing file occupies its slot and
+            // isn't itself being moved away — predict that without touching disk so DryRun
+            // reports honestly and the two-phase rename has no surprises.
+            var plannedSourceNames = new HashSet<string>(
+                moves.Select(m => Path.GetFileName(m.source)!), StringComparer.Ordinal);
+
+            // Two-phase rename so chains and cycles (A→B, B→A) resolve in a single pass:
+            // every move first goes to a unique temp name, then to its final key.
+            var phase1 = new List<(string tempPath, string targetName, string sourceForReporting)>();
+            foreach (var (source, targetName) in moves)
+            {
                 var target = Path.Combine(dir, targetName);
-                // Only safe if the target slot is free, or it is a stale file that itself
-                // will be moved away by this same plan.
-                if (File.Exists(target)
-                    && !plan.Any(p => string.Equals(Path.GetFileName(p.source), targetName, StringComparison.Ordinal)
-                                      && !string.Equals(p.targetName, targetName, StringComparison.Ordinal)))
+                if (File.Exists(target) && !plannedSourceNames.Contains(targetName))
                 {
                     conflicts.Add(source);
                     continue;
                 }
 
+                var temp = Path.Combine(dir, $"{Guid.NewGuid():N}.rekey.tmp");
                 if (!options.DryRun)
                 {
                     try
                     {
-                        File.Move(source, target, overwrite: false);
+                        File.Move(source, temp, overwrite: false);
                     }
                     catch (IOException)
                     {
                         conflicts.Add(source);
+                        continue;
+                    }
+                }
+                phase1.Add((temp, targetName, source));
+            }
+
+            foreach (var (tempPath, targetName, sourceForReporting) in phase1)
+            {
+                if (!options.DryRun)
+                {
+                    try
+                    {
+                        File.Move(tempPath, Path.Combine(dir, targetName), overwrite: false);
+                    }
+                    catch (IOException)
+                    {
+                        conflicts.Add(sourceForReporting);
                         continue;
                     }
                 }

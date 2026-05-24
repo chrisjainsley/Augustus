@@ -120,6 +120,37 @@ public class CacheMaintenanceTests : IDisposable
     }
 
     [Fact]
+    public async Task Rekey_KeyCycle_ResolvesInOnePassViaTwoPhaseRename()
+    {
+        var dir = NewDir();
+        var canonA = CanonicalFor("POST", "/v1/a", null, "{}");
+        var canonB = CanonicalFor("POST", "/v1/b", null, "{}");
+        var keyA = RequestKeyFactory.ComputeKeyFromCanonical(canonA, null);
+        var keyB = RequestKeyFactory.ComputeKeyFromCanonical(canonB, null);
+        keyA.Should().NotBe(keyB);
+
+        // Cross-keyed: file named {keyB}.json holds canonA, file named {keyA}.json holds canonB.
+        await WriteFixtureAsync(dir, $"{keyB}.json", canonA, "{\"r\":\"a\"}");
+        await WriteFixtureAsync(dir, $"{keyA}.json", canonB, "{\"r\":\"b\"}");
+
+        var result = CacheMaintenance.Rekey(dir, new RekeyOptions());
+
+        result.Renamed.Should().Be(2);
+        result.Conflicts.Should().BeEmpty();
+
+        // Each fixture is now at the file matching its canonical's recomputed key.
+        var atKeyA = JsonSerializer.Deserialize<APISimulator.CacheEntry>(
+            await File.ReadAllTextAsync(Path.Combine(dir, $"{keyA}.json")));
+        var atKeyB = JsonSerializer.Deserialize<APISimulator.CacheEntry>(
+            await File.ReadAllTextAsync(Path.Combine(dir, $"{keyB}.json")));
+        atKeyA!.Response.Should().Be("{\"r\":\"a\"}");
+        atKeyB!.Response.Should().Be("{\"r\":\"b\"}");
+
+        // No temp files left behind.
+        Directory.GetFiles(dir, "*.rekey.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Rekey_Recursive_ProcessesPerContextSubdirectories()
     {
         var dir = NewDir();

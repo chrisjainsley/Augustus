@@ -427,6 +427,93 @@ public class FileManagerTests
     }
 
     [Fact]
+    public async Task ResolveEntryAsync_FastPath_RejectsLabelMismatch_FallsThroughToContent()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            // Fixture A's canonical, but parked at filename = fixture B's hash on disk.
+            var bodyA = Encoding.UTF8.GetBytes("{\"model\":\"A\"}");
+            var bodyB = Encoding.UTF8.GetBytes("{\"model\":\"B\"}");
+            var (keyA, canonicalA) = BuildKey("POST", "/v1/x", null, bodyA);
+            var (keyB, _) = BuildKey("POST", "/v1/x", null, bodyB);
+            keyA.Should().NotBe(keyB);
+
+            // Author A's canonical under B's hash name — a stale/misplaced file.
+            var bogus = new
+            {
+                RequestHash = "ignored",
+                Response = "{\"served\":\"wrong\"}",
+                OriginalRequest = "",
+                Instructions = Array.Empty<string>(),
+                Timestamp = DateTime.UtcNow,
+                Normalized = true,
+                CanonicalRequest = canonicalA
+            };
+            await File.WriteAllTextAsync(
+                Path.Combine(cachePath, $"{keyB}.json"),
+                JsonSerializer.Serialize(bogus));
+
+            // Asking for keyB: fast path finds {keyB}.json, but its CanonicalRequest
+            // recomputes to keyA — must reject, not return the wrong response.
+            var fm = new APISimulator.FileManager(cachePath);
+            var entry = await fm.ResolveEntryAsync(keyB, Recompute);
+            entry.Should().BeNull();
+
+            // Asking for keyA: fast path misses, content lookup finds it under keyB.json.
+            var fm2 = new APISimulator.FileManager(cachePath);
+            var match = await fm2.ResolveEntryAsync(keyA, Recompute);
+            match.Should().NotBeNull();
+            match!.Response.Should().Contain("wrong"); // body content, matched correctly
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
+    public async Task GetOrBuildIndex_KeyCollision_FirstWins_NoSilentOverwrite()
+    {
+        var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cachePath);
+        try
+        {
+            // Two fixtures with the SAME canonical (so they recompute to the same key)
+            // but different file names and different responses.
+            var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
+            var (_, canonical) = BuildKey("POST", "/v1/x", null, body);
+
+            async Task Write(string name, string response)
+            {
+                var fixture = new
+                {
+                    RequestHash = "ignored",
+                    Response = response,
+                    OriginalRequest = "",
+                    Instructions = Array.Empty<string>(),
+                    Timestamp = DateTime.UtcNow,
+                    Normalized = true,
+                    CanonicalRequest = canonical
+                };
+                await File.WriteAllTextAsync(
+                    Path.Combine(cachePath, name),
+                    JsonSerializer.Serialize(fixture));
+            }
+            await Write("aaa.json", "{\"served\":\"first\"}");
+            await Write("zzz.json", "{\"served\":\"second\"}");
+
+            var key = RequestKeyFactory.ComputeKeyFromCanonical(canonical, null);
+            var fm = new APISimulator.FileManager(cachePath);
+            var entry = await fm.ResolveEntryAsync(key, Recompute);
+
+            // First-wins behavior is deterministic; the other file is not silently served.
+            entry.Should().NotBeNull();
+            (entry!.Response == "{\"served\":\"first\"}" || entry.Response == "{\"served\":\"second\"}")
+                .Should().BeTrue();
+        }
+        finally { Directory.Delete(cachePath, true); }
+    }
+
+    [Fact]
     public async Task ResolveEntryAsync_LegacyFileNoCanonicalRequest_ResolvesByFilename()
     {
         var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");

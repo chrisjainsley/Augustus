@@ -49,6 +49,35 @@ public class RequestKeyTests
     }
 
     [Fact]
+    public void RequestKey_DifferentListInstances_SameContents_AreEqual()
+    {
+        var a = new RequestKey("POST", "/v1/x", null, new List<string> { "i1", "i2" }, "{}");
+        var b = new RequestKey("POST", "/v1/x", null, new[] { "i1", "i2" }, "{}");
+
+        a.Equals(b).Should().BeTrue();
+        a.GetHashCode().Should().Be(b.GetHashCode());
+    }
+
+    [Fact]
+    public void RequestKey_DifferentInstructionContents_AreNotEqual()
+    {
+        var a = new RequestKey("POST", "/v1/x", null, new[] { "i1" }, "{}");
+        var b = new RequestKey("POST", "/v1/x", null, new[] { "i2" }, "{}");
+
+        a.Equals(b).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanonicalRequest_DifferentListInstances_SameContents_AreEqual()
+    {
+        var a = new CanonicalRequest("POST", "/v1/x", null, new List<string> { "i1", "i2" }, "{}");
+        var b = new CanonicalRequest("POST", "/v1/x", null, new[] { "i1", "i2" }, "{}");
+
+        a.Equals(b).Should().BeTrue();
+        a.GetHashCode().Should().Be(b.GetHashCode());
+    }
+
+    [Fact]
     public void CacheMissDiagnostic_ExposesExpectedIdentity()
     {
         var canonical = new CanonicalRequest("POST", "/v1/chat/completions", null, Array.Empty<string>(), "{}");

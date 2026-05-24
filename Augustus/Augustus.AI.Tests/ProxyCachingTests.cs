@@ -202,6 +202,32 @@ public class ProxyCachingTests : IDisposable
     }
 
     [Fact]
+    public async Task EnableCachingFalse_DoesNotFireOnCacheMissHook()
+    {
+        var cacheDir = CreateTempCacheDir();
+        var fired = 0;
+        var sim = this.CreateAPISimulator("TestAPI", options =>
+        {
+            options.EnableCaching = false;       // no cache searched → no miss
+            options.CacheFolderPath = cacheDir;
+            options.Port = 0;
+            options.OnCacheMiss = _ => Interlocked.Increment(ref fired);
+        });
+        sim.UseProxy(new AIOptions(), "https://api.example.com");
+
+        await using (sim)
+        {
+            await sim.StartAsync();
+            using var client = sim.CreateClient();
+            // The proxy without caching will attempt upstream and fail; that's fine — we
+            // only care that OnCacheMiss does not fire when no cache was searched.
+            try { using var _ = await client.GetAsync("/api/whatever"); } catch { }
+        }
+
+        fired.Should().Be(0);
+    }
+
+    [Fact]
     public async Task ProxyCacheOnly_GetRequest_CacheHitServesCorrectResponse()
     {
         var cacheDir = CreateTempCacheDir();

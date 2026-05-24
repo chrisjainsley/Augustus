@@ -137,7 +137,7 @@ var simulator = this.CreateAPISimulator("MyAPI", options =>
 
     // Stable, renameable, hand-authorable fixtures (see "Cache identity" below)
     options.NormalizeAzureOpenAIDeployment = true;            // /openai/deployments/{x}/ → constant
-    options.RequestKeyTransform = key => key with { ... };    // strip/rewrite volatile request parts
+    options.RequestKeyTransform = key => key with { Path = "/v1/chat/completions" }; // rewrite volatile parts
     options.IgnoredQueryParameters.Add("_cb");                // drop cache-buster params from the key
     options.StripNullBodyProperties = true;                   // null vs omitted no longer churns
     options.HashMessagesContentOnly = true;                   // only messages[].content keys the cache

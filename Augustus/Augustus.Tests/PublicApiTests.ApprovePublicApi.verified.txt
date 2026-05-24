@@ -80,6 +80,8 @@ namespace Augustus
         public string NormalizedBody { get; init; }
         public string Path { get; init; }
         public string? QueryString { get; init; }
+        public bool Equals(Augustus.CanonicalRequest? other) { }
+        public override int GetHashCode() { }
     }
     public sealed class DeliveredWebhook : System.IEquatable<Augustus.DeliveredWebhook>
     {
@@ -169,6 +171,8 @@ namespace Augustus
         public string NormalizedBody { get; init; }
         public string Path { get; init; }
         public string? QueryString { get; init; }
+        public bool Equals(Augustus.RequestKey? other) { }
+        public override int GetHashCode() { }
     }
     public sealed class RouteBuilder
     {

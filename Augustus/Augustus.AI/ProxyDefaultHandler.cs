@@ -83,10 +83,12 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                     await context.Response.WriteAsync(cached, cancellationToken).ConfigureAwait(false);
                     return;
                 }
-            }
 
-            options.OnCacheMiss?.Invoke(
-                new CacheMissDiagnostic(canonical, cacheKey, fileManager.CurrentCachePath));
+                // Only fire after we actually searched the cache and missed — otherwise
+                // consumers with caching disabled would see a misleading miss per request.
+                options.OnCacheMiss?.Invoke(
+                    new CacheMissDiagnostic(canonical, cacheKey, fileManager.CurrentCachePath));
+            }
 
             if (options.CacheOnly)
             {

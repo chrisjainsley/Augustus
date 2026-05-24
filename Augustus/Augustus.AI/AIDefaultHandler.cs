@@ -90,10 +90,12 @@ internal class AIDefaultHandler : IRequestHandler
                     await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
                     return;
                 }
-            }
 
-            options.OnCacheMiss?.Invoke(
-                new CacheMissDiagnostic(canonical, requestHash, fileManager.CurrentCachePath));
+                // Only fire after we actually searched the cache and missed — otherwise
+                // consumers with caching disabled would see a misleading miss per request.
+                options.OnCacheMiss?.Invoke(
+                    new CacheMissDiagnostic(canonical, requestHash, fileManager.CurrentCachePath));
+            }
 
             if (cacheOnly)
             {

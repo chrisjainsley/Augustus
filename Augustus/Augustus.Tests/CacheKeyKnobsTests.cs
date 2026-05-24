@@ -83,6 +83,18 @@ public class CacheKeyKnobsTests
     }
 
     [Fact]
+    public void IgnoredQueryParameters_MalformedPercentEncoding_DoesNotThrow()
+    {
+        // Regression: Uri.UnescapeDataString throws on "?bad=%". The factory must compare
+        // safely so cache-key computation never turns into a 500.
+        var rules = new CacheKeyRules { IgnoredQueryParameters = new[] { "drop" } };
+
+        var act = () => RequestKeyFactory.Create("GET", "/v1/x", "?bad=%&keep=1", Array.Empty<byte>(), null, rules);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
     public void Options_ExposeKnobsAndBuildRules()
     {
         var options = new APISimulatorOptions();

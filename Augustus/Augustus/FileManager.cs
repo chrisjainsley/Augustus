@@ -261,7 +261,15 @@ public partial class APISimulator
         {
             var direct = await ReadCachedEntryAsync(primaryKey).ConfigureAwait(false);
             if (direct?.Response is { Length: > 0 })
-                return new ResolveResult(direct, primaryKey);
+            {
+                // For entries that carry a CanonicalRequest, verify it really matches the
+                // requested key before serving — otherwise a stale/hand-authored file whose
+                // label happens to equal another request's hash would return the wrong
+                // response. Legacy entries (null canonical) are trusted by filename for
+                // back-compat.
+                if (direct.CanonicalRequest is null || recompute(direct.CanonicalRequest) == primaryKey)
+                    return new ResolveResult(direct, primaryKey);
+            }
 
             // Built once per effective cache path (fixtures are expected to exist before the
             // first request); our own writes patch it incrementally, context switches drop it.
@@ -352,7 +360,16 @@ public partial class APISimulator
                     {
                         try
                         {
-                            index[recompute(canonical)] = label;
+                            var key = recompute(canonical);
+                            // First-wins + warn: silently overwriting would return an
+                            // arbitrary response depending on directory-enumeration order.
+                            if (!index.TryAdd(key, label) && index[key] != label)
+                            {
+                                System.Diagnostics.Debug.WriteLine(
+                                    $"Warning: cache fixture {file} recomputes to key {key} " +
+                                    $"already claimed by {index[key]}.json — skipping. " +
+                                    "Remove or re-normalize the duplicate fixture.");
+                            }
                         }
                         catch (Exception ex)
                         {

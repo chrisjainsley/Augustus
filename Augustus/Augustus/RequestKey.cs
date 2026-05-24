@@ -27,7 +27,28 @@ public sealed record RequestKey(
     string Path,
     string? QueryString,
     IReadOnlyList<string> Instructions,
-    string NormalizedBody);
+    string NormalizedBody)
+{
+    /// <summary>
+    /// Compares by value, with <see cref="Instructions"/> compared element-wise so two
+    /// identities built from equivalent lists are equal regardless of list instance.
+    /// </summary>
+    public bool Equals(RequestKey? other) =>
+        other is not null
+        && Method == other.Method
+        && Path == other.Path
+        && QueryString == other.QueryString
+        && NormalizedBody == other.NormalizedBody
+        && Instructions.SequenceEqual(other.Instructions);
+
+    public override int GetHashCode()
+    {
+        var hash = HashCode.Combine(Method, Path, QueryString, NormalizedBody);
+        foreach (var s in Instructions)
+            hash = HashCode.Combine(hash, s);
+        return hash;
+    }
+}
 
 /// <summary>
 /// The canonical request persisted inside each cache file. This is the projection of a
@@ -54,7 +75,28 @@ public sealed record CanonicalRequest(
     string Path,
     string? QueryString,
     IReadOnlyList<string> Instructions,
-    string NormalizedBody);
+    string NormalizedBody)
+{
+    /// <summary>
+    /// Compares by value, with <see cref="Instructions"/> compared element-wise so two
+    /// canonicals built from equivalent lists are equal regardless of list instance.
+    /// </summary>
+    public bool Equals(CanonicalRequest? other) =>
+        other is not null
+        && Method == other.Method
+        && Path == other.Path
+        && QueryString == other.QueryString
+        && NormalizedBody == other.NormalizedBody
+        && Instructions.SequenceEqual(other.Instructions);
+
+    public override int GetHashCode()
+    {
+        var hash = HashCode.Combine(Method, Path, QueryString, NormalizedBody);
+        foreach (var s in Instructions)
+            hash = HashCode.Combine(hash, s);
+        return hash;
+    }
+}
 
 /// <summary>
 /// Diagnostic information emitted on a cache miss via

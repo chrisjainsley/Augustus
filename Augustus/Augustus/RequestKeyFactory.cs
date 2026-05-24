@@ -92,15 +92,18 @@ internal static class RequestKeyFactory
         var canonical = new CanonicalRequest(
             key.Method, key.Path, key.QueryString, key.Instructions, key.NormalizedBody);
 
-        // Hash the canonical body string the same way ComputeKeyFromCanonical does so a
-        // just-written fixture resolves byte-identically when later matched via its stored
-        // CanonicalRequest (the invariant the renameable-fixture feature depends on).
-        // For UTF-8 bodies — JSON and form-encoded, i.e. every realistic API request body —
-        // this round-trips exactly and equals the historical key. A request body that is
-        // not valid UTF-8 (raw binary upload) hashes differently than pre-0.9 Augustus and
-        // is resolvable only by its hash filename, not by content; this is an accepted,
-        // documented edge for an API simulator.
-        var hash = ComputeHash(canonical, Encoding.UTF8.GetBytes(canonical.NormalizedBody));
+        // When a transform did not touch the body, hash the original materialized bytes so
+        // the live key is byte-identical to pre-0.9 Augustus (including non-UTF-8 binary
+        // uploads). When the transform did touch the body, hash UTF-8 of the new string so
+        // the transform actually changes the key. ComputeKeyFromCanonical always hashes
+        // UTF-8 of the stored canonical body, so a just-written fixture's stored canonical
+        // recomputes to the same hash for every realistic (UTF-8-representable) body — the
+        // invariant the renameable-fixture feature depends on. Binary-body fixtures remain
+        // resolvable by hash filename only.
+        var bodyForHash = ReferenceEquals(key.NormalizedBody, bodyString) || key.NormalizedBody == bodyString
+            ? materialized
+            : Encoding.UTF8.GetBytes(key.NormalizedBody);
+        var hash = ComputeHash(canonical, bodyForHash);
         return new Result
         {
             Key = key,
@@ -176,7 +179,14 @@ internal static class RequestKeyFactory
         {
             var eq = pair.IndexOf('=');
             var name = eq >= 0 ? pair[..eq] : pair;
-            if (!ignoreSet.Contains(Uri.UnescapeDataString(name)))
+
+            // Malformed percent-encoding (e.g. "?bad=%") must not turn cache-key
+            // computation into a 500 — fall back to comparing the raw, encoded name.
+            string decoded;
+            try { decoded = Uri.UnescapeDataString(name); }
+            catch (UriFormatException) { decoded = name; }
+
+            if (!ignoreSet.Contains(decoded))
                 kept.Add(pair);
         }
 
