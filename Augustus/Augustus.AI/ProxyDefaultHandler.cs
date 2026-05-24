@@ -65,6 +65,10 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
             var cacheKey = keyResult.Hash;
             var materializedBody = keyResult.MaterializedBody;
             var canonical = keyResult.Canonical;
+            // For non-UTF-8 binary bodies the canonical can't be re-hashed losslessly, so
+            // we must persist as legacy (filename-keyed, no canonical) to keep the fixture
+            // resolvable. Same gate applies to the backfill path below.
+            var persistedCanonical = keyResult.CanonicalIsRoundtrippable ? canonical : null;
 
             if (options.EnableCaching)
             {
@@ -73,10 +77,10 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                     .ConfigureAwait(false);
                 if (resolved is { Entry.Response: { Length: > 0 } cached })
                 {
-                    if (options.BackfillLegacyCanonicalRequest && resolved.Entry.CanonicalRequest is null)
+                    if (options.BackfillLegacyCanonicalRequest && resolved.Entry.CanonicalRequest is null && persistedCanonical is not null)
                     {
                         var label = resolved.Label;
-                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, canonical));
+                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, persistedCanonical));
                     }
 
                     context.Response.ContentType = "application/json";
@@ -137,7 +141,7 @@ internal class ProxyDefaultHandler : IRequestHandler, IDisposable
                 _cacheWriter.Enqueue(() =>
                 {
                     var requestInfo = $"PROXY {method} {path}";
-                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>(), normalized: false, canonical);
+                    return fileManager.CacheResponseAsync(cacheKey, responseBody, requestInfo, new List<string>(), normalized: false, persistedCanonical);
                 });
             }
         }

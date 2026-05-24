@@ -343,7 +343,13 @@ public partial class APISimulator
                     return existing;
 
                 var index = new ConcurrentDictionary<string, string>();
-                foreach (var file in CacheFiles.JsonFiles(path))
+                // Sort so first-wins on key collision is deterministic across machines —
+                // Directory.GetFiles enumeration order is unspecified, and the only signal
+                // for a duplicate-key fixture is a Debug.WriteLine, so an arbitrary winner
+                // would silently shift cache hits between runs.
+                var files = CacheFiles.JsonFiles(path);
+                Array.Sort(files, StringComparer.Ordinal);
+                foreach (var file in files)
                 {
                     var label = Path.GetFileNameWithoutExtension(file);
                     CacheEntry? entry;

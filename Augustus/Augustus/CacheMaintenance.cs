@@ -128,7 +128,22 @@ public static class CacheMaintenance
                     }
                     catch (IOException)
                     {
-                        conflicts.Add(sourceForReporting);
+                        // Don't strand the fixture as *.rekey.tmp (invisible to *.json
+                        // scans on the next run): best-effort revert temp -> source. If
+                        // revert also fails, surface the temp path so the caller can
+                        // recover manually instead of silently losing the file.
+                        try
+                        {
+                            File.Move(tempPath, sourceForReporting, overwrite: false);
+                            conflicts.Add(sourceForReporting);
+                        }
+                        catch (IOException)
+                        {
+                            System.Diagnostics.Debug.WriteLine(
+                                $"Warning: Rekey could not revert {tempPath} to {sourceForReporting}; " +
+                                "manual recovery required.");
+                            conflicts.Add(tempPath);
+                        }
                         continue;
                     }
                 }

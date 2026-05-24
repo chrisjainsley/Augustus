@@ -471,14 +471,15 @@ public class FileManagerTests
     }
 
     [Fact]
-    public async Task GetOrBuildIndex_KeyCollision_FirstWins_NoSilentOverwrite()
+    public async Task GetOrBuildIndex_KeyCollision_FirstWinsByOrdinalSort_Deterministic()
     {
         var cachePath = Path.Combine(Path.GetTempPath(), $"augustus-cache-tests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(cachePath);
         try
         {
-            // Two fixtures with the SAME canonical (so they recompute to the same key)
-            // but different file names and different responses.
+            // Three fixtures with the SAME canonical (so they recompute to the same key)
+            // but file names that DO NOT match filesystem-enumeration order — the index
+            // build must sort to make first-wins reproducible across machines.
             var body = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\"}");
             var (_, canonical) = BuildKey("POST", "/v1/x", null, body);
 
@@ -498,17 +499,18 @@ public class FileManagerTests
                     Path.Combine(cachePath, name),
                     JsonSerializer.Serialize(fixture));
             }
-            await Write("aaa.json", "{\"served\":\"first\"}");
-            await Write("zzz.json", "{\"served\":\"second\"}");
+            // Write order != ordinal order so we can't accidentally pass via fs ordering.
+            await Write("mmm.json", "{\"served\":\"middle\"}");
+            await Write("aaa.json", "{\"served\":\"alpha\"}");
+            await Write("zzz.json", "{\"served\":\"omega\"}");
 
             var key = RequestKeyFactory.ComputeKeyFromCanonical(canonical, null);
             var fm = new APISimulator.FileManager(cachePath);
             var entry = await fm.ResolveEntryAsync(key, Recompute);
 
-            // First-wins behavior is deterministic; the other file is not silently served.
+            // Deterministic: first by ordinal-sorted filename wins.
             entry.Should().NotBeNull();
-            (entry!.Response == "{\"served\":\"first\"}" || entry.Response == "{\"served\":\"second\"}")
-                .Should().BeTrue();
+            entry!.Response.Should().Be("{\"served\":\"alpha\"}");
         }
         finally { Directory.Delete(cachePath, true); }
     }

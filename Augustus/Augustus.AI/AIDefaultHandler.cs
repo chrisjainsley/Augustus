@@ -68,6 +68,10 @@ internal class AIDefaultHandler : IRequestHandler
             var requestHash = keyResult.Hash;
             var materializedBody = keyResult.MaterializedBody;
             var canonical = keyResult.Canonical;
+            // For non-UTF-8 binary bodies the canonical can't be re-hashed losslessly, so
+            // we must persist as legacy (filename-keyed, no canonical) to keep the fixture
+            // resolvable. Same gate applies to the backfill path below.
+            var persistedCanonical = keyResult.CanonicalIsRoundtrippable ? canonical : null;
 
             if (options.EnableCaching)
             {
@@ -81,10 +85,10 @@ internal class AIDefaultHandler : IRequestHandler
                         cachedResponse = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
                             cachedResponse, httpContext.Request.Path.Value ?? "/");
                     }
-                    if (options.BackfillLegacyCanonicalRequest && cachedHit.Entry.CanonicalRequest is null)
+                    if (options.BackfillLegacyCanonicalRequest && cachedHit.Entry.CanonicalRequest is null && persistedCanonical is not null)
                     {
                         var label = cachedHit.Label;
-                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, canonical));
+                        _cacheWriter.Enqueue(() => fileManager.BackfillCanonicalAsync(label, persistedCanonical));
                     }
                     httpContext.Response.ContentType = "application/json";
                     await httpContext.Response.WriteAsync(cachedResponse, cancellationToken);
@@ -180,7 +184,7 @@ internal class AIDefaultHandler : IRequestHandler
 
             if (options.EnableCaching)
             {
-                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true, canonical));
+                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true, persistedCanonical));
             }
         }
         catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)

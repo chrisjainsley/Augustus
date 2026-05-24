@@ -95,6 +95,39 @@ public class CacheKeyKnobsTests
     }
 
     [Fact]
+    public void Create_NonUtf8Body_FlagsCanonicalAsNonRoundtrippable()
+    {
+        // Bytes 0xFF, 0xFE are not valid UTF-8 → GetString produces replacement chars,
+        // GetBytes of that string ≠ original. Persisting CanonicalRequest in that case
+        // would make the fixture unresolvable via both fast-path and content index.
+        var binary = new byte[] { 0xFF, 0xFE, 0x00, 0x01, 0x02 };
+
+        var result = RequestKeyFactory.Create("POST", "/v1/upload", null, binary, null, null);
+
+        result.CanonicalIsRoundtrippable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Create_Utf8JsonBody_FlagsCanonicalAsRoundtrippable()
+    {
+        var json = Encoding.UTF8.GetBytes("{\"model\":\"gpt-4\",\"x\":\"héllo\"}");
+
+        var result = RequestKeyFactory.Create("POST", "/v1/chat", null, json, null, null);
+
+        result.CanonicalIsRoundtrippable.Should().BeTrue();
+        // And the invariant the renameable feature depends on still holds:
+        RequestKeyFactory.ComputeKeyFromCanonical(result.Canonical, null)
+            .Should().Be(result.Hash);
+    }
+
+    [Fact]
+    public void Create_EmptyBody_FlagsCanonicalAsRoundtrippable()
+    {
+        var result = RequestKeyFactory.Create("GET", "/v1/health", null, Array.Empty<byte>(), null, null);
+        result.CanonicalIsRoundtrippable.Should().BeTrue();
+    }
+
+    [Fact]
     public void Options_ExposeKnobsAndBuildRules()
     {
         var options = new APISimulatorOptions();

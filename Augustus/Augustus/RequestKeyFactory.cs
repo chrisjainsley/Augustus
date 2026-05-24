@@ -58,6 +58,16 @@ internal static class RequestKeyFactory
         public CanonicalRequest Canonical { get; init; }
         public string Hash { get; init; }
         public byte[] MaterializedBody { get; init; }
+
+        /// <summary>
+        /// <c>true</c> when <see cref="Canonical"/> can be re-hashed to <see cref="Hash"/>
+        /// — i.e. the materialized body round-trips losslessly through UTF-8. When
+        /// <c>false</c>, persisting the canonical inside the fixture would make the file
+        /// unresolvable both by fast-path probe (canonical recomputes to a different key)
+        /// and by content index (would map under that wrong key). Handlers must persist
+        /// the entry as legacy (filename-keyed, no canonical) in that case.
+        /// </summary>
+        public bool CanonicalIsRoundtrippable { get; init; }
     }
 
     public static Result Create(
@@ -96,13 +106,25 @@ internal static class RequestKeyFactory
         // the live key is byte-identical to pre-0.9 Augustus (including non-UTF-8 binary
         // uploads). When the transform did touch the body, hash UTF-8 of the new string so
         // the transform actually changes the key. ComputeKeyFromCanonical always hashes
-        // UTF-8 of the stored canonical body, so a just-written fixture's stored canonical
-        // recomputes to the same hash for every realistic (UTF-8-representable) body — the
-        // invariant the renameable-fixture feature depends on. Binary-body fixtures remain
-        // resolvable by hash filename only.
-        var bodyForHash = ReferenceEquals(key.NormalizedBody, bodyString) || key.NormalizedBody == bodyString
-            ? materialized
-            : Encoding.UTF8.GetBytes(key.NormalizedBody);
+        // UTF-8 of the stored canonical body — so for the just-written canonical to
+        // recompute to the same hash, the materialized body must round-trip losslessly
+        // through UTF-8. That holds for every realistic JSON/form payload; for a non-UTF-8
+        // binary upload it does not, and CanonicalIsRoundtrippable signals callers to
+        // persist the entry as legacy (filename-keyed) instead.
+        var bodyChanged = key.NormalizedBody != bodyString;
+        byte[] bodyForHash;
+        bool canonicalIsRoundtrippable;
+        if (bodyChanged)
+        {
+            bodyForHash = Encoding.UTF8.GetBytes(key.NormalizedBody);
+            canonicalIsRoundtrippable = true;
+        }
+        else
+        {
+            bodyForHash = materialized;
+            canonicalIsRoundtrippable = materialized.Length == 0
+                || Encoding.UTF8.GetBytes(bodyString).AsSpan().SequenceEqual(materialized);
+        }
         var hash = ComputeHash(canonical, bodyForHash);
         return new Result
         {
@@ -110,6 +132,7 @@ internal static class RequestKeyFactory
             Canonical = canonical,
             Hash = hash,
             MaterializedBody = materialized,
+            CanonicalIsRoundtrippable = canonicalIsRoundtrippable,
         };
     }
 
