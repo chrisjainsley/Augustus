@@ -15,6 +15,13 @@ public partial class APISimulator
         private ConcurrentDictionary<string, byte> _touchedHashes = new();
         private string? _currentTestContext;
 
+        /// <summary>
+        /// Mirrors <see cref="APISimulatorOptions.AutoRemoveStaleCache"/> so per-scenario
+        /// context cleanup honors the option. Default <c>true</c> preserves historical
+        /// behavior for callers that construct a <see cref="FileManager"/> directly.
+        /// </summary>
+        internal bool AutoRemoveStaleCache { get; set; } = true;
+
         // Content-addressed index per effective cache path: recomputed key -> file label
         // (filename without extension). Lets renamed / hand-authored / rule-changed fixtures
         // resolve when the fast {key}.json probe misses. Built once per path (fixtures are
@@ -58,14 +65,19 @@ public partial class APISimulator
         }
 
         /// <summary>
-        /// Clears the current test context. Runs scoped stale entry removal for the
-        /// context's subdirectory before clearing.
+        /// Clears the current test context. When <see cref="AutoRemoveStaleCache"/> is
+        /// <c>true</c>, runs scoped stale entry removal for the context's subdirectory
+        /// before clearing — fixtures not touched during the scenario are deleted on disk.
+        /// When <c>false</c>, the on-disk fixtures are preserved verbatim; this is the
+        /// right setting for committed __mocks__/ trees where a scenario miss must never
+        /// silently delete the file you're trying to debug.
         /// </summary>
         public void ClearTestContext()
         {
             if (_currentTestContext != null)
             {
-                RemoveStaleEntriesFromPath(CurrentCachePath);
+                if (AutoRemoveStaleCache)
+                    RemoveStaleEntriesFromPath(CurrentCachePath);
                 _currentTestContext = null;
                 _touchedHashes.Clear();
                 InvalidateIndex();
