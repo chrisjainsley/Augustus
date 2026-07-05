@@ -24,13 +24,13 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- Microsoft.NET.Test.Sdk 17.14+ requires net8.0; use older version for net6.0/net7.0 -->
+  <!-- Microsoft.NET.Test.Sdk 18.3.0 requires net8.0+; use 17.11.1 for net6.0/net7.0, 18.3.0 for newer -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net6.0' Or '$(TargetFramework)' == 'net7.0'">
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' != 'net6.0' And '$(TargetFramework)' != 'net7.0'">
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
   </ItemGroup>
 
   <ItemGroup>
