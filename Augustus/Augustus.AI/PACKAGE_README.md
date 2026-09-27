@@ -123,7 +123,8 @@ options.ModelTiers.Add(new AIModelTier("gpt-6-luna", "Related objects, lists or 
 options.ResponseValidators.Add(new MyRequestEchoValidator());   // your IAIResponseValidator
 options.MaxValidationRetries = 3;
 
-// Optional: TypeSafe Jev picks the starting tier and checks instructions were followed.
+// Optional: TypeSafe Jev skips the first tier only when it is likely to fail (JevOptions.RiskThreshold, default 0.7),
+// and checks instructions were followed. A rejection names the field that shows the problem.
 var jev = new JevOptions { ApiKey = "ts-..." };
 options.ModelRouter = new JevModelRouter(jev);
 options.ResponseValidators.Add(new JevResponseValidator(jev));

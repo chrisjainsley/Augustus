@@ -21,34 +21,41 @@ public class JevTests
     };
 
     [Fact]
-    public async Task Router_SendsScoreQuestionWithTierDescriptionsAsLevels()
+    public async Task Router_SendsOneRiskQuestionOverTheRequest()
     {
-        var stub = new StubHttpHandler(_ => Answers("{\"tier\":{\"type\":\"score\",\"probabilities\":{\"0\":0.9,\"1\":0.1,\"2\":0}}}"));
-        var router = new JevModelRouter(Jev(stub));
+        var stub = new StubHttpHandler(_ => Answers("{\"risky\":{\"type\":\"noul\",\"noul\":0.2}}"));
 
-        var tier = await router.SelectTierAsync(Context, Tiers, CancellationToken.None);
+        await new JevModelRouter(Jev(stub)).SelectTierAsync(Context, Tiers, CancellationToken.None);
 
-        tier.Should().Be(0);
         var request = stub.Requests.Single();
         request.Uri.ToString().Should().Be("https://api.typesafe.ai/v1/systemone");
         request.Json.GetProperty("model").GetString().Should().Be("jev-1.13.0");
-        var question = request.Json.GetProperty("questions").GetProperty("tier");
-        question.GetProperty("type").GetString().Should().Be("score");
-        question.GetProperty("criteria").EnumerateArray().Select(c => c.GetString())
-            .Should().Equal(Tiers.Select(t => t.Description));
+        request.Json.GetProperty("questions").GetProperty("risky").GetProperty("type").GetString().Should().Be("noul");
         request.Json.GetProperty("state").GetProperty("request").GetString().Should().Contain("amount=2000");
     }
 
     [Theory]
-    [InlineData(0.6, 0.25, 0.15, 1)]
-    [InlineData(0.8, 0.1, 0.1, 0)]
-    [InlineData(0.3, 0.3, 0.4, 2)]
-    public void Router_PicksLowestTierWhoseCumulativeProbabilityReachesConfidence(double p0, double p1, double p2, int expected)
+    [InlineData(0.21, 0)]
+    [InlineData(0.70, 0)]
+    [InlineData(0.75, 1)]
+    public async Task Router_StartsAtSecondTierOnlyWhenRiskIsAboveThreshold(double risk, int expected)
     {
-        using var answers = JsonDocument.Parse(
-            $"{{\"tier\":{{\"probabilities\":{{\"0\":{p0},\"1\":{p1},\"2\":{p2}}}}}}}");
+        var stub = new StubHttpHandler(_ => Answers($"{{\"risky\":{{\"noul\":{risk.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}}}"));
 
-        JevModelRouter.SelectLowestSufficientTier(answers.RootElement, 3, 0.8).Should().Be(expected);
+        var tier = await new JevModelRouter(Jev(stub)).SelectTierAsync(Context, Tiers, CancellationToken.None);
+
+        tier.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task Router_SkipsJevWithASingleTier()
+    {
+        var stub = new StubHttpHandler(_ => Answers("{\"risky\":{\"noul\":0.99}}"));
+
+        var tier = await new JevModelRouter(Jev(stub)).SelectTierAsync(Context, Tiers.Take(1).ToList(), CancellationToken.None);
+
+        tier.Should().Be(0);
+        stub.Requests.Should().BeEmpty();
     }
 
     [Fact]
@@ -80,7 +87,7 @@ public class JevTests
 
         result.IsValid.Should().BeFalse();
         result.Reason.Should().Contain("Use status succeeded.").And.Contain("0.91");
-        stub.Requests.Single().Json.GetProperty("state").GetProperty("response").GetProperty("amount").GetInt32().Should().Be(2000);
+        stub.Requests.First().Json.GetProperty("state").GetProperty("response").GetProperty("amount").GetInt32().Should().Be(2000);
     }
 
     [Fact]
@@ -121,7 +128,7 @@ public class JevTests
     [Theory]
     [InlineData("{\"model\":\"jev-1.13.0\"}")]
     [InlineData("{\"answers\":[]}")]
-    [InlineData("{\"answers\":{\"tier\":{\"probabilities\":[0.9]}}}")]
+    [InlineData("{\"answers\":{\"risky\":{\"noul\":\"high\"}}}")]
     public async Task Router_FallsBackToFirstTierOnMalformedAnswers(string body)
     {
         var stub = new StubHttpHandler(_ => StubHttpHandler.Json(body));
@@ -141,6 +148,61 @@ public class JevTests
         var act = async () => await new JevModelRouter(Jev(stub)).SelectTierAsync(Context, Tiers, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task Validator_NamesTheFieldThatBreaksTheInstruction()
+    {
+        var stub = new StubHttpHandler(r => r.Body.Contains("\"field\"")
+            ? Answers("{\"field\":{\"type\":\"choice\",\"choice\":\"status\",\"confidence\":0.9}}")
+            : Answers("{\"wrong_object\":{\"noul\":0.1},\"placeholder\":{\"noul\":0.1},\"instruction_0\":{\"noul\":0.1},\"instruction_1\":{\"noul\":0.93}}"));
+
+        var result = await new JevResponseValidator(Jev(stub)).ValidateAsync(Context, Response(), CancellationToken.None);
+
+        stub.Requests.Should().HaveCount(2);
+        result.Reason.Should().Contain("field `status` is \"pending\"").And.Contain("Use status succeeded.");
+        var evidence = stub.Requests[1].Json.GetProperty("questions").GetProperty("field");
+        evidence.GetProperty("type").GetString().Should().Be("choice");
+        evidence.GetProperty("criteria").EnumerateObject().Select(c => c.Name)
+            .Should().Contain(new[] { "object", "amount", "status", "(no single field)" });
+    }
+
+    [Fact]
+    public async Task Validator_OmitsEvidenceWhenJevIsUnsure()
+    {
+        var stub = new StubHttpHandler(r => r.Body.Contains("\"field\"")
+            ? Answers("{\"field\":{\"choice\":\"status\",\"confidence\":0.3}}")
+            : Answers("{\"instruction_1\":{\"noul\":0.93}}"));
+
+        var result = await new JevResponseValidator(Jev(stub)).ValidateAsync(Context, Response(), CancellationToken.None);
+
+        result.IsValid.Should().BeFalse();
+        result.Reason.Should().NotContain("field `");
+    }
+
+    [Fact]
+    public async Task Validator_DescribesTheShapeForAWrongObject()
+    {
+        var stub = new StubHttpHandler(_ => Answers("{\"wrong_object\":{\"noul\":0.83}}"));
+        var error = JsonDocument.Parse("{\"error\":{\"message\":\"Received unknown parameter: items\"}}").RootElement;
+
+        var result = await new JevResponseValidator(Jev(stub)).ValidateAsync(Context, error, CancellationToken.None);
+
+        result.Reason.Should().Contain("top-level fields are error");
+        stub.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void CandidateFields_ListsNestedPathsBreadthFirstAndSummarisesLists()
+    {
+        using var doc = JsonDocument.Parse(
+            "{\"id\":\"ch_1\",\"outcome\":{\"risk\":{\"level\":\"normal\",\"deep\":{\"x\":1}}},\"refunds\":[1,2]}");
+
+        var candidates = JevResponseValidator.CandidateFields(doc.RootElement);
+
+        candidates.Select(c => c.Path).Should().Equal("id", "refunds", "outcome.risk.level", "outcome.risk.deep");
+        candidates.Single(c => c.Path == "refunds").Preview.Should().Be("a list of 2");
+        candidates.Single(c => c.Path == "outcome.risk.deep").Preview.Should().Be("an object");
     }
 
     [Fact]

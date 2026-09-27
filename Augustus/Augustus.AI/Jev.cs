@@ -13,12 +13,12 @@ namespace Augustus.AI;
 public sealed class JevOptions
 {
     internal const string DefaultModel = "jev-1.13.0";
-    internal const double DefaultRouterConfidence = 0.8;
+    internal const double DefaultRiskThreshold = 0.7;
     internal const double DefaultRejectAbove = 0.7;
 
     private string _apiKey = string.Empty;
     private string _model = DefaultModel;
-    private double _routerConfidence = DefaultRouterConfidence;
+    private double _riskThreshold = DefaultRiskThreshold;
     private double _rejectAbove = DefaultRejectAbove;
 
     /// <summary>Gets or sets the TypeSafe API key.</summary>
@@ -38,17 +38,18 @@ public sealed class JevOptions
     }
 
     /// <summary>
-    /// Gets or sets how sure the router must be that a tier is enough before choosing it.
-    /// The router picks the lowest tier whose cumulative probability reaches this value.
+    /// Gets or sets the probability that the first tier gets a request wrong above which the router starts at the
+    /// second tier instead. Validation still escalates any detected failure, so the router only skips the first tier
+    /// when a failure is likely.
     /// </summary>
-    public double RouterConfidence
+    public double RiskThreshold
     {
-        get => _routerConfidence;
+        get => _riskThreshold;
         set
         {
-            if (value is <= 0 or > 1)
-                throw new ArgumentOutOfRangeException(nameof(RouterConfidence), "RouterConfidence must be greater than 0 and at most 1");
-            _routerConfidence = value;
+            if (value is <= 0 or >= 1)
+                throw new ArgumentOutOfRangeException(nameof(RiskThreshold), "RiskThreshold must be between 0 and 1");
+            _riskThreshold = value;
         }
     }
 
@@ -71,12 +72,13 @@ public sealed class JevOptions
 }
 
 /// <summary>
-/// Picks the starting model tier by asking Jev to score the request against each tier's description.
-/// Falls back to the first tier when Jev cannot be reached.
+/// Starts generation at the first tier unless Jev judges that a fast answer is likely to be wrong, in which case it
+/// starts at the second tier. Validation escalates any failure it detects, so the router only has to spot likely
+/// failures up front. Falls back to the first tier when Jev cannot be reached.
 /// </summary>
 public sealed class JevModelRouter : IAIModelRouter
 {
-    private const string QuestionId = "tier";
+    private const string QuestionId = "risky";
     private readonly JevOptions options;
     private readonly TypeSafeClient client;
 
@@ -100,20 +102,11 @@ public sealed class JevModelRouter : IAIModelRouter
         if (tiers.Count < 2)
             return 0;
 
-        var question = new JsonObject
-        {
-            ["type"] = "score",
-            ["instructions"] =
-                "Which level describes the response `request` needs, given `instructions`? " +
-                "Pick the simplest level that is enough to produce a correct response.",
-            ["criteria"] = new JsonArray(tiers.Select(t => (JsonNode)JsonValue.Create(t.Description)!).ToArray())
-        };
-
         JsonElement answers;
         try
         {
             answers = await client
-                .AskAsync(RequestState(context), new JsonObject { [QuestionId] = question }, cancellationToken)
+                .AskAsync(RequestState(context), new JsonObject { [QuestionId] = RiskQuestion() }, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -122,32 +115,23 @@ public sealed class JevModelRouter : IAIModelRouter
             return 0;
         }
 
-        return SelectLowestSufficientTier(answers, tiers.Count, options.RouterConfidence);
+        return JevAnswers.TryGetNoul(answers, QuestionId, out var risk) && risk > options.RiskThreshold ? 1 : 0;
     }
 
-    /// <summary>The lowest level whose cumulative probability reaches <paramref name="confidence"/>.</summary>
-    internal static int SelectLowestSufficientTier(JsonElement answers, int tierCount, double confidence)
+    internal static JsonObject RiskQuestion() => new()
     {
-        if (answers.ValueKind != JsonValueKind.Object
-            || !answers.TryGetProperty(QuestionId, out var answer)
-            || answer.ValueKind != JsonValueKind.Object
-            || !answer.TryGetProperty("probabilities", out var probabilities)
-            || probabilities.ValueKind != JsonValueKind.Object)
-            return 0;
-
-        var cumulative = 0.0;
-        for (var level = 0; level < tierCount; level++)
+        ["type"] = "noul",
+        ["instructions"] =
+            "Would a fast model answering without deliberation likely return a wrong response to `request`: an error " +
+            "instead of the success the caller intends, a wrong object type, or an instruction in `instructions` that " +
+            "applies to this request left unmet? Unusual request formats, lists with exact counts and conditional rules " +
+            "raise the risk; a routine create or retrieve of one resource does not.",
+        ["criteria"] = new JsonObject
         {
-            if (probabilities.TryGetProperty(level.ToString(CultureInfo.InvariantCulture), out var p)
-                && p.ValueKind == JsonValueKind.Number
-                && p.TryGetDouble(out var value))
-                cumulative += value;
-            if (cumulative >= confidence)
-                return level;
+            ["true"] = "a fast answer is likely to be wrong",
+            ["false"] = "a fast answer is likely to be right"
         }
-
-        return tierCount - 1;
-    }
+    };
 
     internal static JsonObject RequestState(AIGenerationContext context) => new()
     {
@@ -158,13 +142,21 @@ public sealed class JevModelRouter : IAIModelRouter
 
 /// <summary>
 /// Rejects a generated response when Jev judges that it violates an instruction, is the wrong kind of object,
-/// or contains placeholder values. Keep numeric and date checks in code: Jev is weak at them.
+/// or contains placeholder values. Each rejection names the field that shows the problem, so the regenerated
+/// response knows what to fix. Keep numeric and date checks in code: Jev is weak at them.
 /// </summary>
 public sealed class JevResponseValidator : IAIResponseValidator
 {
     private const string WrongObjectId = "wrong_object";
     private const string PlaceholderId = "placeholder";
     private const string InstructionIdPrefix = "instruction_";
+    private const string EvidenceId = "field";
+    private const string NoSingleField = "(no single field)";
+    private const double EvidenceConfidence = 0.5;
+    private const int MaxEvidenceCandidates = 200;
+    private const int MaxEvidenceDepth = 3;
+    private const int MaxPreviewLength = 60;
+    private const int MaxListedFields = 5;
 
     private readonly JevOptions options;
     private readonly TypeSafeClient client;
@@ -186,14 +178,13 @@ public sealed class JevResponseValidator : IAIResponseValidator
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var questions = BuildQuestions(context.Instructions);
         var state = JevModelRouter.RequestState(context);
         state["response"] = JsonNode.Parse(response.GetRawText());
 
         JsonElement answers;
         try
         {
-            answers = await client.AskAsync(state, questions, cancellationToken).ConfigureAwait(false);
+            answers = await client.AskAsync(state, BuildQuestions(context.Instructions), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -203,7 +194,18 @@ public sealed class JevResponseValidator : IAIResponseValidator
             return AIResponseValidationResult.Valid;
         }
 
-        return Evaluate(answers, context.Instructions, options.RejectAbove);
+        var violation = FindViolation(answers, context.Instructions, options.RejectAbove);
+        if (violation is null)
+            return AIResponseValidationResult.Valid;
+
+        var evidence = violation.Id == WrongObjectId
+            ? DescribeShape(response)
+            : await FindEvidenceAsync(state, violation, context.Instructions, response, cancellationToken).ConfigureAwait(false);
+
+        var probability = violation.Probability.ToString("0.00", CultureInfo.InvariantCulture);
+        return AIResponseValidationResult.Invalid(evidence is null
+            ? $"{violation.Reason} (p={probability})"
+            : $"{violation.Reason}: {evidence} (p={probability})");
     }
 
     internal static JsonObject BuildQuestions(IReadOnlyList<string> instructions)
@@ -243,37 +245,154 @@ public sealed class JevResponseValidator : IAIResponseValidator
         return questions;
     }
 
-    internal static AIResponseValidationResult Evaluate(JsonElement answers, IReadOnlyList<string> instructions, double rejectAbove)
+    /// <summary>The first check whose probability is above <paramref name="rejectAbove"/>, or null.</summary>
+    internal static Violation? FindViolation(JsonElement answers, IReadOnlyList<string> instructions, double rejectAbove)
     {
         if (answers.ValueKind != JsonValueKind.Object)
-            return AIResponseValidationResult.Valid;
+            return null;
 
         foreach (var answer in answers.EnumerateObject())
         {
-            if (answer.Value.ValueKind != JsonValueKind.Object
-                || !answer.Value.TryGetProperty("noul", out var noul)
-                || noul.ValueKind != JsonValueKind.Number
-                || !noul.TryGetDouble(out var probability))
-                continue;
-            if (probability <= rejectAbove)
+            if (!JevAnswers.TryGetNoul(answers, answer.Name, out var probability) || probability <= rejectAbove)
                 continue;
 
-            var reason = answer.Name switch
-            {
-                WrongObjectId => "the response is the wrong kind of object for the request",
-                PlaceholderId => "the response contains placeholder values",
-                _ when answer.Name.StartsWith(InstructionIdPrefix, StringComparison.Ordinal)
-                    && int.TryParse(answer.Name.AsSpan(InstructionIdPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var index)
-                    && index < instructions.Count
-                    => $"the response violates the instruction \"{instructions[index]}\"",
-                _ => $"check '{answer.Name}' failed"
-            };
-            return AIResponseValidationResult.Invalid(
-                $"{reason} (p={probability.ToString("0.00", CultureInfo.InvariantCulture)})");
+            if (answer.Name == WrongObjectId)
+                return new Violation(WrongObjectId, "the response is the wrong kind of object for the request", null, probability);
+            if (answer.Name == PlaceholderId)
+                return new Violation(PlaceholderId, "the response contains placeholder values", null, probability);
+            if (answer.Name.StartsWith(InstructionIdPrefix, StringComparison.Ordinal)
+                && int.TryParse(answer.Name.AsSpan(InstructionIdPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                && index < instructions.Count)
+                return new Violation(answer.Name, $"the response violates the instruction \"{instructions[index]}\"", index, probability);
+
+            return new Violation(answer.Name, $"check '{answer.Name}' failed", null, probability);
         }
 
-        return AIResponseValidationResult.Valid;
+        return null;
     }
+
+    /// <summary>
+    /// Asks Jev which field shows the violation, choosing among fields listed in code so the answer is always a
+    /// real path. Returns null when Jev cannot single one out or cannot be reached.
+    /// </summary>
+    private async Task<string?> FindEvidenceAsync(
+        JsonObject state,
+        Violation violation,
+        IReadOnlyList<string> instructions,
+        JsonElement response,
+        CancellationToken cancellationToken)
+    {
+        var candidates = CandidateFields(response);
+        if (candidates.Count == 0)
+            return null;
+
+        JsonElement answers;
+        try
+        {
+            answers = await client
+                .AskAsync(state, new JsonObject { [EvidenceId] = EvidenceQuestion(violation, instructions, candidates) }, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        return SelectEvidence(answers, candidates);
+    }
+
+    internal static JsonObject EvidenceQuestion(Violation violation, IReadOnlyList<string> instructions, IReadOnlyList<FieldCandidate> candidates)
+    {
+        var criteria = new JsonObject();
+        foreach (var candidate in candidates)
+            criteria[candidate.Path] = $"`response.{candidate.Path}` = {candidate.Preview}";
+        criteria[NoSingleField] = "no single field shows it: a required field is missing, or the problem is the response as a whole";
+
+        JsonNode question = violation.InstructionIndex is { } index
+            ? new JsonObject
+            {
+                ["instruction"] = instructions[index],
+                ["question"] = "Which field of `response` breaks `instruction` for this `request`?"
+            }
+            : "Which field of `response` holds a placeholder value instead of realistic data?";
+
+        return new JsonObject { ["type"] = "choice", ["instructions"] = question, ["criteria"] = criteria };
+    }
+
+    internal static string? SelectEvidence(JsonElement answers, IReadOnlyList<FieldCandidate> candidates)
+    {
+        if (answers.ValueKind != JsonValueKind.Object
+            || !answers.TryGetProperty(EvidenceId, out var answer)
+            || answer.ValueKind != JsonValueKind.Object
+            || !answer.TryGetProperty("choice", out var choice)
+            || choice.ValueKind != JsonValueKind.String)
+            return null;
+        if (answer.TryGetProperty("confidence", out var confidence)
+            && confidence.ValueKind == JsonValueKind.Number
+            && confidence.GetDouble() < EvidenceConfidence)
+            return null;
+
+        var path = choice.GetString();
+        var candidate = candidates.FirstOrDefault(c => c.Path == path);
+        return candidate is null ? null : $"field `{candidate.Path}` is {candidate.Preview}";
+    }
+
+    /// <summary>
+    /// Field paths with a value preview, breadth first so top-level fields come first when the list is capped.
+    /// Arrays are listed with their length and not descended into.
+    /// </summary>
+    internal static IReadOnlyList<FieldCandidate> CandidateFields(JsonElement response)
+    {
+        var candidates = new List<FieldCandidate>();
+        if (response.ValueKind != JsonValueKind.Object)
+            return candidates;
+
+        var queue = new Queue<(string Prefix, JsonElement Element, int Depth)>();
+        queue.Enqueue((string.Empty, response, 1));
+        while (queue.Count > 0 && candidates.Count < MaxEvidenceCandidates)
+        {
+            var (prefix, element, depth) = queue.Dequeue();
+            foreach (var property in element.EnumerateObject())
+            {
+                if (candidates.Count >= MaxEvidenceCandidates)
+                    break;
+                var path = prefix.Length == 0 ? property.Name : $"{prefix}.{property.Name}";
+                switch (property.Value.ValueKind)
+                {
+                    case JsonValueKind.Object when depth < MaxEvidenceDepth:
+                        queue.Enqueue((path, property.Value, depth + 1));
+                        break;
+                    case JsonValueKind.Object:
+                        candidates.Add(new FieldCandidate(path, "an object"));
+                        break;
+                    case JsonValueKind.Array:
+                        candidates.Add(new FieldCandidate(path, $"a list of {property.Value.GetArrayLength()}"));
+                        break;
+                    default:
+                        candidates.Add(new FieldCandidate(path, Preview(property.Value.GetRawText())));
+                        break;
+                }
+            }
+        }
+
+        return candidates;
+    }
+
+    /// <summary>For a wrong-object verdict, the shape says more than any one field.</summary>
+    internal static string DescribeShape(JsonElement response)
+    {
+        if (response.ValueKind != JsonValueKind.Object)
+            return $"the response is a JSON {response.ValueKind.ToString().ToLowerInvariant()}";
+        if (response.TryGetProperty("object", out var kind) && kind.ValueKind == JsonValueKind.String)
+            return $"field `object` is \"{kind.GetString()}\"";
+
+        var fields = response.EnumerateObject().Select(p => p.Name).Take(MaxListedFields + 1).ToList();
+        var listed = string.Join(", ", fields.Take(MaxListedFields));
+        return fields.Count > MaxListedFields ? $"top-level fields are {listed}, ..." : $"top-level fields are {listed}";
+    }
+
+    private static string Preview(string raw)
+        => raw.Length <= MaxPreviewLength ? raw : raw[..MaxPreviewLength] + "...";
 
     private static JsonObject Noul(string question, string whenTrue, string whenFalse) => new()
     {
@@ -281,6 +400,25 @@ public sealed class JevResponseValidator : IAIResponseValidator
         ["instructions"] = question,
         ["criteria"] = new JsonObject { ["true"] = whenTrue, ["false"] = whenFalse }
     };
+
+    internal sealed record Violation(string Id, string Reason, int? InstructionIndex, double Probability);
+
+    internal sealed record FieldCandidate(string Path, string Preview);
+}
+
+/// <summary>Reads typed answers from a TypeSafe response without trusting its shape.</summary>
+internal static class JevAnswers
+{
+    public static bool TryGetNoul(JsonElement answers, string questionId, out double probability)
+    {
+        probability = 0;
+        return answers.ValueKind == JsonValueKind.Object
+            && answers.TryGetProperty(questionId, out var answer)
+            && answer.ValueKind == JsonValueKind.Object
+            && answer.TryGetProperty("noul", out var noul)
+            && noul.ValueKind == JsonValueKind.Number
+            && noul.TryGetDouble(out probability);
+    }
 }
 
 /// <summary>
@@ -314,8 +452,9 @@ internal sealed class TypeSafeClient
         var payload = new JsonObject
         {
             ["model"] = options.Model,
-            ["state"] = state,
-            ["questions"] = questions
+            // Cloned so callers can reuse a node across calls; a JsonNode can only have one parent.
+            ["state"] = state.DeepClone(),
+            ["questions"] = questions.DeepClone()
         }.ToJsonString();
 
         var delayMs = InitialDelayMs;

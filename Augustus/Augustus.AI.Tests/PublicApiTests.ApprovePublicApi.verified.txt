@@ -90,7 +90,7 @@ namespace Augustus.AI
         public string ApiKey { get; set; }
         public string Model { get; set; }
         public double RejectAbove { get; set; }
-        public double RouterConfidence { get; set; }
+        public double RiskThreshold { get; set; }
     }
     public sealed class JevResponseValidator : Augustus.AI.IAIResponseValidator
     {
