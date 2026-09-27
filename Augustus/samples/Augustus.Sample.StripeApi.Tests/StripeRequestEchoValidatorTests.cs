@@ -68,6 +68,36 @@ public class StripeRequestEchoValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("\"ok\"")]
+    [InlineData("null")]
+    public async Task NonObjectJson_IsRejected(string json)
+    {
+        var context = Context("GET", "/v1/customers", string.Empty);
+
+        (await validator.ValidateAsync(context, Json(json), CancellationToken.None)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MissingOrNullEchoedField_IsRejected()
+    {
+        var context = Context("POST", "/v1/charges", " -d 'amount=2000&currency=usd'");
+
+        (await validator.ValidateAsync(context, Json("{\"currency\":\"usd\"}"), CancellationToken.None))
+            .Reason.Should().Contain("\"amount\" is missing");
+        (await validator.ValidateAsync(context, Json("{\"amount\":null,\"currency\":\"usd\"}"), CancellationToken.None))
+            .IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Retrieve_MissingIdIsRejected()
+    {
+        var context = Context("GET", "/v1/customers/cus_test123", string.Empty);
+
+        (await validator.ValidateAsync(context, Json("{\"object\":\"customer\"}"), CancellationToken.None)).IsValid.Should().BeFalse();
+    }
+
     [Fact]
     public async Task ErrorBody_IsRejectedWhenNoInstructionAsksForOne()
     {
@@ -91,6 +121,18 @@ public class StripeRequestEchoValidatorTests
             context, Json("{\"error\":{\"code\":\"card_declined\"}}"), CancellationToken.None);
 
         result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ErrorBody_IsRejectedWhenAnInstructionForbidsErrors()
+    {
+        var context = new AIGenerationContext(
+            "POST", "/v1/charges", "curl -X POST -d 'amount=1' \"http://localhost/v1/charges\"",
+            new[] { "Never return an error for charges." });
+
+        var result = await validator.ValidateAsync(context, Json("{\"error\":{\"code\":\"card_declined\"}}"), CancellationToken.None);
+
+        result.IsValid.Should().BeFalse();
     }
 
     private static AIGenerationContext Context(string method, string path, string data)

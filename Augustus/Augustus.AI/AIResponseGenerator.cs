@@ -45,7 +45,8 @@ internal sealed class AIResponseGenerator
 
             var result = await handlers[tierIndex]
                 .CompleteChatWithRetryAsync(
-                    $"{dedupeKey}|{attempt}|{tierIndex}",
+                    // Everything that shapes the call, so concurrent callers only share a truly identical request.
+                    $"{dedupeKey}|{attempt}|{tier.Model}|{tier.ReasoningEffort}|{options.MaxOutputTokens}|{failure}",
                     messages,
                     AIResponseFormatting.CreateJsonObjectChatOptions(options, tier),
                     cancellationToken)

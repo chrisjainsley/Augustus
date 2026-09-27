@@ -261,6 +261,41 @@ public class AIResponseGenerationTests : IDisposable
     }
 
     [Fact]
+    public void GivenEveryTierHasItsOwnKey_ThenGlobalKeyIsNotRequired()
+    {
+        var options = new AIOptions();
+        options.ModelTiers.Add(new AIModelTier("gpt-oss-20b", "fast") { Endpoint = "https://api.groq.test/openai/v1", ApiKey = "gsk" });
+
+        ((Action)options.Validate).Should().NotThrow();
+
+        options.ModelTiers.Add(new AIModelTier("gpt-6-luna", "strong"));
+        ((Action)options.Validate).Should().Throw<System.ComponentModel.DataAnnotations.ValidationException>();
+    }
+
+    [Fact]
+    public async Task GivenTiersSharingAModel_ThenConcurrentIdenticalRequestsDoNotShareAcrossEffortLevels()
+    {
+        // The delay keeps both calls in flight together, so a shared dedupe key would collapse them into one.
+        var stub = new StubHttpHandler(_ =>
+        {
+            Thread.Sleep(200);
+            return StubHttpHandler.ChatCompletion(ValidBody);
+        });
+        var low = Options(stub);
+        low.ModelTiers.Add(new AIModelTier("same-model", "d") { ReasoningEffort = "low" });
+        var high = Options(stub);
+        high.ModelTiers.Add(new AIModelTier("same-model", "d") { ReasoningEffort = "high" });
+        var context = new AIGenerationContext("POST", "/v1/charges", "curl -X POST", new[] { "Return a charge." });
+
+        await Task.WhenAll(
+            new AIResponseGenerator(low).GenerateAsync("same-hash", context, CancellationToken.None),
+            new AIResponseGenerator(high).GenerateAsync("same-hash", context, CancellationToken.None));
+
+        stub.Requests.Select(r => r.Json.GetProperty("reasoning_effort").GetString())
+            .Should().BeEquivalentTo(new[] { "low", "high" });
+    }
+
+    [Fact]
     public void GivenTierWithInvalidEndpoint_ThenValidateThrows()
     {
         var options = new AIOptions { OpenAIApiKey = "k" };

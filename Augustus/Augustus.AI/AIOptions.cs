@@ -327,9 +327,11 @@ public sealed class AIOptions
     /// <exception cref="ValidationException">Thrown if any required configuration is missing or invalid.</exception>
     public void Validate()
     {
-        if (string.IsNullOrWhiteSpace(OpenAIApiKey))
+        // The global key is only needed when a tier falls back to it; tiers may each carry their own.
+        var needsGlobalKey = ModelTiers.Count == 0 || ModelTiers.Any(t => t is null || string.IsNullOrWhiteSpace(t.ApiKey));
+        if (needsGlobalKey && string.IsNullOrWhiteSpace(OpenAIApiKey))
         {
-            throw new ValidationException("OpenAI API key is required. Please set AIOptions.OpenAIApiKey");
+            throw new ValidationException("OpenAI API key is required. Please set AIOptions.OpenAIApiKey, or an ApiKey on every model tier");
         }
 
         if (!string.IsNullOrEmpty(OpenAIEndpoint) && !Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))

@@ -206,6 +206,27 @@ public class JevTests
     }
 
     [Fact]
+    public void FindViolation_ReportsTheMostProbableCheck()
+    {
+        using var answers = JsonDocument.Parse("{\"placeholder\":{\"noul\":0.75},\"instruction_1\":{\"noul\":0.95}}");
+
+        var violation = JevResponseValidator.FindViolation(answers.RootElement, Context.Instructions, 0.7);
+
+        violation!.Id.Should().Be("instruction_1");
+    }
+
+    [Fact]
+    public void CandidateFields_ListsEmptyObjectsAndSkipsCollidingPaths()
+    {
+        using var doc = JsonDocument.Parse("{\"metadata\":{},\"a.b\":1,\"a\":{\"b\":2},\"(no single field)\":3}");
+
+        var candidates = JevResponseValidator.CandidateFields(doc.RootElement);
+
+        candidates.Select(c => c.Path).Should().Equal("metadata", "a.b");
+        candidates[0].Preview.Should().Be("an empty object");
+    }
+
+    [Fact]
     public void Constructors_RequireAnApiKey()
     {
         ((Action)(() => new JevModelRouter(new JevOptions()))).Should().Throw<ArgumentException>();

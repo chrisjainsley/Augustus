@@ -40,15 +40,15 @@ public sealed class JevOptions
     /// <summary>
     /// Gets or sets the probability that the first tier gets a request wrong above which the router starts at the
     /// second tier instead. Validation still escalates any detected failure, so the router only skips the first tier
-    /// when a failure is likely.
+    /// when a failure is likely. 1 never skips it.
     /// </summary>
     public double RiskThreshold
     {
         get => _riskThreshold;
         set
         {
-            if (value is <= 0 or >= 1)
-                throw new ArgumentOutOfRangeException(nameof(RiskThreshold), "RiskThreshold must be between 0 and 1");
+            if (value is <= 0 or > 1)
+                throw new ArgumentOutOfRangeException(nameof(RiskThreshold), "RiskThreshold must be greater than 0 and at most 1");
             _riskThreshold = value;
         }
     }
@@ -157,6 +157,7 @@ public sealed class JevResponseValidator : IAIResponseValidator
     private const int MaxEvidenceDepth = 3;
     private const int MaxPreviewLength = 60;
     private const int MaxListedFields = 5;
+    private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(5);
 
     private readonly JevOptions options;
     private readonly TypeSafeClient client;
@@ -200,7 +201,9 @@ public sealed class JevResponseValidator : IAIResponseValidator
 
         var evidence = violation.Id == WrongObjectId
             ? DescribeShape(response)
-            : await FindEvidenceAsync(state, violation, context.Instructions, response, cancellationToken).ConfigureAwait(false);
+            : violation.Id == PlaceholderId || violation.InstructionIndex is not null
+                ? await FindEvidenceAsync(state, violation, context.Instructions, response, cancellationToken).ConfigureAwait(false)
+                : null;
 
         var probability = violation.Probability.ToString("0.00", CultureInfo.InvariantCulture);
         return AIResponseValidationResult.Invalid(evidence is null
@@ -245,30 +248,31 @@ public sealed class JevResponseValidator : IAIResponseValidator
         return questions;
     }
 
-    /// <summary>The first check whose probability is above <paramref name="rejectAbove"/>, or null.</summary>
+    /// <summary>The most probable check above <paramref name="rejectAbove"/>, or null.</summary>
     internal static Violation? FindViolation(JsonElement answers, IReadOnlyList<string> instructions, double rejectAbove)
     {
         if (answers.ValueKind != JsonValueKind.Object)
             return null;
 
-        foreach (var answer in answers.EnumerateObject())
-        {
-            if (!JevAnswers.TryGetNoul(answers, answer.Name, out var probability) || probability <= rejectAbove)
-                continue;
+        var (name, probability) = answers.EnumerateObject()
+            .Select(answer => (answer.Name, Found: JevAnswers.TryGetNoul(answers, answer.Name, out var p), Probability: p))
+            .Where(a => a.Found && a.Probability > rejectAbove)
+            .OrderByDescending(a => a.Probability)
+            .Select(a => (a.Name, a.Probability))
+            .FirstOrDefault();
+        if (name is null)
+            return null;
 
-            if (answer.Name == WrongObjectId)
-                return new Violation(WrongObjectId, "the response is the wrong kind of object for the request", null, probability);
-            if (answer.Name == PlaceholderId)
-                return new Violation(PlaceholderId, "the response contains placeholder values", null, probability);
-            if (answer.Name.StartsWith(InstructionIdPrefix, StringComparison.Ordinal)
-                && int.TryParse(answer.Name.AsSpan(InstructionIdPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var index)
-                && index < instructions.Count)
-                return new Violation(answer.Name, $"the response violates the instruction \"{instructions[index]}\"", index, probability);
+        if (name == WrongObjectId)
+            return new Violation(WrongObjectId, "the response is the wrong kind of object for the request", null, probability);
+        if (name == PlaceholderId)
+            return new Violation(PlaceholderId, "the response contains placeholder values", null, probability);
+        if (name.StartsWith(InstructionIdPrefix, StringComparison.Ordinal)
+            && int.TryParse(name.AsSpan(InstructionIdPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+            && index < instructions.Count)
+            return new Violation(name, $"the response violates the instruction \"{instructions[index]}\"", index, probability);
 
-            return new Violation(answer.Name, $"check '{answer.Name}' failed", null, probability);
-        }
-
-        return null;
+        return new Violation(name, $"check '{name}' failed", null, probability);
     }
 
     /// <summary>
@@ -286,11 +290,14 @@ public sealed class JevResponseValidator : IAIResponseValidator
         if (candidates.Count == 0)
             return null;
 
+        // Evidence only improves the message, so it gets one short attempt instead of the full retry budget.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(EvidenceTimeout);
         JsonElement answers;
         try
         {
             answers = await client
-                .AskAsync(state, new JsonObject { [EvidenceId] = EvidenceQuestion(violation, instructions, candidates) }, cancellationToken)
+                .AskAsync(state, new JsonObject { [EvidenceId] = EvidenceQuestion(violation, instructions, candidates) }, timeout.Token, maxAttempts: 1)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -347,6 +354,9 @@ public sealed class JevResponseValidator : IAIResponseValidator
         if (response.ValueKind != JsonValueKind.Object)
             return candidates;
 
+        // A key containing a dot can spell the same path as a nested field; the first one listed wins.
+        var seen = new HashSet<string>(StringComparer.Ordinal) { NoSingleField };
+
         var queue = new Queue<(string Prefix, JsonElement Element, int Depth)>();
         queue.Enqueue((string.Empty, response, 1));
         while (queue.Count > 0 && candidates.Count < MaxEvidenceCandidates)
@@ -357,8 +367,13 @@ public sealed class JevResponseValidator : IAIResponseValidator
                 if (candidates.Count >= MaxEvidenceCandidates)
                     break;
                 var path = prefix.Length == 0 ? property.Name : $"{prefix}.{property.Name}";
+                if (!seen.Add(path))
+                    continue;
                 switch (property.Value.ValueKind)
                 {
+                    case JsonValueKind.Object when !property.Value.EnumerateObject().Any():
+                        candidates.Add(new FieldCandidate(path, "an empty object"));
+                        break;
                     case JsonValueKind.Object when depth < MaxEvidenceDepth:
                         queue.Enqueue((path, property.Value, depth + 1));
                         break;
@@ -447,7 +462,7 @@ internal sealed class TypeSafeClient
     }
 
     /// <summary>Asks <paramref name="questions"/> over <paramref name="state"/> and returns the <c>answers</c> object.</summary>
-    public async Task<JsonElement> AskAsync(JsonObject state, JsonObject questions, CancellationToken cancellationToken)
+    public async Task<JsonElement> AskAsync(JsonObject state, JsonObject questions, CancellationToken cancellationToken, int maxAttempts = MaxAttempts)
     {
         var payload = new JsonObject
         {
@@ -478,7 +493,7 @@ internal sealed class TypeSafeClient
                 return answers.Clone();
             }
 
-            if (attempt >= MaxAttempts || !IsRetryable(response.StatusCode))
+            if (attempt >= maxAttempts || !IsRetryable(response.StatusCode))
                 throw new HttpRequestException($"TypeSafe returned HTTP {(int)response.StatusCode}.");
 
             var retryAfter = response.Headers.RetryAfter?.Delta;
