@@ -195,7 +195,7 @@ public partial class APISimulator
         public Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions)
             => CacheResponseAsync(requestHash, response, originalRequest, instructions, normalized: false);
 
-        public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized, CanonicalRequest? canonical = null)
+        public async Task CacheResponseAsync(string requestHash, string response, string originalRequest, List<string> instructions, bool normalized, CanonicalRequest? canonical = null, string? model = null)
         {
             ValidateFileName(requestHash);
 
@@ -207,7 +207,8 @@ public partial class APISimulator
                 Instructions = instructions.Select(SensitiveDataSanitizer.SanitizeSensitiveValues).ToList(),
                 Timestamp = DateTime.UtcNow,
                 Normalized = normalized,
-                CanonicalRequest = canonical
+                CanonicalRequest = canonical,
+                Model = model
             };
 
             var json = JsonSerializer.Serialize(cacheEntry, CacheSerializerOptions);
@@ -486,6 +487,12 @@ public partial class APISimulator
         /// can be renamed or hand-authored. Null for legacy fixtures (matched by filename).
         /// </summary>
         public CanonicalRequest? CanonicalRequest { get; set; }
+
+        /// <summary>
+        /// The model that generated the response, when known. Omitted from the file when null.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? Model { get; set; }
     }
 
     /// <summary>
