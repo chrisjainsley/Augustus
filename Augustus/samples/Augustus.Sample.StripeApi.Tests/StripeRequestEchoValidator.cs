@@ -13,6 +13,9 @@ internal sealed partial class StripeRequestEchoValidator : IAIResponseValidator
 {
     private static readonly string[] EchoedFields = { "amount", "currency", "customer", "email", "name", "description" };
 
+    /// <summary>Words that mark an instruction as asking for an error response.</summary>
+    private static readonly string[] ErrorWords = { "error", "decline", "fail", "invalid" };
+
     public ValueTask<AIResponseValidationResult> ValidateAsync(
         AIGenerationContext context,
         JsonElement response,
@@ -20,6 +23,17 @@ internal sealed partial class StripeRequestEchoValidator : IAIResponseValidator
     {
         if (response.ValueKind != JsonValueKind.Object)
             return new(AIResponseValidationResult.Valid);
+
+        // A generated body is always served with HTTP 200, so a Stripe error object is a broken success response
+        // unless the instructions for this request ask for an error.
+        if (response.TryGetProperty("error", out var error)
+            && error.ValueKind == JsonValueKind.Object
+            && !context.Instructions.Any(AsksForError))
+        {
+            var message = error.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+            return new(AIResponseValidationResult.Invalid(
+                $"field \"error\" is a Stripe error object{(message is null ? string.Empty : $" (\"{message}\")")} but the request expects a successful response"));
+        }
 
         var sent = ParseBody(context.SanitizedCurlRequest);
         foreach (var field in EchoedFields)
@@ -43,6 +57,9 @@ internal sealed partial class StripeRequestEchoValidator : IAIResponseValidator
 
         return new(AIResponseValidationResult.Valid);
     }
+
+    private static bool AsksForError(string instruction)
+        => ErrorWords.Any(word => instruction.Contains(word, StringComparison.OrdinalIgnoreCase));
 
     private static bool Matches(string expected, JsonElement actual) => actual.ValueKind switch
     {

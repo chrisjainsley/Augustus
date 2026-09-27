@@ -68,6 +68,31 @@ public class StripeRequestEchoValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task ErrorBody_IsRejectedWhenNoInstructionAsksForOne()
+    {
+        var context = Context("POST", "/v1/subscriptions", " -d '{\"customer\":\"cus_1\"}'");
+
+        var result = await validator.ValidateAsync(
+            context, Json("{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Received unknown parameter: items\"}}"), CancellationToken.None);
+
+        result.IsValid.Should().BeFalse();
+        result.Reason.Should().Contain("\"error\"").And.Contain("Received unknown parameter: items");
+    }
+
+    [Fact]
+    public async Task ErrorBody_IsAllowedWhenAnInstructionAsksForADecline()
+    {
+        var context = new AIGenerationContext(
+            "POST", "/v1/charges", "curl -X POST -d 'amount=1' \"http://localhost/v1/charges\"",
+            new[] { "For amount 1, return a card_declined error." });
+
+        var result = await validator.ValidateAsync(
+            context, Json("{\"error\":{\"code\":\"card_declined\"}}"), CancellationToken.None);
+
+        result.IsValid.Should().BeTrue();
+    }
+
     private static AIGenerationContext Context(string method, string path, string data)
         => new(method, path, $"curl -X {method}{data} \"http://localhost{path}\"", new[] { "Return Stripe JSON." });
 
