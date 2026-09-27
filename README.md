@@ -152,7 +152,7 @@ var simulator = this.CreateAPISimulator("MyAPI", options =>
 simulator.UseAI(new AIOptions
 {
     OpenAIApiKey = "sk-...",                 // Required (unless CacheOnly)
-    OpenAIModel = "gpt-4o-mini",            // Default: gpt-4o-mini
+    OpenAIModel = "gpt-6-luna",             // Default: gpt-6-luna at reasoning effort none
     OpenAIEndpoint = "",                     // Optional: custom endpoint
     UseAzureOpenAI = false,                  // Use Azure OpenAI service
     AzureDeploymentName = "",                // Required when UseAzureOpenAI = true

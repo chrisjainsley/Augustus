@@ -39,7 +39,9 @@ public class AIResponseTests
         var options = new AIOptions();
 
         // Assert
-        options.OpenAIModel.Should().Be("gpt-4o-mini");
+        options.OpenAIModel.Should().Be("gpt-6-luna");
+        options.ReasoningEffort.Should().Be("none");
+        options.MaxValidationRetries.Should().Be(3);
         options.EnableCaching.Should().BeTrue();
         options.CacheFolderPath.Should().Be("./mocks");
         options.MaxRetries.Should().Be(5);
