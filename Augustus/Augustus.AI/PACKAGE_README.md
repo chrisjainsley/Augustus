@@ -130,6 +130,8 @@ options.ResponseValidators.Add(new JevResponseValidator(jev));
 ```
 
 With no tiers configured, retries climb the reasoning effort of `OpenAIModel` (`none`, `low`, `medium`, `high`).
+Reasoning tiers (any tier with a reasoning effort) do not pin `temperature`, because reasoning models reject it.
+If the Jev service cannot be reached, the router starts at the first tier and the Jev validator skips its check.
 Keep numeric and date checks in your own validators; Jev is weak at them.
 
 ## Rate Limits and Efficiency

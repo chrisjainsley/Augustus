@@ -109,14 +109,38 @@ public class JevTests
     }
 
     [Fact]
-    public async Task Validator_RejectsWithReasonWhenJevFails()
+    public async Task Validator_SkipsTheCheckWhenJevFails()
     {
         var stub = new StubHttpHandler(_ => StubHttpHandler.Json("{}", HttpStatusCode.Unauthorized));
 
         var result = await new JevResponseValidator(Jev(stub)).ValidateAsync(Context, Response(), CancellationToken.None);
 
-        result.IsValid.Should().BeFalse();
-        result.Reason.Should().Contain("401");
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("{\"model\":\"jev-1.13.0\"}")]
+    [InlineData("{\"answers\":[]}")]
+    [InlineData("{\"answers\":{\"tier\":{\"probabilities\":[0.9]}}}")]
+    public async Task Router_FallsBackToFirstTierOnMalformedAnswers(string body)
+    {
+        var stub = new StubHttpHandler(_ => StubHttpHandler.Json(body));
+
+        var tier = await new JevModelRouter(Jev(stub)).SelectTierAsync(Context, Tiers, CancellationToken.None);
+
+        tier.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Router_PropagatesCallerCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var stub = new StubHttpHandler(_ => Answers("{}"));
+
+        var act = async () => await new JevModelRouter(Jev(stub)).SelectTierAsync(Context, Tiers, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]

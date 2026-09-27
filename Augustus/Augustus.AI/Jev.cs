@@ -12,10 +12,14 @@ namespace Augustus.AI;
 /// </summary>
 public sealed class JevOptions
 {
+    internal const string DefaultModel = "jev-1.13.0";
+    internal const double DefaultRouterConfidence = 0.8;
+    internal const double DefaultRejectAbove = 0.7;
+
     private string _apiKey = string.Empty;
-    private string _model = "jev-1.13.0";
-    private double _routerConfidence = 0.8;
-    private double _rejectAbove = 0.7;
+    private string _model = DefaultModel;
+    private double _routerConfidence = DefaultRouterConfidence;
+    private double _rejectAbove = DefaultRejectAbove;
 
     /// <summary>Gets or sets the TypeSafe API key.</summary>
     public string ApiKey
@@ -30,7 +34,7 @@ public sealed class JevOptions
     public string Model
     {
         get => _model;
-        set => _model = string.IsNullOrWhiteSpace(value) ? "jev-1.13.0" : value.Trim();
+        set => _model = string.IsNullOrWhiteSpace(value) ? DefaultModel : value.Trim();
     }
 
     /// <summary>
@@ -112,7 +116,7 @@ public sealed class JevModelRouter : IAIModelRouter
                 .AskAsync(RequestState(context), new JsonObject { [QuestionId] = question }, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             Console.WriteLine($"[Jev Router] Falling back to the first tier: {ex.Message}");
             return 0;
@@ -124,14 +128,18 @@ public sealed class JevModelRouter : IAIModelRouter
     /// <summary>The lowest level whose cumulative probability reaches <paramref name="confidence"/>.</summary>
     internal static int SelectLowestSufficientTier(JsonElement answers, int tierCount, double confidence)
     {
-        if (!answers.TryGetProperty(QuestionId, out var answer)
-            || !answer.TryGetProperty("probabilities", out var probabilities))
+        if (answers.ValueKind != JsonValueKind.Object
+            || !answers.TryGetProperty(QuestionId, out var answer)
+            || answer.ValueKind != JsonValueKind.Object
+            || !answer.TryGetProperty("probabilities", out var probabilities)
+            || probabilities.ValueKind != JsonValueKind.Object)
             return 0;
 
         var cumulative = 0.0;
         for (var level = 0; level < tierCount; level++)
         {
             if (probabilities.TryGetProperty(level.ToString(CultureInfo.InvariantCulture), out var p)
+                && p.ValueKind == JsonValueKind.Number
                 && p.TryGetDouble(out var value))
                 cumulative += value;
             if (cumulative >= confidence)
@@ -187,9 +195,12 @@ public sealed class JevResponseValidator : IAIResponseValidator
         {
             answers = await client.AskAsync(state, questions, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            return AIResponseValidationResult.Invalid($"Jev could not check the response: {ex.Message}");
+            // An outage is not a defect in the response; rejecting would regenerate for nothing.
+            // Deterministic validators still run, so the response is not left unchecked.
+            Console.WriteLine($"[Jev Validator] Skipping the Jev check: {ex.Message}");
+            return AIResponseValidationResult.Valid;
         }
 
         return Evaluate(answers, context.Instructions, options.RejectAbove);
@@ -234,9 +245,15 @@ public sealed class JevResponseValidator : IAIResponseValidator
 
     internal static AIResponseValidationResult Evaluate(JsonElement answers, IReadOnlyList<string> instructions, double rejectAbove)
     {
+        if (answers.ValueKind != JsonValueKind.Object)
+            return AIResponseValidationResult.Valid;
+
         foreach (var answer in answers.EnumerateObject())
         {
-            if (!answer.Value.TryGetProperty("noul", out var noul) || !noul.TryGetDouble(out var probability))
+            if (answer.Value.ValueKind != JsonValueKind.Object
+                || !answer.Value.TryGetProperty("noul", out var noul)
+                || noul.ValueKind != JsonValueKind.Number
+                || !noul.TryGetDouble(out var probability))
                 continue;
             if (probability <= rejectAbove)
                 continue;
@@ -274,8 +291,11 @@ internal sealed class TypeSafeClient
     internal const string Endpoint = "https://api.typesafe.ai/v1/systemone";
     private const int MaxAttempts = 3;
     private const int InitialDelayMs = 500;
+    private const int OverloadedStatusCode = 529;
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
-    private static readonly Lazy<HttpClient> SharedHttpClient = new(() => new HttpClient { Timeout = Timeout });
+    private static readonly TimeSpan PooledConnectionLifetime = TimeSpan.FromMinutes(5);
+    private static readonly Lazy<HttpClient> SharedHttpClient = new(() =>
+        new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = PooledConnectionLifetime }) { Timeout = Timeout });
 
     private readonly JevOptions options;
     private readonly HttpClient httpClient;
@@ -312,7 +332,11 @@ internal sealed class TypeSafeClient
             {
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 using var document = JsonDocument.Parse(body);
-                return document.RootElement.GetProperty("answers").Clone();
+                if (document.RootElement.ValueKind != JsonValueKind.Object
+                    || !document.RootElement.TryGetProperty("answers", out var answers)
+                    || answers.ValueKind != JsonValueKind.Object)
+                    throw new JsonException("TypeSafe response has no answers object.");
+                return answers.Clone();
             }
 
             if (attempt >= MaxAttempts || !IsRetryable(response.StatusCode))
@@ -326,5 +350,5 @@ internal sealed class TypeSafeClient
     }
 
     private static bool IsRetryable(HttpStatusCode status)
-        => status == HttpStatusCode.TooManyRequests || (int)status == 529 || (int)status >= 500;
+        => status == HttpStatusCode.TooManyRequests || (int)status == OverloadedStatusCode || (int)status >= 500;
 }

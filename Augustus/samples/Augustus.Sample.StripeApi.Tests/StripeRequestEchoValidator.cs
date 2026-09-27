@@ -85,6 +85,7 @@ internal sealed partial class StripeRequestEchoValidator : IAIResponseValidator
             }
             catch (JsonException)
             {
+                // A body that is not JSON sent no fields, so there is nothing for the response to echo.
             }
             return fields;
         }

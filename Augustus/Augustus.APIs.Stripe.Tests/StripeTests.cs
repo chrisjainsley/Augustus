@@ -193,7 +193,7 @@ public class StripeTests
 
         // Test default values for AI options
         var aiOptions = new AIOptions();
-        aiOptions.OpenAIModel.Should().Be("gpt-4o-mini");
+        aiOptions.OpenAIModel.Should().Be("gpt-6-luna");
         aiOptions.OpenAIApiKey.Should().BeEmpty();
         aiOptions.OpenAIEndpoint.Should().BeEmpty();
         aiOptions.MaxRetries.Should().Be(5);

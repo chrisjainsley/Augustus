@@ -55,9 +55,12 @@ internal sealed class AIResponseGenerator
             var body = string.IsNullOrEmpty(text) ? string.Empty : AIResponseFormatting.StripMarkdownFences(text!);
             body = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(body, context.Path);
 
-            failure = await ValidateAsync(context, body, cancellationToken).ConfigureAwait(false) ?? string.Empty;
-            if (failure.Length == 0)
+            var validation = await ValidateAsync(context, body, cancellationToken).ConfigureAwait(false);
+            if (validation.Failure is null)
                 return AIGenerationResult.Succeeded(body, tier.Model, attempts);
+            failure = validation.Failure;
+            if (validation.IsFatal)
+                break;
 
             messages.Add(ChatMessage.CreateAssistantMessage(body.Length == 0 ? "(empty response)" : body));
             messages.Add(ChatMessage.CreateUserMessage(
@@ -72,15 +75,24 @@ internal sealed class AIResponseGenerator
         if (options.ModelRouter is null || tiers.Count < 2)
             return 0;
 
-        var selected = await options.ModelRouter.SelectTierAsync(context, tiers, cancellationToken).ConfigureAwait(false);
-        return Math.Clamp(selected, 0, tiers.Count - 1);
+        try
+        {
+            var selected = await options.ModelRouter.SelectTierAsync(context, tiers, cancellationToken).ConfigureAwait(false);
+            return Math.Clamp(selected, 0, tiers.Count - 1);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // A router is an optimisation: when it fails, start at the first tier and let validation escalate.
+            Console.WriteLine($"[AI Router] {options.ModelRouter.GetType().Name} failed, starting at the first tier: {ex.Message}");
+            return 0;
+        }
     }
 
-    /// <returns>Null when the body passes; otherwise the reason it failed.</returns>
-    private async Task<string?> ValidateAsync(AIGenerationContext context, string body, CancellationToken cancellationToken)
+    /// <returns>A null failure when the body passes. A fatal failure is not worth regenerating for.</returns>
+    private async Task<(string? Failure, bool IsFatal)> ValidateAsync(AIGenerationContext context, string body, CancellationToken cancellationToken)
     {
         if (body.Length == 0)
-            return "response was empty";
+            return ("response was empty", false);
 
         JsonDocument document;
         try
@@ -89,22 +101,33 @@ internal sealed class AIResponseGenerator
         }
         catch (JsonException)
         {
-            return "response is not valid JSON";
+            return ("response is not valid JSON", false);
         }
 
         using (document)
         {
             foreach (var validator in options.ResponseValidators)
             {
-                var result = await validator
-                    .ValidateAsync(context, document.RootElement, cancellationToken)
-                    .ConfigureAwait(false);
+                var name = validator.GetType().Name;
+                AIResponseValidationResult result;
+                try
+                {
+                    result = await validator
+                        .ValidateAsync(context, document.RootElement, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    // A broken validator fails the same way for every body, so regenerating would only burn model calls.
+                    return ($"{name} threw {ex.GetType().Name}: {ex.Message}", true);
+                }
+
                 if (!result.IsValid)
-                    return $"{validator.GetType().Name}: {result.Reason ?? "rejected"}";
+                    return ($"{name}: {result.Reason ?? "rejected"}", false);
             }
         }
 
-        return null;
+        return (null, false);
     }
 }
 

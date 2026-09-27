@@ -22,6 +22,9 @@ public sealed class AIOptions
     internal static readonly IReadOnlyList<string> ReasoningEffortLevels = new[] { "none", "minimal", "low", "medium", "high" };
 
     private const int MaxModelTiers = 10;
+    private const int MaxOutputTokensLimit = 32768;
+    private const int DefaultMaxValidationRetries = 3;
+    private const int MaxValidationRetriesLimit = 5;
 
     private string _openAIModel = DefaultOpenAIModel;
     private string _cacheFolderPath = "./mocks";
@@ -91,8 +94,8 @@ public sealed class AIOptions
         get => _maxOutputTokens;
         set
         {
-            if (value is < 1 or > 32768)
-                throw new ArgumentOutOfRangeException(nameof(MaxOutputTokens), "MaxOutputTokens must be between 1 and 32768");
+            if (value is < 1 or > MaxOutputTokensLimit)
+                throw new ArgumentOutOfRangeException(nameof(MaxOutputTokens), $"MaxOutputTokens must be between 1 and {MaxOutputTokensLimit}");
             _maxOutputTokens = value;
         }
     }
@@ -116,7 +119,7 @@ public sealed class AIOptions
     /// </summary>
     public IList<IAIResponseValidator> ResponseValidators { get; } = new List<IAIResponseValidator>();
 
-    private int _maxValidationRetries = 3;
+    private int _maxValidationRetries = DefaultMaxValidationRetries;
 
     /// <summary>
     /// Gets or sets how many times a rejected response is regenerated, one tier higher each time,
@@ -127,8 +130,8 @@ public sealed class AIOptions
         get => _maxValidationRetries;
         set
         {
-            if (value < 0 || value > 5)
-                throw new ArgumentOutOfRangeException(nameof(MaxValidationRetries), "MaxValidationRetries must be between 0 and 5");
+            if (value < 0 || value > MaxValidationRetriesLimit)
+                throw new ArgumentOutOfRangeException(nameof(MaxValidationRetries), $"MaxValidationRetries must be between 0 and {MaxValidationRetriesLimit}");
             _maxValidationRetries = value;
         }
     }

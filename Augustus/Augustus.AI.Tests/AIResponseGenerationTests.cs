@@ -133,6 +133,34 @@ public class AIResponseGenerationTests : IDisposable
     }
 
     [Fact]
+    public async Task GivenThrowingRouter_ThenGenerationStartsAtTheFirstTier()
+    {
+        var stub = new StubHttpHandler(_ => StubHttpHandler.ChatCompletion(ValidBody));
+        var options = ThreeTierOptions(stub);
+        options.ModelRouter = new ThrowingRouter();
+
+        var (status, _) = await PostChargeAsync(options);
+
+        status.Should().Be(HttpStatusCode.OK);
+        stub.Requests.Single().Model.Should().Be("tier-0");
+    }
+
+    [Fact]
+    public async Task GivenThrowingValidator_ThenRequestFailsWithoutRegenerating()
+    {
+        var stub = new StubHttpHandler(_ => StubHttpHandler.ChatCompletion(ValidBody));
+        var options = ThreeTierOptions(stub);
+        options.ResponseValidators.Add(new ThrowingValidator());
+
+        var (status, body) = await PostChargeAsync(options);
+
+        status.Should().Be(HttpStatusCode.BadGateway);
+        body.Should().Contain(nameof(ThrowingValidator)).And.Contain("InvalidOperationException");
+        stub.Requests.Should().ContainSingle();
+        CachedEntries().Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task GivenBodyThatIsNotJson_ThenItIsRejectedAndNotCached()
     {
         var stub = new StubHttpHandler(_ => StubHttpHandler.ChatCompletion("not json"));
@@ -311,6 +339,18 @@ public class AIResponseGenerationTests : IDisposable
 
         public ValueTask<AIResponseValidationResult> ValidateAsync(AIGenerationContext context, JsonElement response, CancellationToken cancellationToken)
             => new(Interlocked.Increment(ref calls) == 1 ? AIResponseValidationResult.Invalid(reason) : AIResponseValidationResult.Valid);
+    }
+
+    private sealed class ThrowingRouter : IAIModelRouter
+    {
+        public ValueTask<int> SelectTierAsync(AIGenerationContext context, IReadOnlyList<AIModelTier> tiers, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("router broke");
+    }
+
+    private sealed class ThrowingValidator : IAIResponseValidator
+    {
+        public ValueTask<AIResponseValidationResult> ValidateAsync(AIGenerationContext context, JsonElement response, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("validator broke");
     }
 
     private sealed class RejectAllValidator : IAIResponseValidator
