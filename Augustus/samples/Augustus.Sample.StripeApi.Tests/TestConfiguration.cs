@@ -36,9 +36,19 @@ internal static class TestConfiguration
             ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
     }
 
-    public static string GetModel()
+    /// <summary>Null keeps the library default model.</summary>
+    public static string? GetModel()
     {
-        return Config["OpenAI:Model"] ?? "gpt-4o-mini";
+        return Config["OpenAI:Model"];
+    }
+
+    /// <summary>
+    /// When set, generated responses are routed and checked by Jev. Unset keeps the sample to one external service.
+    /// </summary>
+    public static string? GetTypeSafeApiKey()
+    {
+        return Config["TypeSafe:ApiKey"]
+            ?? Environment.GetEnvironmentVariable("TYPESAFE_API_KEY");
     }
 
     public static string ResolveCachePath(string apiName, [CallerFilePath] string callerFilePath = "")
@@ -76,11 +86,23 @@ internal static class TestConfiguration
         }
 
         var key = GetApiKey() ?? throw new InvalidOperationException("OpenAI API key required for local Stripe sample tests (user secrets or OPENAI_API_KEY).");
-        simulator.UseAI(new AIOptions
+        var options = new AIOptions { OpenAIApiKey = key };
+        if (GetModel() is { Length: > 0 } model)
+            options.OpenAIModel = model;
+        if (Config["OpenAI:Endpoint"] is { Length: > 0 } endpoint)
+            options.OpenAIEndpoint = endpoint;
+        if (Config["OpenAI:ReasoningEffort"] is { Length: > 0 } effort)
+            options.ReasoningEffort = effort;
+
+        options.ResponseValidators.Add(new StripeRequestEchoValidator());
+        if (GetTypeSafeApiKey() is { Length: > 0 } typeSafeKey)
         {
-            OpenAIApiKey = key,
-            OpenAIModel = GetModel()
-        });
+            var jev = new JevOptions { ApiKey = typeSafeKey };
+            options.ModelRouter = new JevModelRouter(jev);
+            options.ResponseValidators.Add(new JevResponseValidator(jev));
+        }
+
+        simulator.UseAI(options);
     }
 
     public static void AssertCommittedMockExists(string requestHash, string apiName = "Stripe", [CallerFilePath] string callerFilePath = "")

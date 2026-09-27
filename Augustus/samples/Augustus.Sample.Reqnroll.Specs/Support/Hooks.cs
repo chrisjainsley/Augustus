@@ -22,11 +22,10 @@ public class Hooks
         {
             opt.Port = 9060;
         });
-        _simulator.UseAI(new AIOptions
-        {
-            OpenAIApiKey = apiKey,
-            OpenAIModel = TestConfiguration.GetModel()
-        });
+        var aiOptions = new AIOptions { OpenAIApiKey = apiKey };
+        if (TestConfiguration.GetModel() is { Length: > 0 } model)
+            aiOptions.OpenAIModel = model;
+        _simulator.UseAI(aiOptions);
         _simulator.AddInstruction("Return realistic Stripe API JSON responses.");
         _simulator.AddInstruction("For POST /v1/charges, return a charge object with \"object\": \"charge\", a realistic \"id\" starting with \"ch_\", the amount and currency from the request, and \"status\": \"succeeded\".");
 

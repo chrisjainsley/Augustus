@@ -13,7 +13,20 @@ public sealed class AIOptions
 {
     private string _openAIApiKey = string.Empty;
     private string _openAIEndpoint = string.Empty;
-    private string _openAIModel = "gpt-4o-mini";
+    /// <summary>The model used when <see cref="OpenAIModel"/> is not set.</summary>
+    internal const string DefaultOpenAIModel = "gpt-6-luna";
+
+    /// <summary>The reasoning effort applied to <see cref="DefaultOpenAIModel"/> when none is set.</summary>
+    internal const string DefaultModelReasoningEffort = "none";
+
+    internal static readonly IReadOnlyList<string> ReasoningEffortLevels = new[] { "none", "minimal", "low", "medium", "high" };
+
+    private const int MaxModelTiers = 10;
+    private const int MaxOutputTokensLimit = 32768;
+    private const int DefaultMaxValidationRetries = 3;
+    private const int MaxValidationRetriesLimit = 5;
+
+    private string _openAIModel = DefaultOpenAIModel;
     private string _cacheFolderPath = "./mocks";
     private int _maxRetries = 5;
     private int _initialRetryDelayMs = 1000;
@@ -30,7 +43,8 @@ public sealed class AIOptions
     }
 
     /// <summary>
-    /// Gets or sets a custom OpenAI API endpoint URL (optional, for Azure OpenAI or custom endpoints).
+    /// Gets or sets a custom endpoint URL: the Azure OpenAI resource when <see cref="UseAzureOpenAI"/> is set,
+    /// otherwise any OpenAI-compatible API (for example <c>https://api.groq.com/openai/v1</c>).
     /// </summary>
     public string OpenAIEndpoint
     {
@@ -39,12 +53,139 @@ public sealed class AIOptions
     }
 
     /// <summary>
-    /// Gets or sets the OpenAI model to use for generating responses.
+    /// Gets or sets the OpenAI model to use for generating responses. Defaults to <c>gpt-6-luna</c>.
     /// </summary>
     public string OpenAIModel
     {
         get => _openAIModel;
-        set => _openAIModel = string.IsNullOrWhiteSpace(value) ? "gpt-4o-mini" : value.Trim();
+        set => _openAIModel = string.IsNullOrWhiteSpace(value) ? DefaultOpenAIModel : value.Trim();
+    }
+
+    private string? _reasoningEffort;
+    private bool _reasoningEffortSet;
+
+    /// <summary>
+    /// Gets or sets the reasoning effort sent with each request: <c>none</c>, <c>minimal</c>, <c>low</c>,
+    /// <c>medium</c> or <c>high</c>. Null sends no reasoning effort, which non-reasoning models require.
+    /// </summary>
+    /// <remarks>
+    /// When not set, this is <c>none</c> while <see cref="OpenAIModel"/> is the default model and null otherwise,
+    /// so setting a non-reasoning model such as <c>gpt-4o-mini</c> never sends an unsupported parameter.
+    /// </remarks>
+    public string? ReasoningEffort
+    {
+        get => _reasoningEffortSet
+            ? _reasoningEffort
+            : !UseAzureOpenAI && _openAIModel == DefaultOpenAIModel ? DefaultModelReasoningEffort : null;
+        set
+        {
+            _reasoningEffort = NormalizeReasoningEffort(value, nameof(ReasoningEffort));
+            _reasoningEffortSet = true;
+        }
+    }
+
+    private int? _maxOutputTokens;
+
+    /// <summary>
+    /// Gets or sets the maximum number of tokens a generated response may use. Null leaves the provider default.
+    /// </summary>
+    public int? MaxOutputTokens
+    {
+        get => _maxOutputTokens;
+        set
+        {
+            if (value is < 1 or > MaxOutputTokensLimit)
+                throw new ArgumentOutOfRangeException(nameof(MaxOutputTokens), $"MaxOutputTokens must be between 1 and {MaxOutputTokensLimit}");
+            _maxOutputTokens = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets the model tiers used to generate responses, weakest first. When empty, the tiers are
+    /// <see cref="OpenAIModel"/> at each reasoning effort from <see cref="ReasoningEffort"/> up to <c>high</c>,
+    /// or <see cref="OpenAIModel"/> alone when <see cref="ReasoningEffort"/> is null.
+    /// </summary>
+    public IList<AIModelTier> ModelTiers { get; } = new List<AIModelTier>();
+
+    /// <summary>
+    /// Gets or sets the router that picks the starting tier for each generated response.
+    /// When null, generation starts at the first tier.
+    /// </summary>
+    public IAIModelRouter? ModelRouter { get; set; }
+
+    /// <summary>
+    /// Gets the validators every freshly generated response must pass before it is returned or cached.
+    /// Responses that are not valid JSON are always rejected.
+    /// </summary>
+    public IList<IAIResponseValidator> ResponseValidators { get; } = new List<IAIResponseValidator>();
+
+    private int _maxValidationRetries = DefaultMaxValidationRetries;
+
+    /// <summary>
+    /// Gets or sets how many times a rejected response is regenerated, one tier higher each time,
+    /// before the request fails with HTTP 502.
+    /// </summary>
+    public int MaxValidationRetries
+    {
+        get => _maxValidationRetries;
+        set
+        {
+            if (value < 0 || value > MaxValidationRetriesLimit)
+                throw new ArgumentOutOfRangeException(nameof(MaxValidationRetries), $"MaxValidationRetries must be between 0 and {MaxValidationRetriesLimit}");
+            _maxValidationRetries = value;
+        }
+    }
+
+    /// <summary>Test hook: replaces the HTTP transport for model calls.</summary>
+    internal HttpMessageHandler? HttpHandlerOverride { get; set; }
+
+    /// <summary>The API key a tier uses: its own when set, otherwise <see cref="OpenAIApiKey"/>.</summary>
+    internal string ResolveApiKey(AIModelTier? tier)
+        => string.IsNullOrWhiteSpace(tier?.ApiKey) ? OpenAIApiKey : tier!.ApiKey!;
+
+    /// <summary>
+    /// Returns <see cref="ModelTiers"/>, or the reasoning-effort ladder built from <see cref="OpenAIModel"/>
+    /// (or <see cref="AzureDeploymentName"/>) when no tiers are configured.
+    /// </summary>
+    internal IReadOnlyList<AIModelTier> ResolveModelTiers()
+    {
+        if (ModelTiers.Count > 0)
+            return ModelTiers.ToList();
+
+        var model = UseAzureOpenAI ? AzureDeploymentName : OpenAIModel;
+        var effort = ReasoningEffort;
+        if (effort is null)
+            return new[] { new AIModelTier(model, EffortLadderDescriptions[0]) };
+
+        var start = ReasoningEffortLevels.ToList().IndexOf(effort);
+        // "none" and "minimal" are alternatives at the bottom of the ladder; both climb through low, medium, high.
+        var ladder = new List<string> { effort };
+        ladder.AddRange(ReasoningEffortLevels.Skip(Math.Max(start + 1, 2)));
+        return ladder
+            .Select((level, index) => new AIModelTier(model, EffortLadderDescriptions[Math.Min(index, EffortLadderDescriptions.Length - 1)])
+            {
+                ReasoningEffort = level
+            })
+            .ToList();
+    }
+
+    private static readonly string[] EffortLadderDescriptions =
+    {
+        "A single resource whose fields come straight from the request or the instructions.",
+        "A few related or nested objects, or light conditional logic in the instructions.",
+        "Lists, computed totals, or several instructions that interact.",
+        "Many interacting rules or multi-step reasoning needed to produce a correct response."
+    };
+
+    private static string? NormalizeReasoningEffort(string? value, string parameterName)
+    {
+        if (value is null)
+            return null;
+
+        var normalized = value.Trim().ToLowerInvariant();
+        if (!ReasoningEffortLevels.Contains(normalized))
+            throw new ArgumentOutOfRangeException(parameterName, $"Reasoning effort must be one of: {string.Join(", ", ReasoningEffortLevels)}");
+        return normalized;
     }
 
     /// <summary>
@@ -190,9 +331,11 @@ public sealed class AIOptions
     /// <exception cref="ValidationException">Thrown if any required configuration is missing or invalid.</exception>
     public void Validate()
     {
-        if (string.IsNullOrWhiteSpace(OpenAIApiKey))
+        // The global key is only needed when a tier falls back to it; tiers may each carry their own.
+        var needsGlobalKey = ModelTiers.Count == 0 || ModelTiers.Any(t => t is null || string.IsNullOrWhiteSpace(t.ApiKey));
+        if (needsGlobalKey && string.IsNullOrWhiteSpace(OpenAIApiKey))
         {
-            throw new ValidationException("OpenAI API key is required. Please set AIOptions.OpenAIApiKey");
+            throw new ValidationException("OpenAI API key is required. Please set AIOptions.OpenAIApiKey, or an ApiKey on every model tier");
         }
 
         if (!string.IsNullOrEmpty(OpenAIEndpoint) && !Uri.IsWellFormedUriString(OpenAIEndpoint, UriKind.Absolute))
@@ -200,7 +343,23 @@ public sealed class AIOptions
             throw new ValidationException("OpenAI endpoint must be a valid absolute URI");
         }
 
-        if (UseAzureOpenAI)
+        if (ModelTiers.Count > MaxModelTiers)
+        {
+            throw new ValidationException($"At most {MaxModelTiers} model tiers are supported.");
+        }
+
+        foreach (var tier in ModelTiers)
+        {
+            if (tier is null || string.IsNullOrWhiteSpace(tier.Model))
+                throw new ValidationException("Every model tier needs a model name.");
+            if (tier.Endpoint is not null && !Uri.IsWellFormedUriString(tier.Endpoint, UriKind.Absolute))
+                throw new ValidationException($"Model tier '{tier.Model}' endpoint must be a valid absolute URI");
+            if (tier.ReasoningEffort is not null && !ReasoningEffortLevels.Contains(tier.ReasoningEffort))
+                throw new ValidationException($"Model tier '{tier.Model}' reasoning effort must be one of: {string.Join(", ", ReasoningEffortLevels)}");
+        }
+
+        // Tiers with their own endpoint use an OpenAI-compatible client, so Azure settings matter only for the rest.
+        if (UseAzureOpenAI && (ModelTiers.Count == 0 || ModelTiers.Any(t => t?.Endpoint is null)))
         {
             if (string.IsNullOrWhiteSpace(OpenAIEndpoint))
             {

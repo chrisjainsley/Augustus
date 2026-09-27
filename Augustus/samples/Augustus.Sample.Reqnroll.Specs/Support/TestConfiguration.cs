@@ -16,8 +16,9 @@ internal static class TestConfiguration
             ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
     }
 
-    public static string GetModel()
+    /// <summary>Null keeps the library default model.</summary>
+    public static string? GetModel()
     {
-        return Config["OpenAI:Model"] ?? "gpt-4o-mini";
+        return Config["OpenAI:Model"];
     }
 }

@@ -408,3 +408,5 @@ FodyWeavers.xsd
 
 # Reqnroll auto-generated feature code-behind files
 *.feature.cs
+# Workflow kit plan pages
+plans/

@@ -2,6 +2,23 @@
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Augustus.AI.Tests")]
 namespace Augustus.AI
 {
+    public sealed class AIGenerationContext : System.IEquatable<Augustus.AI.AIGenerationContext>
+    {
+        public AIGenerationContext(string Method, string Path, string SanitizedCurlRequest, System.Collections.Generic.IReadOnlyList<string> Instructions) { }
+        public System.Collections.Generic.IReadOnlyList<string> Instructions { get; init; }
+        public string Method { get; init; }
+        public string Path { get; init; }
+        public string SanitizedCurlRequest { get; init; }
+    }
+    public sealed class AIModelTier : System.IEquatable<Augustus.AI.AIModelTier>
+    {
+        public AIModelTier(string Model, string Description) { }
+        public string? ApiKey { get; init; }
+        public string Description { get; init; }
+        public string? Endpoint { get; init; }
+        public string Model { get; init; }
+        public string? ReasoningEffort { get; init; }
+    }
     public sealed class AIOptions
     {
         public AIOptions() { }
@@ -12,12 +29,18 @@ namespace Augustus.AI
         public bool EnableCaching { get; set; }
         public int InitialRetryDelayMs { get; set; }
         public int MaxConcurrentRequests { get; set; }
+        public int? MaxOutputTokens { get; set; }
         public int MaxRetries { get; set; }
         public int MaxRetryDelayMs { get; set; }
+        public int MaxValidationRetries { get; set; }
+        public Augustus.AI.IAIModelRouter? ModelRouter { get; set; }
+        public System.Collections.Generic.IList<Augustus.AI.AIModelTier> ModelTiers { get; }
         public string OpenAIApiKey { get; set; }
         public string OpenAIEndpoint { get; set; }
         public string OpenAIModel { get; set; }
         public int ProxyTimeoutSeconds { get; set; }
+        public string? ReasoningEffort { get; set; }
+        public System.Collections.Generic.IList<Augustus.AI.IAIResponseValidator> ResponseValidators { get; }
         public bool UseAzureOpenAI { get; set; }
         public void Validate() { }
     }
@@ -27,6 +50,14 @@ namespace Augustus.AI
         public void Dispose() { }
         public System.Threading.Tasks.ValueTask DisposeAsync() { }
         public System.Threading.Tasks.Task GenerateResponseAsync(Microsoft.AspNetCore.Http.HttpContext httpContext, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class AIResponseValidationResult : System.IEquatable<Augustus.AI.AIResponseValidationResult>
+    {
+        public AIResponseValidationResult(bool IsValid, string? Reason) { }
+        public bool IsValid { get; init; }
+        public string? Reason { get; init; }
+        public static Augustus.AI.AIResponseValidationResult Valid { get; }
+        public static Augustus.AI.AIResponseValidationResult Invalid(string reason) { }
     }
     public static class AISimulatorExtensions
     {
@@ -39,6 +70,32 @@ namespace Augustus.AI
         public static Augustus.APISimulator CreateAzureOpenAISimulator(this object testClass, System.Action<Augustus.AI.AIOptions>? configure = null, [System.Runtime.CompilerServices.CallerFilePath] string callerFilePath = "") { }
         public static Augustus.APISimulator CreateOpenAIProxy(this object testClass, System.Action<Augustus.AI.AIOptions>? configure = null, [System.Runtime.CompilerServices.CallerFilePath] string callerFilePath = "") { }
         public static Augustus.APISimulator CreateOpenAISimulator(this object testClass, System.Action<Augustus.AI.AIOptions>? configure = null, [System.Runtime.CompilerServices.CallerFilePath] string callerFilePath = "") { }
+    }
+    public interface IAIModelRouter
+    {
+        System.Threading.Tasks.ValueTask<int> SelectTierAsync(Augustus.AI.AIGenerationContext context, System.Collections.Generic.IReadOnlyList<Augustus.AI.AIModelTier> tiers, System.Threading.CancellationToken cancellationToken);
+    }
+    public interface IAIResponseValidator
+    {
+        System.Threading.Tasks.ValueTask<Augustus.AI.AIResponseValidationResult> ValidateAsync(Augustus.AI.AIGenerationContext context, System.Text.Json.JsonElement response, System.Threading.CancellationToken cancellationToken);
+    }
+    public sealed class JevModelRouter : Augustus.AI.IAIModelRouter
+    {
+        public JevModelRouter(Augustus.AI.JevOptions options) { }
+        public System.Threading.Tasks.ValueTask<int> SelectTierAsync(Augustus.AI.AIGenerationContext context, System.Collections.Generic.IReadOnlyList<Augustus.AI.AIModelTier> tiers, System.Threading.CancellationToken cancellationToken) { }
+    }
+    public sealed class JevOptions
+    {
+        public JevOptions() { }
+        public string ApiKey { get; set; }
+        public string Model { get; set; }
+        public double RejectAbove { get; set; }
+        public double RiskThreshold { get; set; }
+    }
+    public sealed class JevResponseValidator : Augustus.AI.IAIResponseValidator
+    {
+        public JevResponseValidator(Augustus.AI.JevOptions options) { }
+        public System.Threading.Tasks.ValueTask<Augustus.AI.AIResponseValidationResult> ValidateAsync(Augustus.AI.AIGenerationContext context, System.Text.Json.JsonElement response, System.Threading.CancellationToken cancellationToken) { }
     }
     public sealed class RealApiProxyStrategy : Augustus.IResponseStrategy, System.IDisposable
     {

@@ -1,0 +1,146 @@
+using System.Text.Json;
+using Augustus.AI;
+
+namespace Augustus.Sample.StripeApi.Tests;
+
+public class StripeRequestEchoValidatorTests
+{
+    private readonly StripeRequestEchoValidator validator = new();
+
+    [Theory]
+    [InlineData("{\"object\":\"charge\",\"amount\":2000,\"currency\":\"USD\"}", true)]
+    [InlineData("{\"object\":\"charge\",\"amount\":200,\"currency\":\"usd\"}", false)]
+    [InlineData("{\"object\":\"charge\",\"amount\":2000,\"currency\":\"eur\"}", false)]
+    public async Task FormBody_AmountAndCurrencyMustEcho(string response, bool valid)
+    {
+        var context = Context("POST", "/v1/charges", " -d 'amount=2000&currency=usd&source=tok_visa'");
+
+        var result = await validator.ValidateAsync(context, Json(response), CancellationToken.None);
+
+        result.IsValid.Should().Be(valid);
+    }
+
+    [Fact]
+    public async Task Mismatch_NamesTheField()
+    {
+        var context = Context("POST", "/v1/charges", " -d 'amount=2000&currency=usd'");
+
+        var result = await validator.ValidateAsync(context, Json("{\"amount\":200}"), CancellationToken.None);
+
+        result.Reason.Should().Contain("\"amount\"").And.Contain("2000");
+    }
+
+    [Fact]
+    public async Task JsonBody_CustomerMustEcho()
+    {
+        var context = Context("POST", "/v1/subscriptions", " -d '{\"customer\":\"cus_demo_001\",\"items\":[{\"price\":\"price_123\"}]}'");
+
+        (await validator.ValidateAsync(context, Json("{\"customer\":\"cus_demo_001\"}"), CancellationToken.None)).IsValid.Should().BeTrue();
+        (await validator.ValidateAsync(context, Json("{\"customer\":\"cus_other\"}"), CancellationToken.None)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ExpandedObject_IsNotAMismatch()
+    {
+        var context = Context("POST", "/v1/charges", " -d 'customer=cus_1'");
+
+        var result = await validator.ValidateAsync(context, Json("{\"customer\":{\"id\":\"cus_1\"}}"), CancellationToken.None);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Retrieve_IdMustMatchPath()
+    {
+        var context = Context("GET", "/v1/customers/cus_test123", string.Empty);
+
+        (await validator.ValidateAsync(context, Json("{\"id\":\"cus_test123\"}"), CancellationToken.None)).IsValid.Should().BeTrue();
+        (await validator.ValidateAsync(context, Json("{\"id\":\"cus_other\"}"), CancellationToken.None)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task List_IsNotCheckedForId()
+    {
+        var context = Context("GET", "/v1/customers", string.Empty);
+
+        var result = await validator.ValidateAsync(context, Json("{\"object\":\"list\",\"data\":[]}"), CancellationToken.None);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("\"ok\"")]
+    [InlineData("null")]
+    public async Task NonObjectJson_IsRejected(string json)
+    {
+        var context = Context("GET", "/v1/customers", string.Empty);
+
+        (await validator.ValidateAsync(context, Json(json), CancellationToken.None)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MissingOrNullEchoedField_IsRejected()
+    {
+        var context = Context("POST", "/v1/charges", " -d 'amount=2000&currency=usd'");
+
+        (await validator.ValidateAsync(context, Json("{\"currency\":\"usd\"}"), CancellationToken.None))
+            .Reason.Should().Contain("\"amount\" is missing");
+        (await validator.ValidateAsync(context, Json("{\"amount\":null,\"currency\":\"usd\"}"), CancellationToken.None))
+            .IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Retrieve_MissingIdIsRejected()
+    {
+        var context = Context("GET", "/v1/customers/cus_test123", string.Empty);
+
+        (await validator.ValidateAsync(context, Json("{\"object\":\"customer\"}"), CancellationToken.None)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ErrorBody_IsRejectedWhenNoInstructionAsksForOne()
+    {
+        var context = Context("POST", "/v1/subscriptions", " -d '{\"customer\":\"cus_1\"}'");
+
+        var result = await validator.ValidateAsync(
+            context, Json("{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Received unknown parameter: items\"}}"), CancellationToken.None);
+
+        result.IsValid.Should().BeFalse();
+        result.Reason.Should().Contain("\"error\"").And.Contain("Received unknown parameter: items");
+    }
+
+    [Fact]
+    public async Task ErrorBody_IsAllowedWhenAnInstructionAsksForADecline()
+    {
+        var context = new AIGenerationContext(
+            "POST", "/v1/charges", "curl -X POST -d 'amount=1' \"http://localhost/v1/charges\"",
+            new[] { "For amount 1, return a card_declined error." });
+
+        var result = await validator.ValidateAsync(
+            context, Json("{\"error\":{\"code\":\"card_declined\"}}"), CancellationToken.None);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("Never return an error for charges.")]
+    [InlineData("Return a successful response, not an error.")]
+    [InlineData("No error responses for charges.")]
+    [InlineData("Charges succeed without errors.")]
+    public async Task ErrorBody_IsRejectedWhenAnInstructionForbidsErrors(string instruction)
+    {
+        var context = new AIGenerationContext(
+            "POST", "/v1/charges", "curl -X POST -d 'amount=1' \"http://localhost/v1/charges\"",
+            new[] { instruction });
+
+        var result = await validator.ValidateAsync(context, Json("{\"error\":{\"code\":\"card_declined\"}}"), CancellationToken.None);
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    private static AIGenerationContext Context(string method, string path, string data)
+        => new(method, path, $"curl -X {method}{data} \"http://localhost{path}\"", new[] { "Return Stripe JSON." });
+
+    private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement;
+}

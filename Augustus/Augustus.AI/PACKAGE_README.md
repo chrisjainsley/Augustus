@@ -90,8 +90,10 @@ var response = await client.PostAsync("/v1/chat/completions", content);
 simulator.UseAI(new AIOptions
 {
     OpenAIApiKey = "sk-...",              // Required (unless CacheOnly)
-    OpenAIModel = "gpt-4o-mini",         // Default model
-    OpenAIEndpoint = "",                  // Custom endpoint (optional)
+    OpenAIModel = "gpt-6-luna",          // Default model
+    ReasoningEffort = "none",             // Default for gpt-6-luna; null for non-reasoning models
+    MaxOutputTokens = null,               // Cap on generated tokens (optional)
+    OpenAIEndpoint = "",                  // Azure resource, or any OpenAI-compatible API (optional)
     UseAzureOpenAI = false,               // Use Azure OpenAI service
     AzureDeploymentName = "",             // Required when UseAzureOpenAI = true
     AzureApiVersion = "2024-06-01",       // Azure API version
@@ -99,6 +101,39 @@ simulator.UseAI(new AIOptions
     MaxConcurrentRequests = 10            // Process-wide concurrent OpenAI limit
 });
 ```
+
+## Faster Recording and Validation
+
+Only cache misses call a model, so these settings affect recording, never cached replays or CI cache-only runs.
+
+```csharp
+var options = new AIOptions { OpenAIApiKey = "sk-..." };
+
+// Weakest first. A rejected response is regenerated one tier higher with the reason.
+options.ModelTiers.Add(new AIModelTier("openai/gpt-oss-20b", "A single resource echoed from the request.")
+{
+    Endpoint = "https://api.groq.com/openai/v1", ApiKey = "gsk-...", ReasoningEffort = "low"
+});
+options.ModelTiers.Add(new AIModelTier("gpt-6-luna", "Related objects, lists or several instructions.")
+{
+    ReasoningEffort = "none"
+});
+
+// Every fresh response must be valid JSON and pass these checks, or the request fails with 502 and nothing is cached.
+options.ResponseValidators.Add(new MyRequestEchoValidator());   // your IAIResponseValidator
+options.MaxValidationRetries = 3;
+
+// Optional: TypeSafe Jev skips the first tier only when it is likely to fail (JevOptions.RiskThreshold, default 0.7),
+// and checks instructions were followed. A rejection names the field that shows the problem.
+var jev = new JevOptions { ApiKey = "ts-..." };
+options.ModelRouter = new JevModelRouter(jev);
+options.ResponseValidators.Add(new JevResponseValidator(jev));
+```
+
+With no tiers configured, retries climb the reasoning effort of `OpenAIModel` (`none`, `low`, `medium`, `high`).
+Reasoning tiers (any tier with a reasoning effort) do not pin `temperature`, because reasoning models reject it.
+If the Jev service cannot be reached, the router starts at the first tier and the Jev validator skips its check.
+Keep numeric and date checks in your own validators; Jev is weak at them.
 
 ## Rate Limits and Efficiency
 
