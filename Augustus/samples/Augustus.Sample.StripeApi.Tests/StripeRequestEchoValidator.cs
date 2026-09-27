@@ -16,8 +16,9 @@ internal sealed partial class StripeRequestEchoValidator : IAIResponseValidator
     /// <summary>Words that mark an instruction as asking for an error response.</summary>
     private static readonly string[] ErrorWords = { "error", "decline", "failed", "failure", "invalid" };
 
-    /// <summary>Words that turn an error mention into a prohibition ("never return an error").</summary>
-    private static readonly string[] NegationWords = { "never", "do not", "don't", "must not", "avoid" };
+    /// <summary>Any negation turns an error mention into a prohibition ("never return an error", "not an error").</summary>
+    [GeneratedRegex(@"\b(not|no|never|without|avoid|don't|dont|mustn't)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex NegationPattern();
 
     public ValueTask<AIResponseValidationResult> ValidateAsync(
         AIGenerationContext context,
@@ -70,7 +71,7 @@ internal sealed partial class StripeRequestEchoValidator : IAIResponseValidator
 
     private static bool AsksForError(string instruction)
         => ErrorWords.Any(word => instruction.Contains(word, StringComparison.OrdinalIgnoreCase))
-            && !NegationWords.Any(word => instruction.Contains(word, StringComparison.OrdinalIgnoreCase));
+            && !NegationPattern().IsMatch(instruction);
 
     private static bool Matches(string expected, JsonElement actual) => actual.ValueKind switch
     {

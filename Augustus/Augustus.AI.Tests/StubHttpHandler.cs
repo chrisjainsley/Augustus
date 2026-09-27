@@ -30,7 +30,7 @@ internal sealed class StubHttpHandler : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
-        var recorded = new RecordedRequest(request.RequestUri!, body);
+        var recorded = new RecordedRequest(request.RequestUri!, body, request.Headers.Authorization?.ToString());
         lock (requests)
             requests.Add(recorded);
         return respond(recorded);
@@ -60,7 +60,7 @@ internal sealed class StubHttpHandler : HttpMessageHandler
         => new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 }
 
-internal sealed record RecordedRequest(Uri Uri, string Body)
+internal sealed record RecordedRequest(Uri Uri, string Body, string? Authorization = null)
 {
     public JsonElement Json => JsonDocument.Parse(Body).RootElement;
 

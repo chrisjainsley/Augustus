@@ -123,12 +123,16 @@ public class StripeRequestEchoValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
-    public async Task ErrorBody_IsRejectedWhenAnInstructionForbidsErrors()
+    [Theory]
+    [InlineData("Never return an error for charges.")]
+    [InlineData("Return a successful response, not an error.")]
+    [InlineData("No error responses for charges.")]
+    [InlineData("Charges succeed without errors.")]
+    public async Task ErrorBody_IsRejectedWhenAnInstructionForbidsErrors(string instruction)
     {
         var context = new AIGenerationContext(
             "POST", "/v1/charges", "curl -X POST -d 'amount=1' \"http://localhost/v1/charges\"",
-            new[] { "Never return an error for charges." });
+            new[] { instruction });
 
         var result = await validator.ValidateAsync(context, Json("{\"error\":{\"code\":\"card_declined\"}}"), CancellationToken.None);
 

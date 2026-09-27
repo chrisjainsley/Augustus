@@ -15,7 +15,7 @@ internal static class OpenAIClientFactory
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(tier);
 
-        var credential = new ApiKeyCredential(tier.ApiKey ?? options.OpenAIApiKey);
+        var credential = new ApiKeyCredential(options.ResolveApiKey(tier));
         var transport = options.HttpHandlerOverride is null
             ? null
             : new HttpClientPipelineTransport(new HttpClient(options.HttpHandlerOverride, disposeHandler: false));

@@ -296,6 +296,30 @@ public class AIResponseGenerationTests : IDisposable
     }
 
     [Fact]
+    public void GivenAzureWithEveryTierOnItsOwnEndpoint_ThenAzureSettingsAreNotRequired()
+    {
+        var options = new AIOptions { OpenAIApiKey = "k", UseAzureOpenAI = true };
+        options.ModelTiers.Add(new AIModelTier("gpt-oss-20b", "fast") { Endpoint = "https://api.groq.test/openai/v1" });
+
+        ((Action)options.Validate).Should().NotThrow();
+
+        options.ModelTiers.Add(new AIModelTier("prod-deployment", "strong"));
+        ((Action)options.Validate).Should().Throw<System.ComponentModel.DataAnnotations.ValidationException>();
+    }
+
+    [Fact]
+    public async Task GivenTierWithBlankApiKey_ThenTheGlobalKeyIsSent()
+    {
+        var stub = new StubHttpHandler(_ => StubHttpHandler.ChatCompletion(ValidBody));
+        var options = Options(stub);
+        options.ModelTiers.Add(new AIModelTier("m", "d") { ApiKey = "  " });
+
+        await PostChargeAsync(options);
+
+        stub.Requests.Single().Authorization.Should().Be("Bearer test-key");
+    }
+
+    [Fact]
     public void GivenTierWithInvalidEndpoint_ThenValidateThrows()
     {
         var options = new AIOptions { OpenAIApiKey = "k" };

@@ -139,6 +139,10 @@ public sealed class AIOptions
     /// <summary>Test hook: replaces the HTTP transport for model calls.</summary>
     internal HttpMessageHandler? HttpHandlerOverride { get; set; }
 
+    /// <summary>The API key a tier uses: its own when set, otherwise <see cref="OpenAIApiKey"/>.</summary>
+    internal string ResolveApiKey(AIModelTier? tier)
+        => string.IsNullOrWhiteSpace(tier?.ApiKey) ? OpenAIApiKey : tier!.ApiKey!;
+
     /// <summary>
     /// Returns <see cref="ModelTiers"/>, or the reasoning-effort ladder built from <see cref="OpenAIModel"/>
     /// (or <see cref="AzureDeploymentName"/>) when no tiers are configured.
@@ -354,7 +358,8 @@ public sealed class AIOptions
                 throw new ValidationException($"Model tier '{tier.Model}' reasoning effort must be one of: {string.Join(", ", ReasoningEffortLevels)}");
         }
 
-        if (UseAzureOpenAI)
+        // Tiers with their own endpoint use an OpenAI-compatible client, so Azure settings matter only for the rest.
+        if (UseAzureOpenAI && (ModelTiers.Count == 0 || ModelTiers.Any(t => t?.Endpoint is null)))
         {
             if (string.IsNullOrWhiteSpace(OpenAIEndpoint))
             {

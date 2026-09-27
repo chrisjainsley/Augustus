@@ -44,7 +44,7 @@ internal sealed class OpenAICallCoordinator
         var sb = new StringBuilder(256);
         sb.Append(o.UseAzureOpenAI && tier?.Endpoint is null ? 'A' : 'O');
         sb.Append('|');
-        sb.Append(tier?.ApiKey ?? o.OpenAIApiKey);
+        sb.Append(o.ResolveApiKey(tier));
         sb.Append('|');
         sb.Append(tier?.Endpoint ?? o.OpenAIEndpoint);
         sb.Append('|');
