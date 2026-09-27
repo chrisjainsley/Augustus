@@ -1,7 +1,4 @@
 using Augustus;
-using Azure.AI.OpenAI;
-using OpenAI;
-using OpenAI.Chat;
 using Microsoft.AspNetCore.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -14,8 +11,7 @@ namespace Augustus.AI;
 /// </summary>
 internal class AIDefaultHandler : IRequestHandler
 {
-    private readonly OpenAIClient? openAiClient;
-    private readonly OpenAIRequestHandler? requestHandler;
+    private readonly AIResponseGenerator? generator;
     private readonly bool cacheOnly;
     private readonly APISimulator simulator;
     private readonly AIOptions aiOptions;
@@ -29,17 +25,7 @@ internal class AIDefaultHandler : IRequestHandler
 
         if (!cacheOnly)
         {
-            if (aiOptions.UseAzureOpenAI)
-            {
-                openAiClient = new AzureOpenAIClient(
-                    new Uri(aiOptions.OpenAIEndpoint),
-                    new System.ClientModel.ApiKeyCredential(aiOptions.OpenAIApiKey));
-            }
-            else
-            {
-                openAiClient = new OpenAIClient(aiOptions.OpenAIApiKey);
-            }
-            requestHandler = new OpenAIRequestHandler(openAiClient, aiOptions);
+            generator = new AIResponseGenerator(aiOptions);
         }
     }
 
@@ -121,7 +107,7 @@ internal class AIDefaultHandler : IRequestHandler
                 return;
             }
 
-            if (requestHandler is null)
+            if (generator is null)
             {
                 await WriteErrorResponse(httpContext, "OpenAI client is not initialized. Provide an API key or enable cache-only mode.", 500, cancellationToken);
                 return;
@@ -149,42 +135,24 @@ internal class AIDefaultHandler : IRequestHandler
             // Sanitize any residual sensitive values (query params, body tokens) before forwarding to OpenAI.
             curlRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(curlRequest);
 
-            List<ChatMessage> messages = new List<ChatMessage>
-            {
-                ChatMessage.CreateSystemMessage(string.Join("\n\n", instructions)),
-                ChatMessage.CreateUserMessage(curlRequest)
-            };
-
-            var chatOptions = AIResponseFormatting.CreateJsonObjectChatOptions();
-
-            var chatResults = await requestHandler
-                .CompleteChatWithRetryAsync(requestHash, messages, chatOptions, cancellationToken)
+            var path = httpContext.Request.Path.Value ?? "/";
+            var generation = await generator
+                .GenerateAsync(requestHash, new AIGenerationContext(httpContext.Request.Method, path, curlRequest, instructions), cancellationToken)
                 .ConfigureAwait(false);
 
-            if (chatResults?.Value?.Content == null || chatResults.Value.Content.Count == 0)
+            if (!generation.IsSuccess)
             {
-                await WriteErrorResponse(httpContext, "No response generated from OpenAI", 500, cancellationToken);
+                await WriteErrorResponse(httpContext, generation.Failure!, 502, cancellationToken, attempts: generation.Attempts);
                 return;
             }
 
-            var firstContent = chatResults.Value.Content[0];
-            if (firstContent == null || string.IsNullOrEmpty(firstContent.Text))
-            {
-                await WriteErrorResponse(httpContext, "Empty or null text content from OpenAI", 500, cancellationToken);
-                return;
-            }
-
-            var responseContent = AIResponseFormatting.StripMarkdownFences(firstContent.Text);
-
-            responseContent = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(
-                responseContent, httpContext.Request.Path.Value ?? "/");
-
+            var responseContent = generation.Body!;
             httpContext.Response.ContentType = "application/json";
             await httpContext.Response.WriteAsync(responseContent, cancellationToken);
 
             if (options.EnableCaching)
             {
-                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true, persistedCanonical));
+                _cacheWriter.Enqueue(() => fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true, persistedCanonical, generation.Model));
             }
         }
         catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
@@ -196,7 +164,7 @@ internal class AIDefaultHandler : IRequestHandler
     public Task DrainPendingCacheWritesAsync(CancellationToken cancellationToken = default)
         => _cacheWriter.DrainAsync(cancellationToken);
 
-    private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken = default, CanonicalRequest? expectedCanonicalRequest = null, string? computedKey = null)
+    private async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken = default, CanonicalRequest? expectedCanonicalRequest = null, string? computedKey = null, int? attempts = null)
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
@@ -210,6 +178,8 @@ internal class AIDefaultHandler : IRequestHandler
             payload["expectedCanonicalRequest"] = expectedCanonicalRequest;
         if (computedKey is not null)
             payload["computedKey"] = computedKey;
+        if (attempts is not null)
+            payload["attempts"] = attempts;
 
         var errorResponse = JsonSerializer.Serialize(payload);
         await context.Response.WriteAsync(errorResponse, cancellationToken);

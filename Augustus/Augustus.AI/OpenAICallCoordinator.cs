@@ -31,24 +31,24 @@ internal sealed class OpenAICallCoordinator
     /// Gets or creates a coordinator for the given credentials and model/deployment.
     /// <see cref="AIOptions.MaxConcurrentRequests"/> is applied only on first creation for that key.
     /// </summary>
-    public static OpenAICallCoordinator GetOrCreate(AIOptions options)
+    public static OpenAICallCoordinator GetOrCreate(AIOptions options, AIModelTier? tier = null)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var key = BuildInstanceKey(options);
+        var key = BuildInstanceKey(options, tier);
         return Instances.GetOrAdd(key, _ => new OpenAICallCoordinator(options.MaxConcurrentRequests));
     }
 
     /// <summary>Exposed for tests: coordinator identity includes credentials, model, and <see cref="AIOptions.MaxConcurrentRequests"/>.</summary>
-    internal static string BuildInstanceKey(AIOptions o)
+    internal static string BuildInstanceKey(AIOptions o, AIModelTier? tier = null)
     {
         var sb = new StringBuilder(256);
-        sb.Append(o.UseAzureOpenAI ? 'A' : 'O');
+        sb.Append(o.UseAzureOpenAI && tier?.Endpoint is null ? 'A' : 'O');
         sb.Append('|');
-        sb.Append(o.OpenAIApiKey);
+        sb.Append(tier?.ApiKey ?? o.OpenAIApiKey);
         sb.Append('|');
-        sb.Append(o.OpenAIEndpoint);
+        sb.Append(tier?.Endpoint ?? o.OpenAIEndpoint);
         sb.Append('|');
-        sb.Append(o.UseAzureOpenAI ? o.AzureDeploymentName : o.OpenAIModel);
+        sb.Append(tier?.Model ?? (o.UseAzureOpenAI ? o.AzureDeploymentName : o.OpenAIModel));
         sb.Append('|');
         sb.Append(o.MaxConcurrentRequests);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));

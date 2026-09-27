@@ -13,12 +13,15 @@ internal class OpenAIRequestHandler : IDisposable
     private readonly OpenAIClient openAiClient;
     private readonly AIOptions options;
     private readonly OpenAICallCoordinator coordinator;
+    private readonly string modelOrDeployment;
 
-    public OpenAIRequestHandler(OpenAIClient openAiClient, AIOptions options)
+    public OpenAIRequestHandler(OpenAIClient openAiClient, AIOptions options, AIModelTier tier)
     {
         this.openAiClient = openAiClient ?? throw new ArgumentNullException(nameof(openAiClient));
         this.options = options ?? throw new ArgumentNullException(nameof(options));
-        coordinator = OpenAICallCoordinator.GetOrCreate(options);
+        ArgumentNullException.ThrowIfNull(tier);
+        modelOrDeployment = tier.Model;
+        coordinator = OpenAICallCoordinator.GetOrCreate(options, tier);
     }
 
     /// <param name="dedupeKey">When non-empty, concurrent calls with the same key share one OpenAI execution (typically the cache request hash).</param>
@@ -39,9 +42,6 @@ internal class OpenAIRequestHandler : IDisposable
         ChatCompletionOptions? chatOptions,
         CancellationToken cancellationToken)
     {
-        var modelOrDeployment = options.UseAzureOpenAI
-            ? options.AzureDeploymentName
-            : options.OpenAIModel;
         var chatClient = openAiClient.GetChatClient(modelOrDeployment);
         var attemptCount = 0;
         var delayMilliseconds = options.InitialRetryDelayMs;

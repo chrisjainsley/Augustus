@@ -4,13 +4,26 @@ namespace Augustus.AI;
 
 internal static class AIResponseFormatting
 {
-    public static ChatCompletionOptions CreateJsonObjectChatOptions()
+    public static ChatCompletionOptions CreateJsonObjectChatOptions(AIOptions options, AIModelTier tier)
     {
-        return new ChatCompletionOptions
+        var chatOptions = new ChatCompletionOptions
         {
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
-            Temperature = 0f
+            MaxOutputTokenCount = options.MaxOutputTokens
         };
+
+        // Reasoning models reject a custom temperature, so it is only pinned for non-reasoning tiers.
+        if (tier.ReasoningEffort is null)
+            chatOptions.Temperature = 0f;
+        else
+        {
+            // Reasoning effort is marked experimental in the OpenAI SDK; the wire parameter itself is stable.
+#pragma warning disable OPENAI001
+            chatOptions.ReasoningEffortLevel = new ChatReasoningEffortLevel(tier.ReasoningEffort);
+#pragma warning restore OPENAI001
+        }
+
+        return chatOptions;
     }
 
     public static string StripMarkdownFences(string text)

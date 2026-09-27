@@ -1,10 +1,7 @@
 namespace Augustus.AI;
 
 using Augustus;
-using Azure.AI.OpenAI;
 using Microsoft.AspNetCore.Http;
-using OpenAI;
-using OpenAI.Chat;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -25,8 +22,7 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
     private readonly AIOptions options;
     private readonly List<string> instructions;
     private readonly IReadOnlyCollection<string> mergedDynamicFields;
-    private readonly OpenAIClient? openAiClient;
-    private readonly OpenAIRequestHandler? requestHandler;
+    private readonly AIResponseGenerator? generator;
 
     /// <summary>
     /// Standalone constructor using <see cref="AIOptions.CacheFolderPath"/> for disk cache (no shared <see cref="APISimulator"/>).
@@ -67,19 +63,7 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
         if (!simulator.Options.CacheOnly)
         {
             options.Validate();
-
-            if (options.UseAzureOpenAI)
-            {
-                openAiClient = new AzureOpenAIClient(
-                    new Uri(options.OpenAIEndpoint),
-                    new System.ClientModel.ApiKeyCredential(options.OpenAIApiKey));
-            }
-            else
-            {
-                openAiClient = new OpenAIClient(options.OpenAIApiKey);
-            }
-
-            requestHandler = new OpenAIRequestHandler(openAiClient, options);
+            generator = new AIResponseGenerator(options);
         }
     }
 
@@ -161,7 +145,7 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
                 return;
             }
 
-            if (requestHandler is null)
+            if (generator is null)
             {
                 await WriteErrorResponse(
                     httpContext,
@@ -186,33 +170,17 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
             // Sanitize any residual sensitive values (query params, body tokens) before forwarding to OpenAI.
             curlRequest = SensitiveDataSanitizer.SanitizeSensitiveValues(curlRequest);
 
-            List<ChatMessage> messages = new()
-            {
-                ChatMessage.CreateSystemMessage(string.Join("\n\n", instructions)),
-                ChatMessage.CreateUserMessage(curlRequest)
-            };
-
-            var chatOptions = AIResponseFormatting.CreateJsonObjectChatOptions();
-            var chatResults = await requestHandler
-                .CompleteChatWithRetryAsync(requestHash, messages, chatOptions, cancellationToken)
+            var generation = await generator
+                .GenerateAsync(requestHash, new AIGenerationContext(httpContext.Request.Method, path, curlRequest, instructions), cancellationToken)
                 .ConfigureAwait(false);
 
-            if (chatResults?.Value?.Content == null || chatResults.Value.Content.Count == 0)
+            if (!generation.IsSuccess)
             {
-                await WriteErrorResponse(httpContext, "No response generated from OpenAI", 500, cancellationToken).ConfigureAwait(false);
+                await WriteErrorResponse(httpContext, generation.Failure!, 502, cancellationToken, generation.Attempts).ConfigureAwait(false);
                 return;
             }
 
-            var firstContent = chatResults.Value.Content[0];
-            if (firstContent == null || string.IsNullOrEmpty(firstContent.Text))
-            {
-                await WriteErrorResponse(httpContext, "Empty or null text content from OpenAI", 500, cancellationToken).ConfigureAwait(false);
-                return;
-            }
-
-            var responseContent = AIResponseFormatting.StripMarkdownFences(firstContent.Text);
-            responseContent = ChatCompletionResponseNormalizer.NormalizeIfChatCompletion(responseContent, path);
-
+            var responseContent = generation.Body!;
             httpContext.Response.ContentType = "application/json";
             await httpContext.Response.WriteAsync(responseContent, cancellationToken).ConfigureAwait(false);
 
@@ -220,7 +188,7 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
             {
                 try
                 {
-                    await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true).ConfigureAwait(false);
+                    await fileManager.CacheResponseAsync(requestHash, responseContent, curlRequest, instructions, normalized: true, model: generation.Model).ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -250,18 +218,19 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
         }
     }
 
-    private static async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken)
+    private static async Task WriteErrorResponse(HttpContext context, string message, int statusCode, CancellationToken cancellationToken, int? attempts = null)
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
-        var errorResponse = JsonSerializer.Serialize(new { error = message ?? "Unknown error", status = statusCode });
+        var errorResponse = attempts is null
+            ? JsonSerializer.Serialize(new { error = message ?? "Unknown error", status = statusCode })
+            : JsonSerializer.Serialize(new { error = message ?? "Unknown error", status = statusCode, attempts });
         await context.Response.WriteAsync(errorResponse, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        requestHandler?.Dispose();
         if (ownsDetachedSimulator)
         {
             simulator.DisposeAsync().AsTask().ConfigureAwait(false).GetAwaiter().GetResult();
@@ -273,7 +242,6 @@ public sealed class AIResponseStrategy : IResponseStrategy, IDisposable, IAsyncD
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        requestHandler?.Dispose();
         if (ownsDetachedSimulator)
         {
             await simulator.DisposeAsync().ConfigureAwait(false);
